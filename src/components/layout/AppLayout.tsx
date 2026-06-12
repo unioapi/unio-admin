@@ -7,6 +7,7 @@ import {
   GaugeIcon,
   LayoutDashboardIcon,
   LogOutIcon,
+  ServerCogIcon,
   ServerIcon,
   SlidersHorizontalIcon,
   UsersIcon,
@@ -56,6 +57,10 @@ const NAV_GROUPS = [
       { title: "用量", to: "/usage", icon: GaugeIcon },
       { title: "账本", to: "/ledger", icon: WalletIcon },
     ],
+  },
+  {
+    label: "运营",
+    items: [{ title: "系统", to: "/system", icon: ServerCogIcon }],
   },
 ];
 

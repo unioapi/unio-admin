@@ -8,6 +8,7 @@ import { CapabilityPage } from "@/pages/CapabilityPage";
 import { RequestsPage } from "@/pages/RequestsPage";
 import { UsagePage } from "@/pages/UsagePage";
 import { LedgerPage } from "@/pages/LedgerPage";
+import { SystemPage } from "@/pages/SystemPage";
 import { UsersPage } from "@/pages/UsersPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
 import { ApiKeysPage } from "@/pages/ApiKeysPage";
@@ -28,6 +29,7 @@ function App() {
           <Route path="requests" element={<RequestsPage />} />
           <Route path="usage" element={<UsagePage />} />
           <Route path="ledger" element={<LedgerPage />} />
+          <Route path="system" element={<SystemPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:projectId/api-keys" element={<ApiKeysPage />} />
