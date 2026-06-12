@@ -1,10 +1,15 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  ActivityIcon,
   BoxIcon,
   CableIcon,
+  FolderIcon,
+  GaugeIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   ServerIcon,
+  UsersIcon,
+  WalletIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,12 +30,34 @@ import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { useAuth } from "@/lib/auth/AuthContext";
 
-const NAV_ITEMS = [
-  { title: "概览", to: "/", icon: LayoutDashboardIcon },
-  { title: "服务商", to: "/providers", icon: ServerIcon },
-  { title: "渠道", to: "/channels", icon: CableIcon },
-  { title: "模型", to: "/models", icon: BoxIcon },
+const NAV_GROUPS = [
+  {
+    label: "管理",
+    items: [
+      { title: "概览", to: "/", icon: LayoutDashboardIcon },
+      { title: "服务商", to: "/providers", icon: ServerIcon },
+      { title: "渠道", to: "/channels", icon: CableIcon },
+      { title: "模型", to: "/models", icon: BoxIcon },
+    ],
+  },
+  {
+    label: "客户",
+    items: [
+      { title: "用户", to: "/users", icon: UsersIcon },
+      { title: "项目", to: "/projects", icon: FolderIcon },
+    ],
+  },
+  {
+    label: "查询",
+    items: [
+      { title: "请求", to: "/requests", icon: ActivityIcon },
+      { title: "用量", to: "/usage", icon: GaugeIcon },
+      { title: "账本", to: "/ledger", icon: WalletIcon },
+    ],
+  },
 ];
+
+const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 function isItemActive(to: string, pathname: string): boolean {
   return to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -63,27 +90,29 @@ export function AppLayout() {
         </SidebarHeader>
 
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>管理</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {NAV_ITEMS.map((item) => (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isItemActive(item.to, pathname)}
-                      tooltip={item.title}
-                    >
-                      <Link to={item.to}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {NAV_GROUPS.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.to}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isItemActive(item.to, pathname)}
+                        tooltip={item.title}
+                      >
+                        <Link to={item.to}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
         </SidebarContent>
 
         <SidebarFooter>
