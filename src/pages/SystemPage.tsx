@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
@@ -55,16 +56,31 @@ import { RecoveryStatusBadge } from "@/components/system/RecoveryStatusBadge";
 import { RecoveryJobDetailDialog } from "@/components/system/RecoveryJobDetailDialog";
 
 export function SystemPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // ?tab= 深链同步；概览「结算补偿」行动项用 tab=jobs → 映射到补偿任务页。
+  const raw = searchParams.get("tab");
+  const tab = raw === "sync" ? "sync" : raw === "health" ? "health" : "recovery";
+  const setTab = (v: string) => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.set("tab", v);
+        return sp;
+      },
+      { replace: true },
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>系统</CardTitle>
+        <CardTitle>系统设置</CardTitle>
         <CardDescription>
           结算补偿任务、models.dev 同步任务与渠道健康（横切运营视图，只读）
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="recovery">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="recovery">结算补偿任务</TabsTrigger>
             <TabsTrigger value="sync">同步任务</TabsTrigger>

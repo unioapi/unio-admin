@@ -42,6 +42,7 @@
 | D-016 | 2026-06-24 | RT/CU-B | 抽屉/行内复用既有 CRUD 对话框需完整领域对象 | 由 ops 行 **构造最小领域对象**（Route/ApiKey/User/Provider/Model）喂给既有对话框；缺失非关键字段填默认值 | 避免每行额外 GET；对话框仅用到 id + 编辑字段 | RouteDetailSheet、ApiKeysPage、各抽屉 | |
 | D-017 | 2026-06-24 | RT/MD-A | 「可服务/可售/异常」精确判定（需候选池+健康+价格联算）成本高 | 主表/抽屉派生**近似**：模型可售 = 启用 ∧ 有可用渠道(enabled 绑定+enabled 渠道+enabled 价格)；线路可服务 = 启用 ∧ 非异常(无可用渠道次数>0 或 样本≥20 且成功率<0.9)；精确「样本保护+池有效性」判定延后 P1 | 完整 §3.4.8/§3.5.8 判定 SQL 过重，近似已覆盖主要运营信号 | models_ops/routes_ops 服务派生 | |
 | D-018 | 2026-06-24 | QX-B | 请求中心三页（requests/usage/ledger）已有功能页 | **保留既有功能页**，本次仅补**深链贯通**：`/ledger?tab=exceptions`（侧栏+概览行动项）读 URL；`/requests?request_id=`/`?q=` 自动打开证据详情（RequestDetailDialog 增受控模式）；请求 15 列/证据 Sheet 升级、用量 6 卡分析 **延后 P1 polish** | 既有页可用；深链贯通是跨模块一致性的关键；在一次性预算内优先保证导航闭环 | LedgerPage、RequestsPage、RequestDetailDialog | |
+| D-019 | 2026-06-24 | SYS-B | §3.11 计划 7 Tab 配置台（运行状态/任务/阈值/计费/同步/审计/诊断）多数无后端 | **保留既有 3 个功能 Tab**（结算补偿任务/同步任务/渠道健康）并补 `?tab=` 深链（`tab=jobs`→补偿任务，概览结算行动项生效）；阈值/计费/审计/诊断配置台 **延后 P1**（需新后端 settings/diagnostics 端点） | 阈值/诊断等无现成后端；既有 3 Tab 覆盖核心运维只读视图；优先保证侧栏+深链可达 | SystemPage | |
 
 ---
 
