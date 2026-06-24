@@ -1,5 +1,4 @@
 import { api } from "@/lib/api/client";
-import type { ListMeta, Page } from "@/lib/api/types";
 
 // 与后端 userDTO 对齐（绝不含 password_hash）。
 export interface User {
@@ -20,26 +19,6 @@ export interface Balance {
 // 用户详情：基础信息 + 各币种余额。
 export interface UserDetail extends User {
   balances: Balance[];
-}
-
-export interface UserListParams {
-  page: number;
-  pageSize: number;
-  q?: string;
-}
-
-export async function listUsers(params: UserListParams): Promise<Page<User>> {
-  const res = await api.get<{ data: User[]; meta: ListMeta }>(
-    "/admin/v1/users",
-    {
-      params: {
-        page: params.page,
-        page_size: params.pageSize,
-        q: params.q || undefined,
-      },
-    },
-  );
-  return { items: res.data.data, total: res.data.meta.total };
 }
 
 export async function getUser(id: number): Promise<UserDetail> {

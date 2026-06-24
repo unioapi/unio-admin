@@ -35,6 +35,8 @@
 | D-009 | 2026-06-23 | 规划 | 指标去冗余 P0/P1/P2 是否采纳？ | **全部采纳** → 写入 §1.8 + 各 §3.x 同步修订 | 用户确认「全部采纳」 | ADMIN-IA-PLAN §1.8、§3.1/3.3/3.4/3.5/3.7/3.8 | |
 | D-010 | 2026-06-23 | D-A | 计划写 `error_code='gateway_timeout'`，但代码库无此码 | 超时口径改为 **`error_code IN ('upstream_timeout','context_deadline_exceeded') OR error_code ILIKE '%timeout%'`**；统一封装 SQL helper | 真实写入路径用 `upstream_timeout`/`adapter_error`，无 `gateway_timeout` | 所有 ops 聚合 SQL | |
 | D-011 | 2026-06-23 | D-A | P95 TTFT 计划用 `response_started_at`，但 gateway 从不写该列（`MarkRequestSucceededParams`/`MarkAttemptSucceededParams` 均无该 setter） | **首版 TTFT 优雅降级**（SQL/服务/前端保留字段，无数据时显示「—」）；**不在本次整改改动 gateway 热路径**补写，backfill 延后单独立项 | 改动流式热路径风险高，违背「一次成功」与「不做破坏性操作」红线；TTFT 为非核心指标 | ops SQL（保留 ttft 列）+ 前端「—」 | |
+| D-011a | 2026-06-24 | D-A 后续 | D-011 之后实际补写了 gateway 热路径（`MarkRequestResponseStarted`/`MarkAttemptResponseStarted` + settlement 传 `response_started_at`），TTFT 已转正——但同批改动让 `MarkRequestSucceeded` 误写 `response_completed_at`，违反 `ck_request_records_delivery_completed_at`（仅 `delivery_status='completed'` 才允许非空），导致每次结算撞约束失败、请求卡 `running`、补偿任务全部 `dead` | **修复**：`MarkRequestSucceeded` 不再写 `response_completed_at`（归交付状态机），仅保留 `response_started_at`；重置并重放 36 个 dead 补偿任务恢复结算；E2E 验证流式新请求 TTFT 正确落库、inline 结算闭环 | `response_completed_at` 受交付状态机约束（结算阶段交付未完成），属错误写入点；TTFT(`response_started_at`) 无约束、可安全保留 | sql/queries/request_records.sql、requestlog service/store、gateway/lifecycle/settlement.go、对应 sqlc 生成与测试 | |
+| D-011b | 2026-06-24 | §6 T-0 | `go test ./...` 在开发者已 export `DATABASE_URL` / 本地库已同步目录时出现两处假失败：`config.TestMergeDotEnvFile`（环境已有 DATABASE_URL）、`modelcatalog.sync_db_test`（回滚事务内可见 220+ 历史目录条目 → removed=221） | 修测试隔离：dotenv 用例先 `t.Setenv("DATABASE_URL","")`+`Unsetenv` 注册恢复再清除；catalog 用例在回滚事务内先 `DELETE` 三张目录表再 seed | 二者均为测试卫生问题、非产品缺陷；隔离后对 ambient 环境鲁棒，`go test ./...` 干净绿 | config/dotenv_test.go、modelcatalog/sync_db_test.go | |
 | D-012 | 2026-06-23 | D-A | 线路归因无快照 | 按 §3.1 就近绑定：`COALESCE(api_keys.route_id, projects.default_route_id, 内置经济)` JOIN | 计划已定就近绑定 | 线路相关 ops SQL | |
 | D-013 | 2026-06-24 | D-A | 概览端点形态：扩展 /overview 还是新增 /radar？ | **新增** `/dashboard/radar` + `/dashboard/breakdown` + `/dashboard/timeseries/performance`；保留旧 `/overview`+`/timeseries` 兼容；新 OverviewPage 用新端点；健康/成本趋势复用既有 requests/tokens/cost 时序，仅新增 performance 时序 | D-004 允许破坏；新增更清晰，减少回归面；最小化新增时序查询 | dashboard.go、router.go、dashboard 服务 | |
 | D-014 | 2026-06-24 | CH/PR/RT-A | 渠道/服务商/线路 TPS 与 token 无 per-attempt usage | 性能/成功率/延迟按 **attempt 粒度**（request_attempts.channel_id/provider_id）；TPS/token 按 **最终成功渠道归因**（request_records.final_channel_id JOIN usage_records）；线路按就近绑定归因 | usage_records 仅挂 request_record（非 attempt）；最终渠道归因是最合理近似 | channels_ops/providers_ops/routes_ops.sql | |
@@ -50,6 +52,7 @@
 
 | 日期 | 内容 |
 |------|------|
+| 2026-06-24 | D-011a TTFT 转正 + 结算约束 bug 修复并恢复 36 条卡死请求；D-011b 修两处测试隔离假失败 |
 | 2026-06-23 | D-009 指标去冗余全部采纳（§1.8） |
 | 2026-06-23 | D-001~D-008 启动确认（P0+P1、分支 mina、真机 .env、API 可破、中英文主题、响应式、实施顺序） |
 | 2026-06-23 | 创建日志；与 ADMIN-IA-PLAN 顶部「不允许中断」约定联动 |

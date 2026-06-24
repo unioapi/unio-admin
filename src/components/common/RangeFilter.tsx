@@ -23,9 +23,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// 全部/24H/3D/7D/30D + 自定义区间 + 「最后刷新」+ 刷新按钮。
+// 固定范围下拉 + 自定义区间 + 「最后刷新」+ 刷新按钮。
 // 「全部」点击须确认弹窗（§3.1.10：大库慢查询保护）。
 export function RangeFilter({
   value,
@@ -71,19 +78,23 @@ export function RangeFilter({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
+      <Select
         value={value.preset === "custom" ? "" : value.preset}
         onValueChange={handlePreset}
       >
-        {RANGE_PRESETS.map((p) => (
-          <ToggleGroupItem key={p.value} value={p.value}>
-            {p.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+        <SelectTrigger size="sm" className="min-w-28">
+          <SelectValue placeholder="时间范围" />
+        </SelectTrigger>
+        <SelectContent align="end" position="popper">
+          <SelectGroup>
+            {RANGE_PRESETS.map((p) => (
+              <SelectItem key={p.value} value={p.value}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
 
       <Popover open={calOpen} onOpenChange={setCalOpen}>
         <PopoverTrigger asChild>

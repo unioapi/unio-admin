@@ -33,8 +33,14 @@ export interface Model {
   updated_at: string;
 }
 
-// 服务端分页：过滤/翻页下沉到后端 SQL。has_update=true 时仅列「应提醒」的采纳模型。
-export async function listModels(
+// 读取单条模型完整配置（抽屉/编辑前回填）。
+export async function getModel(id: number): Promise<Model> {
+  const res = await api.get<{ data: Model }>(`/admin/v1/models/${id}`);
+  return res.data.data;
+}
+
+// 服务端分页列模型；仅供本文件 listAllModels 复用（下拉用），不直接对外导出。
+async function listModels(
   params: ListParams & { hasUpdate?: boolean },
 ): Promise<Page<Model>> {
   const res = await api.get<{ data: Model[]; meta: ListMeta }>(
@@ -50,12 +56,6 @@ export async function listModels(
     },
   );
   return { items: res.data.data, total: res.data.meta.total };
-}
-
-// 读取单条模型完整配置（抽屉/编辑前回填）。
-export async function getModel(id: number): Promise<Model> {
-  const res = await api.get<{ data: Model }>(`/admin/v1/models/${id}`);
-  return res.data.data;
 }
 
 // 给「渠道绑定模型」的下拉用：一次拉满（上限 100），默认只取启用中的模型。

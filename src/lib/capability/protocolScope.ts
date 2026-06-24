@@ -8,20 +8,14 @@ export const PROTOCOL_SCOPE_ORDER: ProtocolScope[] = [
 
 export type ProtocolScopeFilter = "all" | ProtocolScope;
 
-export const PROTOCOL_SCOPE_LABEL: Record<ProtocolScope, string> = {
+const PROTOCOL_SCOPE_LABEL: Record<ProtocolScope, string> = {
   shared: "通用",
   openai: "OpenAI",
   anthropic: "Anthropic",
 };
 
-export const PROTOCOL_SCOPE_HINT: Record<ProtocolScope, string> = {
-  shared: "OpenAI Chat / Anthropic Messages 均常见",
-  openai: "OpenAI Chat Completions / Responses 专有",
-  anthropic: "Anthropic Messages API 专有",
-};
-
 /** 协议归属样式：黑白灰，仅用字重/边框深浅区分，不用彩色。 */
-export const PROTOCOL_SCOPE_STYLES: Record<
+const PROTOCOL_SCOPE_STYLES: Record<
   ProtocolScope,
   {
     badge: string;

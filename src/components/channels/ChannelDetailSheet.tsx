@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { getChannel } from "@/lib/api/channels";
+import { apiErrorMessage } from "@/lib/api/client";
 import {
   getChannelOpsDetail,
   getChannelOpsErrors,
@@ -336,6 +337,7 @@ function ModelsTab({
     queryKey: ["channel", channelId, "ops-models", range],
     queryFn: () => getChannelOpsModels(channelId, range),
     placeholderData: keepPreviousData,
+    retry: false,
   });
   return (
     <div className="flex flex-col gap-2">
@@ -345,9 +347,13 @@ function ModelsTab({
         </Button>
       </div>
       {q.isPending ? (
-        <Skeleton className="h-40 w-full" />
+        <div className="flex flex-col gap-2 rounded-md border p-3">
+          <Skeleton className="h-6 w-2/3" />
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-5/6" />
+        </div>
       ) : q.isError ? (
-        <ErrorBox message={(q.error as Error).message} />
+        <ErrorBox message={apiErrorMessage(q.error)} />
       ) : q.data.length === 0 ? (
         <p className="text-muted-foreground py-12 text-center text-sm">暂无绑定模型</p>
       ) : (

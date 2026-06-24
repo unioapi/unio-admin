@@ -62,13 +62,3 @@ export async function updateRoute({
 export async function deleteRoute(id: number): Promise<void> {
   await api.delete(`/admin/v1/routes/${id}`);
 }
-
-export async function setRouteChannels(
-  id: number,
-  channelIds: number[],
-): Promise<Route> {
-  const res = await api.put<{ data: Route }>(`/admin/v1/routes/${id}/channels`, {
-    channel_ids: channelIds,
-  });
-  return res.data.data;
-}

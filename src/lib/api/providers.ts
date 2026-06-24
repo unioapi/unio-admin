@@ -12,9 +12,8 @@ export interface Provider {
 
 // 服务端分页：把 page/page_size/status/q 作为 query 传给后端，拆出 items + total。
 // 空的 status/q 由 axios 自动从 query 省略（值为 undefined 不发送）。
-export async function listProviders(
-  params: ListParams,
-): Promise<Page<Provider>> {
+// 仅供本文件 listAllProviders 复用（下拉用），不直接对外导出。
+async function listProviders(params: ListParams): Promise<Page<Provider>> {
   const res = await api.get<{ data: Provider[]; meta: ListMeta }>(
     "/admin/v1/providers",
     {

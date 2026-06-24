@@ -117,8 +117,3 @@ export async function rotateChannelCredential({
   await api.put(`/admin/v1/channels/${id}/credential`, { credential });
 }
 
-// 删除渠道：录错的脏数据可真删，后端在同一事务内级联清理它自身的模型绑定/成本价/能力收紧；
-// 一旦被请求/账务历史引用，后端返回 409，提示改用停用。
-export async function deleteChannel(id: number): Promise<void> {
-  await api.delete(`/admin/v1/channels/${id}`);
-}

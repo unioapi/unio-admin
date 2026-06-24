@@ -86,24 +86,3 @@ export async function createModelFromCatalog(
   return res.data.data;
 }
 
-// 从目录刷新本模型：用目录最新值覆盖元数据 + 能力，更新基线指纹（model_id 不变）。
-export async function refreshFromCatalog(modelId: number): Promise<Model> {
-  const res = await api.post<{ data: Model }>(
-    `/admin/v1/models/${modelId}/catalog-refresh`,
-  );
-  return res.data.data;
-}
-
-export type ReminderAction = "dismiss" | "mute" | "unmute" | "snooze";
-
-export async function setCatalogReminder(
-  modelId: number,
-  action: ReminderAction,
-  snoozeUntil?: string,
-): Promise<Model> {
-  const res = await api.post<{ data: Model }>(
-    `/admin/v1/models/${modelId}/catalog-reminder`,
-    { action, snooze_until: snoozeUntil },
-  );
-  return res.data.data;
-}

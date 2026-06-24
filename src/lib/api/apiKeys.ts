@@ -1,5 +1,4 @@
 import { api } from "@/lib/api/client";
-import type { ListMeta, Page } from "@/lib/api/types";
 
 // 与后端 apiKeyDTO 对齐；绝不含 key_hash。
 // status: active / disabled / revoked / expired（后端按优先级计算）。
@@ -24,18 +23,6 @@ export interface ApiKey {
 // 创建结果：含只展示一次的明文 plaintext。
 export interface CreatedApiKey extends ApiKey {
   plaintext: string;
-}
-
-export async function listApiKeys(
-  projectId: number,
-  page: number,
-  pageSize: number,
-): Promise<Page<ApiKey>> {
-  const res = await api.get<{ data: ApiKey[]; meta: ListMeta }>(
-    `/admin/v1/projects/${projectId}/api-keys`,
-    { params: { page, page_size: pageSize } },
-  );
-  return { items: res.data.data, total: res.data.meta.total };
 }
 
 export interface CreateApiKeyInput {

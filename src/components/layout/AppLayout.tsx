@@ -147,8 +147,10 @@ export function AppLayout() {
 
         <SidebarContent>
           {NAV_GROUPS.map((group) => (
-            <SidebarGroup key={group.label}>
-              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroup key={group.label} className="py-1">
+              <SidebarGroupLabel className="h-7">
+                {group.label}
+              </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {group.items.map((item) => (
@@ -156,6 +158,7 @@ export function AppLayout() {
                       <SidebarMenuButton
                         asChild
                         isActive={isItemActive(item, loc)}
+                        size="sm"
                         tooltip={item.title}
                       >
                         <Link to={item.to}>

@@ -93,27 +93,6 @@ export async function listModelCapabilities(
   return res.data.data;
 }
 
-// limits 传已解析的 JSON 值或 undefined（省略 → 后端写 NULL）；仅 limited 级别允许 limits。
-export interface SetModelCapabilityInput {
-  modelId: number;
-  capability_key: string;
-  support_level: SupportLevel;
-  limits?: unknown;
-}
-
-export async function setModelCapability({
-  modelId,
-  capability_key,
-  support_level,
-  limits,
-}: SetModelCapabilityInput): Promise<ModelCapability> {
-  const res = await api.put<{ data: ModelCapability }>(
-    `/admin/v1/models/${modelId}/capabilities/${encodeURIComponent(capability_key)}`,
-    { support_level, limits },
-  );
-  return res.data.data;
-}
-
 // ---- 批量整表覆盖（一次保存多条，DEC-024 §6.2）----
 
 export interface ModelCapabilityItem {
@@ -132,15 +111,6 @@ export async function replaceModelCapabilities(
     { capabilities },
   );
   return res.data.data;
-}
-
-export async function deleteModelCapability(
-  modelId: number,
-  capabilityKey: string,
-): Promise<void> {
-  await api.delete(
-    `/admin/v1/models/${modelId}/capabilities/${encodeURIComponent(capabilityKey)}`,
-  );
 }
 
 // ---- models.dev 同步 ----

@@ -36,6 +36,7 @@ import {
   type RangeQuery,
   type RequestPoint,
   type SpendPoint,
+  type TimeseriesInterval,
 } from "@/lib/api/dashboard";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
@@ -79,8 +80,11 @@ const CHART_COLORS = [
   "var(--chart-5)",
 ];
 
-function fmtBucket(iso: string, interval: "hour" | "day"): string {
+function fmtBucket(iso: string, interval: TimeseriesInterval): string {
   const d = new Date(iso);
+  if (interval === "minute") {
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
   if (interval === "hour") {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:00`;
   }
@@ -274,7 +278,7 @@ function RadarCards({
         icon={<HourglassIcon className="size-3.5" />}
         tooltip={
           r && !r.ttft.has_data
-            ? "暂无首 token 时间数据（网关尚未记录响应起始时间）"
+            ? "暂无首 token 时间数据（历史请求未记录响应起始时间；后端重启后新请求会开始写入）"
             : r
               ? `P50 ${formatLatencyMs(r.ttft.p50)}`
               : undefined
@@ -475,7 +479,7 @@ function TrendsSection({
   interval,
 }: {
   range: RangeQuery;
-  interval: "hour" | "day";
+  interval: TimeseriesInterval;
 }) {
   const [tab, setTab] = useState("health");
   return (
@@ -536,7 +540,7 @@ function HealthChart({
   interval,
 }: {
   range: RangeQuery;
-  interval: "hour" | "day";
+  interval: TimeseriesInterval;
 }) {
   const q = useQuery({
     queryKey: ["dashboard", "ts", "requests", interval, range],
@@ -592,7 +596,7 @@ function PerformanceChart({
   interval,
 }: {
   range: RangeQuery;
-  interval: "hour" | "day";
+  interval: TimeseriesInterval;
 }) {
   const q = useQuery({
     queryKey: ["dashboard", "ts", "performance", range],
@@ -642,7 +646,7 @@ function CostChart({
   interval,
 }: {
   range: RangeQuery;
-  interval: "hour" | "day";
+  interval: TimeseriesInterval;
 }) {
   const q = useQuery({
     queryKey: ["dashboard", "ts", "cost", interval, range],
