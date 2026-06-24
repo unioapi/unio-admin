@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ActivityIcon, EyeIcon, SearchIcon } from "lucide-react";
 import { listRequests } from "@/lib/api/requests";
@@ -54,6 +55,21 @@ const STATUS_OPTIONS = [
 ];
 
 export function RequestsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 深链：?request_id= 或 ?q= 自动打开证据中心详情（来自渠道/模型/线路等抽屉）。
+  const deepRequestId = searchParams.get("request_id") ?? searchParams.get("q");
+  const closeDeep = () => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.delete("request_id");
+        sp.delete("q");
+        return sp;
+      },
+      { replace: true },
+    );
+  };
+
   const [status, setStatus] = useState("all");
   const [modelInput, setModelInput] = useState("");
   const [userIdInput, setUserIdInput] = useState("");
@@ -92,6 +108,15 @@ export function RequestsPage() {
 
   return (
     <Card>
+      {deepRequestId ? (
+        <RequestDetailDialog
+          requestId={deepRequestId}
+          open
+          onOpenChange={(o) => {
+            if (!o) closeDeep();
+          }}
+        />
+      ) : null}
       <CardHeader className="border-b">
         <CardTitle>请求</CardTitle>
         <CardDescription>网关请求记录（只读）与上游尝试链路</CardDescription>

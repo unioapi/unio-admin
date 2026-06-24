@@ -21,19 +21,29 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RequestStatusBadge } from "@/components/requests/RequestStatusBadge";
 
-// children-trigger 弹窗：与定价弹窗一致，自管 open，open 时才拉详情。
+// 证据中心弹窗：默认 children-trigger 自管 open；也支持受控（深链自动打开）。
 export function RequestDetailDialog({
   requestId,
   children,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   requestId: string;
-  children: ReactNode;
+  children?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
         {open && <DetailBody requestId={requestId} />}
       </DialogContent>

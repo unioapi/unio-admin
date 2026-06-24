@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { WalletIcon } from "lucide-react";
 import {
@@ -39,7 +40,20 @@ import { TablePagination } from "@/components/common/TablePagination";
 const PAGE_SIZE = 20;
 
 export function LedgerPage() {
-  const [tab, setTab] = useState<"entries" | "exceptions">("entries");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: "entries" | "exceptions" =
+    searchParams.get("tab") === "exceptions" ? "exceptions" : "entries";
+  const setTab = (v: string) => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        if (v === "exceptions") sp.set("tab", "exceptions");
+        else sp.delete("tab");
+        return sp;
+      },
+      { replace: true },
+    );
+  };
 
   return (
     <Card>
