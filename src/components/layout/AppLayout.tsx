@@ -11,9 +11,11 @@ import {
   ServerCogIcon,
   ServerIcon,
   SlidersHorizontalIcon,
+  TriangleAlertIcon,
   UsersIcon,
   WalletIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -33,11 +35,28 @@ import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { useAuth } from "@/lib/auth/AuthContext";
 
-const NAV_GROUPS = [
+interface NavItem {
+  title: string;
+  to: string;
+  icon: LucideIcon;
+  // 自定义高亮判定（用于共享路由的 Tab，如「计费异常」= /ledger?tab=exceptions）。
+  match?: (loc: { pathname: string; search: string }) => boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+// §1.3 目标侧栏 IA：概览 / 网关中心 / 客户中心 / 请求中心 / 系统设置。
+const NAV_GROUPS: NavGroup[] = [
   {
-    label: "管理",
+    label: "概览",
+    items: [{ title: "概览", to: "/overview", icon: LayoutDashboardIcon }],
+  },
+  {
+    label: "网关中心",
     items: [
-      { title: "概览", to: "/", icon: LayoutDashboardIcon },
       { title: "服务商", to: "/providers", icon: ServerIcon },
       { title: "渠道", to: "/channels", icon: CableIcon },
       { title: "模型", to: "/models", icon: BoxIcon },
@@ -46,43 +65,71 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: "客户",
+    label: "客户中心",
     items: [
       { title: "用户", to: "/users", icon: UsersIcon },
       { title: "项目", to: "/projects", icon: FolderIcon },
     ],
   },
   {
-    label: "查询",
+    label: "请求中心",
     items: [
-      { title: "请求", to: "/requests", icon: ActivityIcon },
-      { title: "用量", to: "/usage", icon: GaugeIcon },
-      { title: "账本", to: "/ledger", icon: WalletIcon },
+      { title: "请求记录", to: "/requests", icon: ActivityIcon },
+      { title: "用量分析", to: "/usage", icon: GaugeIcon },
+      {
+        title: "账本流水",
+        to: "/ledger",
+        icon: WalletIcon,
+        match: (loc) =>
+          loc.pathname.startsWith("/ledger") &&
+          !new URLSearchParams(loc.search).get("tab")?.includes("exceptions"),
+      },
+      {
+        title: "计费异常",
+        to: "/ledger?tab=exceptions",
+        icon: TriangleAlertIcon,
+        match: (loc) =>
+          loc.pathname.startsWith("/ledger") &&
+          new URLSearchParams(loc.search).get("tab") === "exceptions",
+      },
     ],
   },
   {
-    label: "运营",
-    items: [{ title: "系统", to: "/system", icon: ServerCogIcon }],
+    label: "系统设置",
+    items: [{ title: "系统设置", to: "/system", icon: ServerCogIcon }],
   },
 ];
 
 const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
-function isItemActive(to: string, pathname: string): boolean {
-  return to === "/" ? pathname === "/" : pathname.startsWith(to);
+function defaultActive(to: string, pathname: string): boolean {
+  const path = to.split("?")[0];
+  return path === "/" ? pathname === "/" : pathname.startsWith(path);
+}
+
+function isItemActive(
+  item: NavItem,
+  loc: { pathname: string; search: string },
+): boolean {
+  if (item.match) return item.match(loc);
+  return defaultActive(item.to, loc.pathname);
 }
 
 export function AppLayout() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const loc = { pathname: location.pathname, search: location.search };
 
   function handleLogout() {
     logout();
     navigate("/login", { replace: true });
   }
 
-  const current = NAV_ITEMS.find((item) => isItemActive(item.to, pathname));
+  // 当前页标题：优先精确 match 项，回退到路径前缀首个匹配。
+  const current =
+    NAV_ITEMS.find((item) => item.match && item.match(loc)) ??
+    NAV_ITEMS.find((item) => defaultActive(item.to, loc.pathname));
 
   return (
     <SidebarProvider>
@@ -105,10 +152,10 @@ export function AppLayout() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {group.items.map((item) => (
-                    <SidebarMenuItem key={item.to}>
+                    <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
-                        isActive={isItemActive(item.to, pathname)}
+                        isActive={isItemActive(item, loc)}
                         tooltip={item.title}
                       >
                         <Link to={item.to}>

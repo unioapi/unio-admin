@@ -24,7 +24,8 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/" element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
+          <Route index element={<Navigate to="/overview" replace />} />
+          <Route path="overview" element={<DashboardPage />} />
           <Route path="providers" element={<ProvidersPage />} />
           <Route path="channels" element={<ChannelsPage />} />
           <Route path="models" element={<ModelsPage />} />
