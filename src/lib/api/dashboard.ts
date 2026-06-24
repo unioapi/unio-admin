@@ -108,11 +108,22 @@ export interface LatencyStats {
   p90: number;
   p95: number;
   p99: number;
+  /** 测到延迟（成功且 completed_at 非空）的请求数 */
+  sample: number;
+  /** sample / 成功请求，反映平均/分位的代表性 */
+  coverage: number;
 }
 
 export interface TtftStats {
+  avg: number;
   p50: number;
+  p90: number;
   p95: number;
+  p99: number;
+  /** 测到首 token（response_started_at 非空）的请求数 */
+  sample: number;
+  /** sample / 区间总请求，反映平均/分位的代表性 */
+  coverage: number;
   has_data: boolean;
 }
 
@@ -120,6 +131,10 @@ export interface CacheStats {
   read_rate: number;
   write_rate: number;
   input_tokens: number;
+  uncached_tokens: number;
+  cache_read_tokens: number;
+  cache_write_5m_tokens: number;
+  cache_write_1h_tokens: number;
 }
 
 export interface RadarActionItem {

@@ -1,16 +1,14 @@
 import type { ReactNode } from "react";
-import { InfoIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 
-// §1.5.3 MetricCard：Card + Tooltip + Skeleton 组合。运维总览卡片唯一实现。
+// §1.5.3 MetricCard：Card + 悬浮详情（HoverCard，可移入 tip）+ Skeleton 组合。运维总览卡片唯一实现。
 export type MetricIntent = "default" | "success" | "warning" | "danger";
 
 const intentText: Record<MetricIntent, string> = {
@@ -24,6 +22,7 @@ export interface MetricCardProps {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
+  /** 悬浮卡片详情；有值时整卡 hover 展示 HoverCard，鼠标可移入 tip 内 */
   tooltip?: ReactNode;
   intent?: MetricIntent;
   loading?: boolean;
@@ -43,12 +42,13 @@ export function MetricCard({
   onClick,
   className,
 }: MetricCardProps) {
-  return (
+  const card = (
     <Card
       size="sm"
       onClick={onClick}
       className={cn(
         "gap-1.5 p-3",
+        tooltip && "cursor-default",
         onClick && "cursor-pointer transition-colors hover:bg-accent/50",
         className,
       )}
@@ -57,28 +57,9 @@ export function MetricCard({
         <span className="text-muted-foreground truncate text-xs font-medium">
           {label}
         </span>
-        <span className="flex items-center gap-1 text-muted-foreground">
-          {icon}
-          {tooltip ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="text-muted-foreground/70 hover:text-foreground"
-                    aria-label="详情"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <InfoIcon className="size-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs whitespace-pre-line text-left">
-                  {tooltip}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
-        </span>
+        {icon ? (
+          <span className="text-muted-foreground shrink-0">{icon}</span>
+        ) : null}
       </div>
       {loading ? (
         <Skeleton className="h-7 w-20" />
@@ -93,13 +74,24 @@ export function MetricCard({
         </div>
       )}
       {hint != null && !loading ? (
-        <div className="text-muted-foreground truncate text-xs">{hint}</div>
+        <div className="text-muted-foreground min-w-0 text-xs">{hint}</div>
       ) : null}
     </Card>
   );
+
+  if (!tooltip) return card;
+
+  return (
+    <HoverCard openDelay={120} closeDelay={120}>
+      <HoverCardTrigger asChild>{card}</HoverCardTrigger>
+      <HoverCardContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-3">
+        {tooltip}
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
-// 响应式雷达栅格：移动端 2 列，桌面 6 列（§3.1.9）。
+// 响应式雷达栅格：移动端 2 列，桌面 4 列（8 卡 = 4×2）。
 export function MetricGrid({
   children,
   className,
@@ -109,10 +101,7 @@ export function MetricGrid({
 }) {
   return (
     <div
-      className={cn(
-        "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6",
-        className,
-      )}
+      className={cn("grid grid-cols-2 gap-3 md:grid-cols-4", className)}
     >
       {children}
     </div>

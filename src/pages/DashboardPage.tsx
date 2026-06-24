@@ -12,16 +12,12 @@ import {
 } from "recharts";
 import {
   ActivityIcon,
-  AlertTriangleIcon,
-  BadgePercentIcon,
-  CircleCheckIcon,
   CircleDollarSignIcon,
   ClockIcon,
   CoinsIcon,
   DatabaseIcon,
   HourglassIcon,
   ReceiptTextIcon,
-  TrendingUpIcon,
   ZapIcon,
 } from "lucide-react";
 import {
@@ -41,6 +37,26 @@ import {
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
+import { CacheHitHint, CacheHitTip } from "@/components/dashboard/CacheHitTip";
+import {
+  RequestSuccessHint,
+  RequestSuccessTip,
+} from "@/components/dashboard/RequestSuccessTip";
+import { TtftHint, TtftTip } from "@/components/dashboard/TtftTip";
+import { LatencyHint, LatencyTip } from "@/components/dashboard/LatencyTip";
+import { RevenueHint, RevenueTip } from "@/components/dashboard/RevenueTip";
+import {
+  SettlementHint,
+  SettlementTip,
+} from "@/components/dashboard/SettlementTip";
+import { TokenHint, TokenTip } from "@/components/dashboard/TokenTip";
+import { TpsHint, TpsTip } from "@/components/dashboard/TpsTip";
+import {
+  profitIntent,
+  rateIntent,
+  settlementAnomalyCount,
+  settlementIntent,
+} from "@/components/dashboard/metrics";
 import {
   formatCompact,
   formatInt,
@@ -89,13 +105,6 @@ function fmtBucket(iso: string, interval: TimeseriesInterval): string {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:00`;
   }
   return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
-// 成功率/毛利的 intent 色板。
-function rateIntent(rate: number): "success" | "warning" | "danger" {
-  if (rate >= 0.95) return "success";
-  if (rate >= 0.8) return "warning";
-  return "danger";
 }
 
 const HEALTH_LABEL: Record<HealthBucket, string> = {
@@ -231,133 +240,77 @@ function RadarCards({
 }) {
   const r = data;
   const ttftValue =
-    r && r.ttft.has_data ? formatLatencyMs(r.ttft.p95) : "—";
-  const marginNum = r ? Number(r.margin_usd) : 0;
+    r && r.ttft.has_data ? formatLatencyMs(r.ttft.avg) : "—";
 
   return (
     <MetricGrid>
       <MetricCard
-        label="请求量"
-        loading={loading}
-        value={formatCompact(r?.requests.total ?? 0)}
-        hint={r ? `成功 ${formatCompact(r.requests.succeeded)}` : undefined}
-        icon={<ActivityIcon className="size-3.5" />}
-        tooltip={
-          r
-            ? `成功 ${r.requests.succeeded} · 失败 ${r.requests.failed} · 取消 ${r.requests.canceled} · 超时 ${r.requests.timeout}`
-            : undefined
-        }
-      />
-      <MetricCard
-        label="成功率"
+        label="请求成功率"
         loading={loading}
         value={formatPercent(r?.requests.success_rate ?? 0)}
         intent={r ? rateIntent(r.requests.success_rate) : "default"}
-        icon={<CircleCheckIcon className="size-3.5" />}
-        tooltip={
-          r
-            ? `失败率 ${formatPercent(r.requests.error_rate)} · 超时 ${r.requests.timeout}`
-            : undefined
-        }
+        icon={<ActivityIcon className="size-3.5" />}
+        hint={r ? <RequestSuccessHint requests={r.requests} /> : undefined}
+        tooltip={r ? <RequestSuccessTip requests={r.requests} /> : undefined}
       />
       <MetricCard
-        label="P95 延迟"
+        label="平均延迟"
         loading={loading}
-        value={formatLatencyMs(r?.latency.p95 ?? 0)}
+        value={formatLatencyMs(r?.latency.avg ?? 0)}
         icon={<ClockIcon className="size-3.5" />}
-        tooltip={
-          r
-            ? `Avg ${formatLatencyMs(r.latency.avg)} · P50 ${formatLatencyMs(r.latency.p50)} · P90 ${formatLatencyMs(r.latency.p90)} · P99 ${formatLatencyMs(r.latency.p99)}`
-            : undefined
-        }
+        hint={r ? <LatencyHint latency={r.latency} /> : undefined}
+        tooltip={r ? <LatencyTip latency={r.latency} /> : undefined}
       />
       <MetricCard
-        label="P95 TTFT"
+        label="平均 TTFT"
         loading={loading}
         value={ttftValue}
         icon={<HourglassIcon className="size-3.5" />}
-        tooltip={
-          r && !r.ttft.has_data
-            ? "暂无首 token 时间数据（历史请求未记录响应起始时间；后端重启后新请求会开始写入）"
-            : r
-              ? `P50 ${formatLatencyMs(r.ttft.p50)}`
-              : undefined
-        }
+        hint={r ? <TtftHint ttft={r.ttft} /> : undefined}
+        tooltip={r ? <TtftTip ttft={r.ttft} /> : undefined}
       />
       <MetricCard
         label="缓存命中率"
         loading={loading}
         value={formatPercent(r?.cache.read_rate ?? 0)}
+        intent={r && r.cache.read_rate >= 0.5 ? "success" : "default"}
         icon={<DatabaseIcon className="size-3.5" />}
-        tooltip={
-          r
-            ? `写入率 ${formatPercent(r.cache.write_rate)} · 输入 token ${formatCompact(r.cache.input_tokens)}`
-            : undefined
-        }
+        hint={r ? <CacheHitHint cache={r.cache} /> : undefined}
+        tooltip={r ? <CacheHitTip cache={r.cache} /> : undefined}
       />
       <MetricCard
-        label="Token"
+        label="Token 总量"
         loading={loading}
         value={formatCompact(r?.tokens.total ?? 0)}
         icon={<CoinsIcon className="size-3.5" />}
-        tooltip={
-          r
-            ? `输入 ${formatCompact(r.tokens.input)} · 输出 ${formatCompact(r.tokens.output)}`
-            : undefined
-        }
+        hint={r ? <TokenHint tokens={r.tokens} /> : undefined}
+        tooltip={r ? <TokenTip tokens={r.tokens} cache={r.cache} /> : undefined}
       />
       <MetricCard
-        label="TPS"
+        label="平均 TPS"
         loading={loading}
         value={r ? formatTPS(r.tps) : "—"}
         icon={<ZapIcon className="size-3.5" />}
-        tooltip="成功请求平均输出 token 速度"
+        hint={r ? <TpsHint output={r.tokens.output} /> : undefined}
+        tooltip={r ? <TpsTip tps={r.tps} output={r.tokens.output} /> : undefined}
       />
       <MetricCard
-        label="收入"
+        label="营收"
         loading={loading}
-        value={formatUSD(r?.revenue_usd ?? "0")}
+        value={r ? formatUSD(r.margin_usd) : "—"}
+        intent={r ? profitIntent(Number(r.margin_usd)) : "default"}
         icon={<CircleDollarSignIcon className="size-3.5" />}
-        tooltip="客户结算扣费（USD）"
+        hint={r ? <RevenueHint revenue={r} /> : undefined}
+        tooltip={r ? <RevenueTip revenue={r} /> : undefined}
       />
       <MetricCard
-        label="成本"
+        label="结算异常"
         loading={loading}
-        value={formatUSD(r?.cost_usd ?? "0")}
-        icon={<TrendingUpIcon className="size-3.5" />}
-        tooltip="平台上游成本（USD）"
-      />
-      <MetricCard
-        label="毛利"
-        loading={loading}
-        value={formatUSD(r?.margin_usd ?? "0")}
-        intent={marginNum < 0 ? "danger" : "success"}
-        icon={<BadgePercentIcon className="size-3.5" />}
-        tooltip="收入 − 成本（USD）"
-      />
-      <MetricCard
-        label="计费异常"
-        loading={loading}
-        value={formatInt(r?.billing_exceptions.total ?? 0)}
-        intent={r && r.billing_exceptions.total > 0 ? "danger" : "default"}
+        value={formatInt(r ? settlementAnomalyCount(r) : 0)}
+        intent={r ? settlementIntent(r) : "default"}
         icon={<ReceiptTextIcon className="size-3.5" />}
-        hint={r ? `平台承担 ${formatUSD(r.billing_exceptions.amount)}` : undefined}
-        tooltip="区间内新增计费异常事件"
-      />
-      <MetricCard
-        label="结算积压"
-        loading={loading}
-        value={formatInt(r?.settlement_backlog.active ?? 0)}
-        intent={
-          r && r.settlement_backlog.dead > 0
-            ? "danger"
-            : r && r.settlement_backlog.active > 0
-              ? "warning"
-              : "default"
-        }
-        icon={<AlertTriangleIcon className="size-3.5" />}
-        hint={r ? `失败 ${formatInt(r.settlement_backlog.dead)}` : undefined}
-        tooltip="结算补偿任务：进行中 active / 已耗尽需人工 dead"
+        hint={r ? <SettlementHint settlement={r} /> : undefined}
+        tooltip={r ? <SettlementTip settlement={r} /> : undefined}
       />
     </MetricGrid>
   );
