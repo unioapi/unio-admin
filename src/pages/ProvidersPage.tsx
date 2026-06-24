@@ -1,24 +1,29 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { PlusIcon, SearchIcon } from "lucide-react";
 import {
-  PencilIcon,
-  PlusIcon,
-  SearchIcon,
-  ServerIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { listProviders } from "@/lib/api/providers";
-import type { StatusFilter } from "@/lib/api/types";
+  getProvidersOpsTable,
+  type ProviderOpsRow,
+} from "@/lib/api/providersOps";
+import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { Button } from "@/components/ui/button";
+import { RangeFilter } from "@/components/common/RangeFilter";
+import { ProviderDetailSheet } from "@/components/providers/ProviderDetailSheet";
+import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
+import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  formatCompact,
+  formatInt,
+  formatLatencyMs,
+  formatPercent,
+  formatRelativeTime,
+} from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -27,214 +32,146 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { TablePagination } from "@/components/common/TablePagination";
-import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
-import { ProviderStatusToggle } from "@/components/providers/ProviderStatusToggle";
-import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
 
-const COLS = 5;
 const PAGE_SIZE = 20;
+type StatusTab = "all" | "enabled" | "disabled";
 
 export function ProvidersPage() {
-  const [tab, setTab] = useState<StatusFilter>("enabled");
+  const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
+  const [statusTab, setStatusTab] = useState<StatusTab>("all");
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
-
+  const [selected, setSelected] = useState<ProviderOpsRow | null>(null);
   const search = useDebouncedValue(searchInput.trim(), 300);
 
-  const query = useQuery({
-    queryKey: ["providers", { status: tab, q: search, page }],
+  const rangeQuery = { ...params, range: value.preset };
+
+  const table = useQuery({
+    queryKey: ["providers", "ops-table", rangeQuery, statusTab, search, page],
     queryFn: () =>
-      listProviders({ page, pageSize: PAGE_SIZE, status: tab, q: search }),
+      getProvidersOpsTable({
+        ...rangeQuery,
+        page,
+        page_size: PAGE_SIZE,
+        status: statusTab === "all" ? undefined : statusTab,
+        search: search || undefined,
+      }),
     placeholderData: keepPreviousData,
   });
 
-  const items = query.data?.items ?? [];
-  const total = query.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  // 渲染期夹紧：过滤后总数变小（如停用最后一条）导致当前页越界时，回退到末页。
-  if (page > pageCount) {
-    setPage(pageCount);
-  }
-
-  function changeTab(next: string) {
-    setTab(next as StatusFilter);
-    setPage(1);
-  }
-
-  function changeSearch(next: string) {
-    setSearchInput(next);
-    setPage(1);
-  }
+  const pageCount = table.data ? Math.max(1, Math.ceil(table.data.total / PAGE_SIZE)) : 1;
 
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle>服务商</CardTitle>
-        <CardDescription>上游服务商列表</CardDescription>
-        <CardAction>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-lg font-semibold tracking-tight">服务商</h2>
+          <p className="text-muted-foreground text-sm">上游供应商分组视图：整体稳定性与渠道概况</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <RangeFilter value={value} onChange={setRange} refreshedAt={refreshedAt} onRefresh={refresh} />
           <ProviderFormDialog>
             <Button size="sm">
               <PlusIcon data-icon="inline-start" />
-              新建
+              新建服务商
             </Button>
           </ProviderFormDialog>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Tabs value={tab} onValueChange={changeTab}>
-            <TabsList>
-              <TabsTrigger value="enabled">启用</TabsTrigger>
-              <TabsTrigger value="disabled">停用</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          <div className="relative w-full max-w-xs">
-            <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-            <Input
-              placeholder="搜索标识 / 名称"
-              value={searchInput}
-              onChange={(e) => changeSearch(e.target.value)}
-              className="pl-8"
-            />
-          </div>
         </div>
+      </div>
 
-        {query.isError ? (
-          <Alert variant="destructive">
-            <AlertTitle>加载失败</AlertTitle>
-            <AlertDescription>{query.error.message}</AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            <Table className={query.isFetching ? "opacity-60" : undefined}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v as StatusTab); setPage(1); }}>
+          <TabsList>
+            <TabsTrigger value="all">全部</TabsTrigger>
+            <TabsTrigger value="enabled">启用</TabsTrigger>
+            <TabsTrigger value="disabled">停用</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="relative">
+          <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <Input
+            value={searchInput}
+            onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
+            placeholder="搜索名称 / slug"
+            className="w-56 pl-8"
+          />
+        </div>
+      </div>
+
+      {table.isError ? (
+        <Alert variant="destructive">
+          <AlertTitle>加载失败</AlertTitle>
+          <AlertDescription>{(table.error as Error).message}</AlertDescription>
+        </Alert>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">ID</TableHead>
-                  <TableHead>标识</TableHead>
-                  <TableHead>名称</TableHead>
+                  <TableHead>服务商</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="w-24 text-right">操作</TableHead>
+                  <TableHead className="text-right">渠道</TableHead>
+                  <TableHead>健康</TableHead>
+                  <TableHead className="text-right">请求</TableHead>
+                  <TableHead className="text-right">成功率</TableHead>
+                  <TableHead className="text-right">P95 延迟</TableHead>
+                  <TableHead className="text-right">超时</TableHead>
+                  <TableHead>最近成功</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {query.isPending ? (
-                  Array.from({ length: 8 }).map((_, i) => (
+                {table.isPending ? (
+                  Array.from({ length: 6 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell>
-                        <Skeleton className="h-4 w-8" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-48" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-40" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-16 rounded-full" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="ml-auto size-8" />
+                      <TableCell colSpan={9}>
+                        <Skeleton className="h-6 w-full" />
                       </TableCell>
                     </TableRow>
                   ))
-                ) : items.length === 0 ? (
+                ) : table.data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={COLS} className="h-48">
-                      <ProvidersEmpty search={search} tab={tab} />
+                    <TableCell colSpan={9} className="text-muted-foreground py-10 text-center text-sm">
+                      暂无服务商
                     </TableCell>
                   </TableRow>
                 ) : (
-                  items.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {p.id}
-                      </TableCell>
-                      <TableCell className="font-medium">{p.slug}</TableCell>
-                      <TableCell>{p.name}</TableCell>
+                  table.data.items.map((p) => (
+                    <TableRow key={p.id} className="cursor-pointer" onClick={() => setSelected(p)}>
                       <TableCell>
-                        <ProviderStatusToggle provider={p} />
+                        <div className="font-medium">{p.name}</div>
+                        <div className="text-muted-foreground text-xs">{p.slug}</div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <ProviderFormDialog provider={p}>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="编辑"
-                            >
-                              <PencilIcon />
-                            </Button>
-                          </ProviderFormDialog>
-                          <DeleteProviderDialog provider={p}>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="删除"
-                              className="text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2Icon />
-                            </Button>
-                          </DeleteProviderDialog>
-                        </div>
+                      <TableCell>
+                        <Badge variant={p.status === "enabled" ? "default" : "outline"}>
+                          {p.status === "enabled" ? "启用" : "停用"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {p.channel_enabled}/{p.channel_total}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={HEALTH_VARIANT[p.health]}>{HEALTH_LABEL[p.health]}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCompact(p.attempt_total)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatPercent(p.success_rate)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatLatencyMs(p.latency_p95)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatInt(p.timeout_total)}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {p.last_success_at ? formatRelativeTime(p.last_success_at) : "—"}
                       </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
+          </div>
+          <TablePagination page={page} pageCount={pageCount} total={table.data?.total ?? 0} onPageChange={setPage} />
+        </div>
+      )}
 
-            <TablePagination
-              page={page}
-              pageCount={pageCount}
-              total={total}
-              onPageChange={setPage}
-            />
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ProvidersEmpty({
-  search,
-  tab,
-}: {
-  search: string;
-  tab: StatusFilter;
-}) {
-  if (search) {
-    return (
-      <p className="text-muted-foreground text-center text-sm">
-        没有匹配「{search}」的服务商
-      </p>
-    );
-  }
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <ServerIcon />
-        </EmptyMedia>
-        <EmptyTitle>暂无服务商</EmptyTitle>
-        <EmptyDescription>
-          {tab === "enabled" ? "没有启用中的服务商。" : "没有已停用的服务商。"}
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+      <ProviderDetailSheet provider={selected} range={rangeQuery} onClose={() => setSelected(null)} />
+    </div>
   );
 }
