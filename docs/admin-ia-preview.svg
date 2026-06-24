@@ -1,0 +1,291 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" fill="none">
+  <defs>
+    <style>
+      text { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", Inter, Arial, sans-serif; }
+      .title { font-size: 31px; font-weight: 680; fill: #111827; }
+      .subtitle { font-size: 14px; fill: #64748b; }
+      .small { font-size: 13px; fill: #64748b; }
+      .tiny { font-size: 12px; fill: #94a3b8; }
+      .nav-title { font-size: 12px; font-weight: 650; fill: #94a3b8; letter-spacing: .5px; }
+      .nav { font-size: 15px; fill: #475569; }
+      .nav-active { font-size: 15px; font-weight: 650; fill: #0f172a; }
+      .card-title { font-size: 14px; fill: #64748b; }
+      .metric { font-size: 29px; font-weight: 720; fill: #0f172a; }
+      .metric-sm { font-size: 22px; font-weight: 720; fill: #0f172a; }
+      .label { font-size: 13px; font-weight: 650; fill: #334155; }
+      .value { font-size: 14px; fill: #0f172a; }
+      .good { fill: #047857; }
+      .warn { fill: #b45309; }
+      .bad { fill: #b91c1c; }
+      .muted { fill: #64748b; }
+      .panel-title { font-size: 18px; font-weight: 680; fill: #0f172a; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    </style>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <linearGradient id="successLine" x1="670" y1="728" x2="1240" y2="728" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="latencyLine" x1="670" y1="818" x2="1240" y2="818" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d97706"/>
+      <stop offset="1" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#f8fafc"/>
+
+  <!-- Sidebar -->
+  <rect x="24" y="24" width="264" height="952" rx="18" fill="#ffffff" stroke="#e2e8f0"/>
+  <circle cx="63" cy="66" r="18" fill="#0f172a"/>
+  <path d="M53 66h20M63 56v20" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="92" y="62" font-size="20" font-weight="720" fill="#0f172a">UNIO Admin</text>
+  <text x="92" y="84" class="tiny">运营控制台</text>
+
+  <g transform="translate(48,128)">
+    <text class="nav-title" x="0" y="0">概览</text>
+    <rect x="-12" y="18" width="216" height="42" rx="10" fill="#eef2ff"/>
+    <rect x="-12" y="18" width="4" height="42" rx="2" fill="#4f46e5"/>
+    <circle cx="9" cy="39" r="6" fill="#4f46e5"/>
+    <text class="nav-active" x="28" y="44">概览</text>
+  </g>
+
+  <g transform="translate(48,218)">
+    <text class="nav-title" x="0" y="0">网关中心</text>
+    <text class="nav" x="28" y="40">服务商</text>
+    <text class="nav" x="28" y="82">渠道</text>
+    <text class="nav" x="28" y="124">模型</text>
+    <text class="nav" x="28" y="166">线路</text>
+    <text class="nav" x="28" y="208">能力</text>
+    <circle cx="9" cy="35" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="77" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="119" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="161" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="203" r="5" fill="#94a3b8"/>
+  </g>
+
+  <g transform="translate(48,478)">
+    <text class="nav-title" x="0" y="0">客户中心</text>
+    <text class="nav" x="28" y="40">用户</text>
+    <text class="nav" x="28" y="82">项目</text>
+    <circle cx="9" cy="35" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="77" r="5" fill="#94a3b8"/>
+  </g>
+
+  <g transform="translate(48,610)">
+    <text class="nav-title" x="0" y="0">请求中心</text>
+    <text class="nav" x="28" y="40">请求记录</text>
+    <text class="nav" x="28" y="82">用量分析</text>
+    <text class="nav" x="28" y="124">账本流水</text>
+    <text class="nav" x="28" y="166">计费异常</text>
+    <circle cx="9" cy="35" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="77" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="119" r="5" fill="#94a3b8"/>
+    <circle cx="9" cy="161" r="5" fill="#94a3b8"/>
+  </g>
+
+  <g transform="translate(48,828)">
+    <text class="nav-title" x="0" y="0">系统设置</text>
+    <text class="nav" x="28" y="40">系统设置</text>
+    <circle cx="9" cy="35" r="5" fill="#94a3b8"/>
+  </g>
+
+  <!-- Main header -->
+  <text x="328" y="66" class="title">概览 · 全平台值班雷达</text>
+  <text x="328" y="94" class="subtitle">把请求健康、成本收益、渠道异常和待处理事项放到同一个运营视图里。</text>
+
+  <rect x="1052" y="45" width="66" height="36" rx="9" fill="#0f172a"/>
+  <text x="1074" y="68" font-size="14" font-weight="650" fill="#ffffff">24H</text>
+  <rect x="1128" y="45" width="58" height="36" rx="9" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="1146" y="68" class="label">3D</text>
+  <rect x="1196" y="45" width="58" height="36" rx="9" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="1214" y="68" class="label">7D</text>
+  <rect x="1264" y="45" width="66" height="36" rx="9" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="1282" y="68" class="label">30D</text>
+  <rect x="1340" y="45" width="94" height="36" rx="9" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="1364" y="68" class="label">自定义</text>
+  <rect x="1444" y="45" width="112" height="36" rx="9" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="1474" y="68" class="label">刷新</text>
+
+  <!-- KPI cards -->
+  <g filter="url(#softShadow)">
+    <rect x="328" y="128" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="532" y="128" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="736" y="128" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="940" y="128" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="1144" y="128" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="1348" y="128" width="208" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+
+    <rect x="328" y="264" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="532" y="264" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="736" y="264" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="940" y="264" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="1144" y="264" width="188" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="1348" y="264" width="208" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  </g>
+
+  <text x="348" y="160" class="card-title">请求数</text>
+  <text x="348" y="205" class="metric">1.28M</text>
+  <text x="348" y="230" class="small good">较昨日 +12.4%</text>
+
+  <text x="552" y="160" class="card-title">成功率</text>
+  <text x="552" y="205" class="metric">99.31%</text>
+  <text x="552" y="230" class="small good">SLO 正常</text>
+
+  <text x="756" y="160" class="card-title">P95 延迟</text>
+  <text x="756" y="205" class="metric">842ms</text>
+  <text x="756" y="230" class="small warn">华东线路偏高</text>
+
+  <text x="960" y="160" class="card-title">P95 TTFT</text>
+  <text x="960" y="205" class="metric">316ms</text>
+  <text x="960" y="230" class="small muted">新写入后展示</text>
+
+  <text x="1164" y="160" class="card-title">收入</text>
+  <text x="1164" y="205" class="metric">¥86.4k</text>
+  <text x="1164" y="230" class="small good">账本已对齐</text>
+
+  <text x="1368" y="160" class="card-title">成本</text>
+  <text x="1368" y="205" class="metric">¥51.7k</text>
+  <text x="1368" y="230" class="small muted">渠道成本口径</text>
+
+  <text x="348" y="296" class="card-title">毛利率</text>
+  <text x="348" y="341" class="metric">40.2%</text>
+  <text x="348" y="366" class="small good">较上周 +2.1%</text>
+
+  <text x="552" y="296" class="card-title">缓存命中</text>
+  <text x="552" y="341" class="metric">18.8%</text>
+  <text x="552" y="366" class="small muted">按请求口径</text>
+
+  <text x="756" y="296" class="card-title">计费异常</text>
+  <text x="756" y="341" class="metric">17</text>
+  <text x="756" y="366" class="small bad">需处理 5 个</text>
+
+  <text x="960" y="296" class="card-title">结算积压</text>
+  <text x="960" y="341" class="metric">¥2.9k</text>
+  <text x="960" y="366" class="small warn">2 个恢复任务</text>
+
+  <text x="1164" y="296" class="card-title">异常渠道</text>
+  <text x="1164" y="341" class="metric">3</text>
+  <text x="1164" y="366" class="small warn">失败率超阈值</text>
+
+  <text x="1368" y="296" class="card-title">可用线路</text>
+  <text x="1368" y="341" class="metric">24 / 28</text>
+  <text x="1368" y="366" class="small good">4 条降级保护</text>
+
+  <!-- Action items -->
+  <rect x="328" y="412" width="572" height="250" rx="14" fill="#ffffff" stroke="#e2e8f0" filter="url(#softShadow)"/>
+  <text x="352" y="448" class="panel-title">需要处理</text>
+  <text x="352" y="474" class="subtitle">按风险排序的运营动作入口</text>
+
+  <line x1="352" y1="500" x2="876" y2="500" stroke="#e2e8f0"/>
+  <circle cx="366" cy="530" r="7" fill="#dc2626"/>
+  <text x="388" y="535" class="value">渠道 azure-east 错误率 8.2%，已连续 18 分钟超阈值</text>
+  <rect x="770" y="512" width="84" height="30" rx="8" fill="#fee2e2"/>
+  <text x="790" y="532" font-size="13" font-weight="650" fill="#b91c1c">去处理</text>
+
+  <circle cx="366" cy="578" r="7" fill="#f59e0b"/>
+  <text x="388" y="583" class="value">5 条计费异常待复核，预计影响 ¥412.80</text>
+  <rect x="770" y="560" width="84" height="30" rx="8" fill="#fef3c7"/>
+  <text x="790" y="580" font-size="13" font-weight="650" fill="#92400e">查看</text>
+
+  <circle cx="366" cy="626" r="7" fill="#2563eb"/>
+  <text x="388" y="631" class="value">gpt-4.1-mini 近 24H 请求量突增 31%，建议检查线路权重</text>
+  <rect x="770" y="608" width="84" height="30" rx="8" fill="#dbeafe"/>
+  <text x="790" y="628" font-size="13" font-weight="650" fill="#1d4ed8">调整</text>
+
+  <!-- Channel health -->
+  <rect x="928" y="412" width="628" height="250" rx="14" fill="#ffffff" stroke="#e2e8f0" filter="url(#softShadow)"/>
+  <text x="952" y="448" class="panel-title">异常渠道 Top</text>
+  <text x="952" y="474" class="subtitle">结合失败率、P95、成本漂移和路由命中数</text>
+
+  <g transform="translate(952,508)">
+    <text x="0" y="0" class="tiny">渠道</text>
+    <text x="220" y="0" class="tiny">失败率</text>
+    <text x="328" y="0" class="tiny">P95</text>
+    <text x="442" y="0" class="tiny">状态</text>
+    <line x1="0" y1="18" x2="580" y2="18" stroke="#e2e8f0"/>
+
+    <text x="0" y="54" class="value">azure-east / gpt-4.1</text>
+    <text x="220" y="54" class="bad" font-size="14" font-weight="650">8.2%</text>
+    <text x="328" y="54" class="value">2.8s</text>
+    <rect x="442" y="34" width="82" height="28" rx="8" fill="#fee2e2"/>
+    <text x="462" y="53" font-size="13" font-weight="650" fill="#b91c1c">降级中</text>
+
+    <text x="0" y="102" class="value">openai-us / embeddings</text>
+    <text x="220" y="102" class="warn" font-size="14" font-weight="650">3.4%</text>
+    <text x="328" y="102" class="value">920ms</text>
+    <rect x="442" y="82" width="82" height="28" rx="8" fill="#fef3c7"/>
+    <text x="462" y="101" font-size="13" font-weight="650" fill="#92400e">观察</text>
+
+    <text x="0" y="150" class="value">volc-cn / rerank</text>
+    <text x="220" y="150" class="warn" font-size="14" font-weight="650">2.9%</text>
+    <text x="328" y="150" class="value">1.4s</text>
+    <rect x="442" y="130" width="82" height="28" rx="8" fill="#dcfce7"/>
+    <text x="462" y="149" font-size="13" font-weight="650" fill="#047857">恢复中</text>
+  </g>
+
+  <!-- Trends -->
+  <rect x="328" y="690" width="620" height="262" rx="14" fill="#ffffff" stroke="#e2e8f0" filter="url(#softShadow)"/>
+  <text x="352" y="728" class="panel-title">请求与体验趋势</text>
+  <text x="352" y="754" class="subtitle">请求数、成功率、P95 延迟与 TTFT 同屏对比</text>
+  <g transform="translate(352,782)">
+    <line x1="0" y1="122" x2="556" y2="122" stroke="#e2e8f0"/>
+    <line x1="0" y1="82" x2="556" y2="82" stroke="#eef2f7"/>
+    <line x1="0" y1="42" x2="556" y2="42" stroke="#eef2f7"/>
+    <path d="M0 96 C50 64 84 72 126 54 C174 33 218 40 260 48 C318 60 352 22 396 34 C444 48 486 22 556 28" stroke="url(#successLine)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M0 70 C48 88 86 84 132 104 C190 128 236 98 282 114 C332 132 382 88 430 96 C480 108 512 70 556 74" stroke="url(#latencyLine)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <text x="0" y="152" class="tiny">00:00</text>
+    <text x="178" y="152" class="tiny">08:00</text>
+    <text x="370" y="152" class="tiny">16:00</text>
+    <text x="520" y="152" class="tiny">现在</text>
+    <circle cx="438" cy="-52" r="5" fill="#0f766e"/>
+    <text x="450" y="-48" class="tiny">成功率 / 请求</text>
+    <circle cx="438" cy="-28" r="5" fill="#d97706"/>
+    <text x="450" y="-24" class="tiny">P95 / TTFT</text>
+  </g>
+
+  <!-- Group performance -->
+  <rect x="976" y="690" width="580" height="262" rx="14" fill="#ffffff" stroke="#e2e8f0" filter="url(#softShadow)"/>
+  <text x="1000" y="728" class="panel-title">分组表现</text>
+  <g transform="translate(1000,750)">
+    <rect x="0" y="0" width="74" height="32" rx="8" fill="#0f172a"/>
+    <text x="18" y="21" font-size="13" font-weight="650" fill="#ffffff">服务商</text>
+    <rect x="82" y="0" width="58" height="32" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="98" y="21" class="label">渠道</text>
+    <rect x="148" y="0" width="58" height="32" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="164" y="21" class="label">模型</text>
+    <rect x="214" y="0" width="58" height="32" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="230" y="21" class="label">线路</text>
+  </g>
+  <g transform="translate(1000,804)">
+    <text x="0" y="0" class="tiny">对象</text>
+    <text x="170" y="0" class="tiny">请求</text>
+    <text x="270" y="0" class="tiny">成功率</text>
+    <text x="380" y="0" class="tiny">毛利</text>
+    <line x1="0" y1="18" x2="520" y2="18" stroke="#e2e8f0"/>
+
+    <text x="0" y="46" class="value">OpenAI</text>
+    <text x="170" y="46" class="value mono">614k</text>
+    <text x="270" y="46" class="good" font-size="14" font-weight="650">99.62%</text>
+    <rect x="380" y="28" width="130" height="12" rx="6" fill="#dcfce7"/>
+    <rect x="380" y="28" width="92" height="12" rx="6" fill="#16a34a"/>
+    <text x="380" y="62" class="tiny">¥19.8k</text>
+
+    <text x="0" y="88" class="value">Azure</text>
+    <text x="170" y="88" class="value mono">428k</text>
+    <text x="270" y="88" class="warn" font-size="14" font-weight="650">97.88%</text>
+    <rect x="380" y="70" width="130" height="12" rx="6" fill="#fef3c7"/>
+    <rect x="380" y="70" width="62" height="12" rx="6" fill="#f59e0b"/>
+    <text x="380" y="104" class="tiny">¥8.4k</text>
+
+    <text x="0" y="130" class="value">Volcengine</text>
+    <text x="170" y="130" class="value mono">238k</text>
+    <text x="270" y="130" class="good" font-size="14" font-weight="650">99.11%</text>
+    <rect x="380" y="112" width="130" height="12" rx="6" fill="#dbeafe"/>
+    <rect x="380" y="112" width="74" height="12" rx="6" fill="#2563eb"/>
+    <text x="380" y="146" class="tiny">¥6.5k</text>
+  </g>
+
+  <text x="328" y="974" class="tiny">概念预览：基于 ADMIN-IA-PLAN.md / IMPLEMENTATION-DECISION-LOG.md 绘制，最终细节会随真实数据与组件实现微调。</text>
+</svg>

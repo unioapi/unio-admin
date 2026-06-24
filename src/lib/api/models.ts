@@ -52,6 +52,12 @@ export async function listModels(
   return { items: res.data.data, total: res.data.meta.total };
 }
 
+// 读取单条模型完整配置（抽屉/编辑前回填）。
+export async function getModel(id: number): Promise<Model> {
+  const res = await api.get<{ data: Model }>(`/admin/v1/models/${id}`);
+  return res.data.data;
+}
+
 // 给「渠道绑定模型」的下拉用：一次拉满（上限 100），默认只取启用中的模型。
 export async function listAllModels(
   status: "enabled" | "disabled" = "enabled",
