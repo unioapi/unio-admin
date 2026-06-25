@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
@@ -11,9 +11,10 @@ import {
   type ProviderOpsRow,
 } from "@/lib/api/providersOps";
 import type { RangeQuery } from "@/lib/api/dashboard";
-import { formatCompact, formatInt, formatLatencyMs, formatPercent } from "@/lib/format";
+import { formatCompact, formatInt, formatPercent } from "@/lib/format";
 import { col } from "@/lib/table-columns";
 import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
+import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
 import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
 import { ProviderStatusToggle } from "@/components/providers/ProviderStatusToggle";
@@ -51,7 +52,7 @@ function fmtTs(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-md border p-2.5">
       <div className="text-muted-foreground text-xs">{label}</div>
@@ -163,8 +164,15 @@ function OverviewTab({ id, range }: { id: number; range: RangeQuery }) {
       <Stat label="尝试数" value={formatCompact(d.attempt_total)} />
       <Stat label="成功率" value={formatPercent(d.success_rate)} />
       <Stat label="超时" value={formatInt(d.timeout_total)} />
-      <Stat label="P50 延迟" value={formatLatencyMs(d.latency_p50)} />
-      <Stat label="P95 延迟" value={formatLatencyMs(d.latency_p95)} />
+      <Stat
+        label="平均延迟"
+        value={
+          <AttemptLatencyCell
+            latency={d.latency}
+            className="font-heading text-base font-semibold"
+          />
+        }
+      />
     </div>
   );
 }
@@ -185,10 +193,10 @@ function ChannelsTab({ id, range }: { id: number; range: RangeQuery }) {
         <TableRow>
           <TableHead className={col.primary}>渠道</TableHead>
           <TableHead className={col.badge}>健康</TableHead>
-          <TableHead className={`${col.num} text-right`}>尝试</TableHead>
-          <TableHead className={`${col.percent} text-right`}>成功率</TableHead>
-          <TableHead className={`${col.latency} text-right`}>P95</TableHead>
-          <TableHead className={`${col.action} text-right`}>操作</TableHead>
+          <TableHead className={col.num}>尝试</TableHead>
+          <TableHead className={col.percent}>成功率</TableHead>
+          <TableHead className={col.latency}>平均延迟</TableHead>
+          <TableHead className={col.action}>操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -198,10 +206,12 @@ function ChannelsTab({ id, range }: { id: number; range: RangeQuery }) {
             <TableCell>
               <Badge variant={HEALTH_VARIANT[c.health]}>{HEALTH_LABEL[c.health]}</Badge>
             </TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatCompact(c.attempt_total)}</TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatPercent(c.success_rate)}</TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatLatencyMs(c.latency_p95)}</TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-xs tabular-nums">{formatCompact(c.attempt_total)}</TableCell>
+            <TableCell className="text-xs tabular-nums">{formatPercent(c.success_rate)}</TableCell>
+            <TableCell className="text-xs">
+              <AttemptLatencyCell latency={c.latency} />
+            </TableCell>
+            <TableCell >
               <Button asChild size="sm" variant="ghost">
                 <Link to={`/channels?channel_id=${c.id}`}>打开</Link>
               </Button>
@@ -227,7 +237,7 @@ function PerformanceTab({ id, range }: { id: number; range: RangeQuery }) {
     attempt_total: { label: "尝试", color: "var(--chart-1)" },
     attempt_succeeded: { label: "成功", color: "var(--chart-2)" },
   };
-  const latConfig: ChartConfig = { latency_p95: { label: "P95(ms)", color: "var(--chart-3)" } };
+  const latConfig: ChartConfig = { latency_avg: { label: "平均(ms)", color: "var(--chart-3)" } };
   return (
     <div className="flex flex-col gap-4">
       <ChartContainer config={reqConfig} className="h-[180px] w-full">
@@ -246,7 +256,7 @@ function PerformanceTab({ id, range }: { id: number; range: RangeQuery }) {
           <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} tickFormatter={fmtTs} />
           <YAxis tickLine={false} axisLine={false} width={44} />
           <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, p) => fmtTs(String(p?.[0]?.payload.bucket))} />} />
-          <Line dataKey="latency_p95" type="monotone" stroke="var(--color-latency_p95)" dot={false} strokeWidth={2} />
+          <Line dataKey="latency_avg" type="monotone" stroke="var(--color-latency_avg)" dot={false} strokeWidth={2} />
         </LineChart>
       </ChartContainer>
     </div>

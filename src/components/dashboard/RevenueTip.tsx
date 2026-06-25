@@ -41,7 +41,13 @@ function SummaryRow({
 }
 
 /** 营收卡片悬浮详情：收入构成（成本 + 利润）+ 利润率。 */
-export function RevenueTip({ revenue }: { revenue: Revenue }) {
+export function RevenueTip({
+  revenue,
+  title = "营收",
+}: {
+  revenue: Revenue;
+  title?: string;
+}) {
   const rev = Number(revenue.revenue_usd);
   const cost = Number(revenue.cost_usd);
   const margin = Number(revenue.margin_usd);
@@ -55,7 +61,7 @@ export function RevenueTip({ revenue }: { revenue: Revenue }) {
       {/* 顶栏 + 利润 */}
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold leading-tight">营收</div>
+          <div className="text-sm font-semibold leading-tight">{title}</div>
           <div className="text-muted-foreground mt-0.5 text-[11px]">
             利润 = 收入 − 成本
           </div>

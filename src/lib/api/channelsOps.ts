@@ -1,6 +1,6 @@
 import { api } from "@/lib/api/client";
 import type { ListMeta, Page } from "@/lib/api/types";
-import type { HealthBucket, RangeQuery } from "@/lib/api/dashboard";
+import type { HealthBucket, LatencyStats, RangeQuery } from "@/lib/api/dashboard";
 
 // §3.3 渠道作战台只读运维聚合（与后端 channels_ops DTO 对齐）。
 
@@ -20,7 +20,7 @@ export interface ChannelsOpsSummary {
   attempt_succeeded: number;
   success_rate: number;
   timeout_total: number;
-  latency_p95: number;
+  latency: LatencyStats;
   tps: number;
   recent_error_code: string;
   recent_error_channel: string;
@@ -43,7 +43,7 @@ export interface ChannelOpsRow {
   attempt_succeeded: number;
   success_rate: number;
   timeout_total: number;
-  latency_p95: number;
+  latency: LatencyStats;
   health: HealthBucket;
   last_success_at: string | null;
   bound_models: number;
@@ -55,10 +55,7 @@ export interface ChannelOpsDetail {
   attempt_succeeded: number;
   success_rate: number;
   timeout_total: number;
-  latency_avg: number;
-  latency_p50: number;
-  latency_p95: number;
-  latency_p99: number;
+  latency: LatencyStats;
   last_success_at: string | null;
   last_failure_at: string | null;
 }
@@ -67,7 +64,7 @@ export interface ChannelOpsPerfPoint {
   bucket: string;
   attempt_total: number;
   attempt_succeeded: number;
-  latency_p95: number;
+  latency_avg: number;
 }
 
 export interface ChannelOpsError {
@@ -88,7 +85,7 @@ export interface ChannelOpsModel {
   attempt_total: number;
   attempt_succeeded: number;
   success_rate: number;
-  latency_p95: number;
+  latency: LatencyStats;
   has_price: boolean;
 }
 

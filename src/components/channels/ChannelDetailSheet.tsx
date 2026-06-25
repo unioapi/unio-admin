@@ -15,11 +15,11 @@ import type { RangeQuery } from "@/lib/api/dashboard";
 import {
   formatCompact,
   formatInt,
-  formatLatencyMs,
   formatPercent,
   formatRelativeTime,
 } from "@/lib/format";
 import { col } from "@/lib/table-columns";
+import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
 import {
   Sheet,
   DetailSheetContent,
@@ -212,9 +212,15 @@ function OverviewTab({ channelId, range }: { channelId: number; range: RangeQuer
       <Stat label="尝试数" value={formatCompact(d.attempt_total)} />
       <Stat label="成功率" value={formatPercent(d.success_rate)} />
       <Stat label="超时" value={formatInt(d.timeout_total)} />
-      <Stat label="P95 延迟" value={formatLatencyMs(d.latency_p95)} />
-      <Stat label="平均延迟" value={formatLatencyMs(d.latency_avg)} />
-      <Stat label="P99 延迟" value={formatLatencyMs(d.latency_p99)} />
+      <Stat
+        label="平均延迟"
+        value={
+          <AttemptLatencyCell
+            latency={d.latency}
+            className="font-heading text-base font-semibold"
+          />
+        }
+      />
       <Stat label="最近成功" value={d.last_success_at ? formatRelativeTime(d.last_success_at) : "—"} />
       <Stat label="最近失败" value={d.last_failure_at ? formatRelativeTime(d.last_failure_at) : "—"} />
     </div>
@@ -238,7 +244,7 @@ function PerformanceTab({ channelId, range }: { channelId: number; range: RangeQ
     attempt_succeeded: { label: "成功", color: "var(--chart-2)" },
   };
   const latConfig: ChartConfig = {
-    latency_p95: { label: "P95 延迟(ms)", color: "var(--chart-3)" },
+    latency_avg: { label: "平均延迟(ms)", color: "var(--chart-3)" },
   };
   return (
     <div className="flex flex-col gap-4">
@@ -256,14 +262,14 @@ function PerformanceTab({ channelId, range }: { channelId: number; range: RangeQ
         </ChartContainer>
       </div>
       <div>
-        <div className="text-muted-foreground mb-1 text-xs">P95 延迟</div>
+        <div className="text-muted-foreground mb-1 text-xs">平均延迟</div>
         <ChartContainer config={latConfig} className="h-[180px] w-full">
           <LineChart data={points} margin={{ left: 4, right: 8 }}>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} tickFormatter={fmtTs} />
             <YAxis tickLine={false} axisLine={false} width={44} />
             <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, p) => fmtTs(String(p?.[0]?.payload.bucket))} />} />
-            <Line dataKey="latency_p95" type="monotone" stroke="var(--color-latency_p95)" dot={false} strokeWidth={2} />
+            <Line dataKey="latency_avg" type="monotone" stroke="var(--color-latency_avg)" dot={false} strokeWidth={2} />
           </LineChart>
         </ChartContainer>
       </div>
@@ -290,7 +296,7 @@ function ErrorsTab({ channelId, range }: { channelId: number; range: RangeQuery 
             <TableHead className={col.time}>时间</TableHead>
             <TableHead className={col.textLg}>模型</TableHead>
             <TableHead className={col.text}>错误码</TableHead>
-            <TableHead className={`${col.numSm} text-right`}>HTTP</TableHead>
+            <TableHead className={col.numSm}>HTTP</TableHead>
             <TableHead className={col.mono}>请求</TableHead>
           </TableRow>
         </TableHeader>
@@ -300,7 +306,7 @@ function ErrorsTab({ channelId, range }: { channelId: number; range: RangeQuery 
               <TableCell className="text-xs">{fmtTs(e.at)}</TableCell>
               <TableCell className="text-xs">{e.upstream_model}</TableCell>
               <TableCell className="text-xs">{e.error_code || "—"}</TableCell>
-              <TableCell className="text-right text-xs tabular-nums">{e.upstream_status_code ?? "—"}</TableCell>
+              <TableCell className="text-xs tabular-nums">{e.upstream_status_code ?? "—"}</TableCell>
               <TableCell>
                 <Button asChild size="sm" variant="ghost">
                   <Link to={`/requests?q=${e.request_id}`}>{e.request_id.slice(0, 8)}…</Link>
@@ -365,9 +371,9 @@ function ModelsTab({
             <TableRow>
               <TableHead className={col.primaryLg}>模型</TableHead>
               <TableHead className={col.textLg}>上游名</TableHead>
-              <TableHead className={`${col.num} text-right`}>尝试</TableHead>
-              <TableHead className={`${col.percent} text-right`}>成功率</TableHead>
-              <TableHead className={`${col.latency} text-right`}>P95</TableHead>
+              <TableHead className={col.num}>尝试</TableHead>
+              <TableHead className={col.percent}>成功率</TableHead>
+              <TableHead className={col.latency}>平均延迟</TableHead>
               <TableHead className={col.price}>价格</TableHead>
             </TableRow>
           </TableHeader>
@@ -376,9 +382,11 @@ function ModelsTab({
               <TableRow key={m.model_id}>
                 <TableCell className="text-xs font-medium">{m.model_ref}</TableCell>
                 <TableCell className="text-muted-foreground text-xs">{m.upstream_model}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{formatCompact(m.attempt_total)}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{formatPercent(m.success_rate)}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{formatLatencyMs(m.latency_p95)}</TableCell>
+                <TableCell className="text-xs tabular-nums">{formatCompact(m.attempt_total)}</TableCell>
+                <TableCell className="text-xs tabular-nums">{formatPercent(m.success_rate)}</TableCell>
+                <TableCell className="text-xs">
+                  <AttemptLatencyCell latency={m.latency} />
+                </TableCell>
                 <TableCell>
                   {m.has_price ? (
                     <Badge variant="default">已配置</Badge>

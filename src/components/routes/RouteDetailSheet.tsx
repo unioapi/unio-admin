@@ -226,8 +226,8 @@ function PoolTab({ id, poolKind }: { id: number; poolKind: string }) {
           <TableHead className={col.primary}>渠道</TableHead>
           <TableHead className={col.text}>服务商</TableHead>
           <TableHead className={col.status}>状态</TableHead>
-          <TableHead className={`${col.numSm} text-right`}>优先级</TableHead>
-          <TableHead className={`${col.action} text-right`}>操作</TableHead>
+          <TableHead className={col.numSm}>优先级</TableHead>
+          <TableHead className={col.action}>操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -240,8 +240,8 @@ function PoolTab({ id, poolKind }: { id: number; poolKind: string }) {
                 {c.channel_status === "enabled" ? "启用" : "停用"}
               </Badge>
             </TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{c.priority}</TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-xs tabular-nums">{c.priority}</TableCell>
+            <TableCell>
               <Button asChild size="sm" variant="ghost">
                 <Link to={`/channels?channel_id=${c.channel_id}`}>打开</Link>
               </Button>
@@ -308,18 +308,18 @@ function ModelsTab({ id, range }: { id: number; range: RangeQuery }) {
       <TableHeader>
         <TableRow>
           <TableHead className={col.primaryLg}>模型</TableHead>
-          <TableHead className={`${col.num} text-right`}>请求</TableHead>
-          <TableHead className={`${col.percent} text-right`}>成功率</TableHead>
-          <TableHead className={`${col.action} text-right`}>操作</TableHead>
+          <TableHead className={col.num}>请求</TableHead>
+          <TableHead className={col.percent}>成功率</TableHead>
+          <TableHead className={col.action}>操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {q.data.map((m) => (
           <TableRow key={m.model_id}>
             <TableCell className="text-sm font-medium">{m.model_id}</TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatCompact(m.request_total)}</TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatPercent(m.success_rate)}</TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-xs tabular-nums">{formatCompact(m.request_total)}</TableCell>
+            <TableCell className="text-xs tabular-nums">{formatPercent(m.success_rate)}</TableCell>
+            <TableCell>
               <Button asChild size="sm" variant="ghost">
                 <Link to={`/models?q=${encodeURIComponent(m.model_id)}`}>打开</Link>
               </Button>

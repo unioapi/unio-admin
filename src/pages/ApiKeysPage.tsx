@@ -1,59 +1,24 @@
+import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronLeftIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { ChevronLeftIcon, PlusIcon } from "lucide-react";
 import {
   getApiKeysOpsSummary,
   getApiKeysOpsTable,
   type ApiKeyOpsRow,
 } from "@/lib/api/customerOps";
-import { revokeApiKey, updateApiKey, type ApiKey } from "@/lib/api/apiKeys";
+import { revokeApiKey, updateApiKey } from "@/lib/api/apiKeys";
 import { apiErrorMessage } from "@/lib/api/client";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
+import { ConfigurableDataTable } from "@/components/data-table";
+import { apiKeyOpsColumns } from "@/components/ops-tables/api-keys-columns";
 import { CreateApiKeyDialog } from "@/components/customer/CreateApiKeyDialog";
-import { ApiKeySpendLimitDialog } from "@/components/customer/ApiKeySpendLimitDialog";
-import { formatCompact, formatInt, formatRelativeTime, formatUSD } from "@/lib/format";
+import { formatInt } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { colPct } from "@/lib/table-columns";
-
-// 把 ops 行映射成最小 ApiKey，喂给复用的限额对话框（仅用到 id/spend_limit）。
-function toApiKey(row: ApiKeyOpsRow): ApiKey {
-  return {
-    id: row.id,
-    project_id: row.project_id,
-    name: row.name,
-    key_prefix: row.key_prefix,
-    status: row.status,
-    spend_limit: row.spend_limit,
-    spent_total: row.spent_total,
-    route_id: null,
-    last_used_at: row.last_used_at,
-    expires_at: row.expires_at,
-    disabled_at: null,
-    revoked_at: null,
-    created_at: "",
-    updated_at: "",
-  };
-}
 
 export function ApiKeysPage() {
   const { projectId: projectIdParam } = useParams();
@@ -87,6 +52,14 @@ export function ApiKeysPage() {
   });
 
   const s = summary.data;
+  const columns = useMemo(
+    () =>
+      apiKeyOpsColumns({
+        onToggle: (k) => toggle.mutate(k),
+        onRevoke: (id) => revoke.mutate(id),
+      }),
+    [toggle.mutate, revoke.mutate],
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -118,70 +91,16 @@ export function ApiKeysPage() {
           <AlertDescription>{(table.error as Error).message}</AlertDescription>
         </Alert>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className={colPct.primaryMd}>Key</TableHead>
-                <TableHead className={colPct.badge}>状态</TableHead>
-                <TableHead className={colPct.textMd}>线路</TableHead>
-                <TableHead className={`${colPct.money} text-right`}>限额</TableHead>
-                <TableHead className={`${colPct.money} text-right`}>已用</TableHead>
-                <TableHead className={`${colPct.num} text-right`}>请求</TableHead>
-                <TableHead className={`${colPct.money} text-right`}>消费</TableHead>
-                <TableHead className={colPct.timeSm}>最近</TableHead>
-                <TableHead className={`${colPct.action} text-right`}>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {table.isPending ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                ))
-              ) : table.data && table.data.length > 0 ? (
-                table.data.map((k) => (
-                  <TableRow key={k.id}>
-                    <TableCell>
-                      <div className="truncate font-medium">{k.name}</div>
-                      <div className="text-muted-foreground truncate font-mono text-xs">{k.key_prefix}…</div>
-                    </TableCell>
-                    <TableCell><Badge variant={k.status === "active" ? "default" : "outline"}>{k.status}</Badge></TableCell>
-                    <TableCell className="text-xs">{k.route_name || "项目默认 → 内置经济"}</TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">{k.spend_limit ? formatUSD(k.spend_limit) : "不限"}</TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">{formatUSD(k.spent_total)}</TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">{formatCompact(k.request_total)}</TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">{formatUSD(k.consumption_usd)}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{k.last_used_at ? formatRelativeTime(k.last_used_at) : "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm"><MoreHorizontalIcon /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <ApiKeySpendLimitDialog apiKey={toApiKey(k)}>
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>调整限额</DropdownMenuItem>
-                          </ApiKeySpendLimitDialog>
-                          {k.status !== "revoked" ? (
-                            <DropdownMenuItem onSelect={() => toggle.mutate(k)}>
-                              {k.status === "disabled" ? "启用" : "停用"}
-                            </DropdownMenuItem>
-                          ) : null}
-                          {k.status !== "revoked" ? (
-                            <DropdownMenuItem variant="destructive" onSelect={() => revoke.mutate(k.id)}>
-                              吊销
-                            </DropdownMenuItem>
-                          ) : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow><TableCell colSpan={9} className="text-muted-foreground py-10 text-center text-sm">暂无 API Key</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <ConfigurableDataTable
+          storageKey={`api-keys:${projectId}:ops-table`}
+          data={table.data ?? []}
+          columns={columns}
+          loading={table.isPending}
+          pinnedColumnId="name"
+          emptyMessage="暂无 API Key"
+          getRowId={(r) => String(r.id)}
+          tableClassName={table.isFetching && !table.isPending ? "opacity-60" : undefined}
+        />
       )}
     </div>
   );

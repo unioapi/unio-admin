@@ -1,6 +1,6 @@
 import { api } from "@/lib/api/client";
 import type { ListMeta, Page } from "@/lib/api/types";
-import type { HealthBucket, RangeQuery } from "@/lib/api/dashboard";
+import type { HealthBucket, LatencyStats, RangeQuery } from "@/lib/api/dashboard";
 
 // §3.2 服务商聚合视图只读运维聚合（与后端 providers_ops DTO 对齐）。
 
@@ -15,7 +15,7 @@ export interface ProviderOpsRow {
   attempt_succeeded: number;
   success_rate: number;
   timeout_total: number;
-  latency_p95: number;
+  latency: LatencyStats;
   health: HealthBucket;
   last_success_at: string | null;
 }
@@ -27,8 +27,7 @@ export interface ProviderOpsDetail {
   attempt_succeeded: number;
   success_rate: number;
   timeout_total: number;
-  latency_p50: number;
-  latency_p95: number;
+  latency: LatencyStats;
 }
 
 export interface ProviderOpsChannel {
@@ -39,7 +38,7 @@ export interface ProviderOpsChannel {
   attempt_total: number;
   attempt_succeeded: number;
   success_rate: number;
-  latency_p95: number;
+  latency: LatencyStats;
   health: HealthBucket;
 }
 
@@ -47,7 +46,7 @@ export interface ProviderOpsPerfPoint {
   bucket: string;
   attempt_total: number;
   attempt_succeeded: number;
-  latency_p95: number;
+  latency_avg: number;
 }
 
 export interface ProviderOpsError {

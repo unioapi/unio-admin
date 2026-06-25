@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { SearchIcon } from "lucide-react";
 import {
   getUserOpsDetail,
   getUserOpsKeys,
@@ -13,10 +12,11 @@ import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
+import { ConfigurableDataTable, TableToolbarSearch } from "@/components/data-table";
+import { userOpsColumns } from "@/components/ops-tables/users-columns";
 import { UserBalanceDialog } from "@/components/customer/UserBalanceDialog";
-import { formatCompact, formatInt, formatPercent, formatRelativeTime, formatUSD } from "@/lib/format";
+import { formatCompact, formatInt, formatPercent, formatUSD } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,7 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TablePagination } from "@/components/common/TablePagination";
-import { col, colPct } from "@/lib/table-columns";
+import { col } from "@/lib/table-columns";
 
 const PAGE_SIZE = 20;
 
@@ -84,11 +84,6 @@ export function UsersPage() {
         <MetricCard label="区间消费" loading={summary.isPending} value={formatUSD(s?.consumption_usd ?? "0")} />
       </MetricGrid>
 
-      <div className="relative w-64">
-        <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-        <Input value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setPage(1); }} placeholder="搜索邮箱 / 昵称" className="pl-8" />
-      </div>
-
       {table.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -96,49 +91,27 @@ export function UsersPage() {
         </Alert>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={colPct.primary}>用户</TableHead>
-                  <TableHead className={`${colPct.money} text-right`}>余额</TableHead>
-                  <TableHead className={`${colPct.money} text-right`}>可用</TableHead>
-                  <TableHead className={`${colPct.numSm} text-right`}>项目</TableHead>
-                  <TableHead className={`${colPct.numSm} text-right`}>Key</TableHead>
-                  <TableHead className={`${colPct.num} text-right`}>请求</TableHead>
-                  <TableHead className={`${colPct.money} text-right`}>消费</TableHead>
-                  <TableHead className={colPct.time}>最近</TableHead>
-                  <TableHead className={colPct.badge}>风险</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {table.isPending ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                  ))
-                ) : table.data.items.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-muted-foreground py-10 text-center text-sm">暂无用户</TableCell></TableRow>
-                ) : (
-                  table.data.items.map((u) => (
-                    <TableRow key={u.id} className="cursor-pointer" onClick={() => setSelected(u)}>
-                      <TableCell>
-                        <div className="truncate font-medium">{u.email}</div>
-                        <div className="text-muted-foreground truncate text-xs">{u.display_name}</div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatUSD(u.balance_usd)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatUSD(u.available_usd)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{u.project_count}</TableCell>
-                      <TableCell className="text-right tabular-nums">{u.key_total}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCompact(u.request_total)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatUSD(u.consumption_usd)}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{u.last_used_at ? formatRelativeTime(u.last_used_at) : "—"}</TableCell>
-                      <TableCell>{u.low_balance ? <Badge variant="secondary">低余额</Badge> : <Badge variant="outline">正常</Badge>}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <ConfigurableDataTable
+            storageKey="users:ops-table"
+            data={table.data?.items ?? []}
+            columns={userOpsColumns()}
+            loading={table.isPending}
+            onRowClick={setSelected}
+            pinnedColumnId="name"
+            emptyMessage="暂无用户"
+            getRowId={(r) => String(r.id)}
+            tableClassName={table.isFetching && !table.isPending ? "opacity-60" : undefined}
+            toolbarStart={
+              <TableToolbarSearch
+                value={searchInput}
+                onChange={(v) => {
+                  setSearchInput(v);
+                  setPage(1);
+                }}
+                placeholder="搜索邮箱 / 昵称"
+              />
+            }
+          />
           <TablePagination page={page} pageCount={pageCount} total={table.data?.total ?? 0} onPageChange={setPage} />
         </div>
       )}
@@ -210,7 +183,7 @@ function Body({ row, range }: { row: UserOpsRow; range: { from?: string; to?: st
                     <TableHead className={col.primary}>Key</TableHead>
                     <TableHead className={col.textLg}>项目</TableHead>
                     <TableHead className={col.status}>状态</TableHead>
-                    <TableHead className={`${col.money} text-right`}>已用</TableHead>
+                    <TableHead className={col.money}>已用</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -219,7 +192,7 @@ function Body({ row, range }: { row: UserOpsRow; range: { from?: string; to?: st
                       <TableCell className="text-sm">{k.name}</TableCell>
                       <TableCell className="text-xs">{k.project_name}</TableCell>
                       <TableCell><Badge variant={k.status === "active" ? "default" : "outline"}>{k.status}</Badge></TableCell>
-                      <TableCell className="text-right text-xs tabular-nums">{formatUSD(k.spent_total)}</TableCell>
+                      <TableCell className="text-xs tabular-nums">{formatUSD(k.spent_total)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

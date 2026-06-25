@@ -1,52 +1,38 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import {
   getChannelsOpsSummary,
   getChannelsOpsTable,
-  type ChannelOpsRow,
 } from "@/lib/api/channelsOps";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
+import {
+  ConfigurableDataTable,
+  OPS_STATUS_FILTER_OPTIONS,
+  TableToolbarSearch,
+  TableToolbarSelect,
+  type OpsStatusFilter,
+} from "@/components/data-table";
+import { channelOpsColumns } from "@/components/ops-tables/channels-columns";
 import { ChannelDetailSheet } from "@/components/channels/ChannelDetailSheet";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
-import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
-import {
-  formatCompact,
-  formatInt,
-  formatLatencyMs,
-  formatPercent,
-  formatRelativeTime,
-  formatTPS,
-} from "@/lib/format";
+import { LatencyHint, LatencyTip } from "@/components/dashboard/LatencyTip";
+import { formatCompact, formatInt, formatLatencyMs, formatPercent, formatTPS } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { TablePagination } from "@/components/common/TablePagination";
-import { colPct } from "@/lib/table-columns";
 
 const PAGE_SIZE = 20;
-type StatusTab = "all" | "enabled" | "disabled";
 
 export function ChannelsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
 
-  const [statusTab, setStatusTab] = useState<StatusTab>("all");
+  const [statusTab, setStatusTab] = useState<OpsStatusFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -108,25 +94,6 @@ export function ChannelsPage() {
 
       <ChannelsCards summary={summary.data} loading={summary.isPending} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v as StatusTab); setPage(1); }}>
-          <TabsList>
-            <TabsTrigger value="all">全部</TabsTrigger>
-            <TabsTrigger value="enabled">启用</TabsTrigger>
-            <TabsTrigger value="disabled">停用</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="relative">
-          <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-          <Input
-            value={searchInput}
-            onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
-            placeholder="搜索渠道名"
-            className="w-56 pl-8"
-          />
-        </div>
-      </div>
-
       {table.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -134,45 +101,37 @@ export function ChannelsPage() {
         </Alert>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={colPct.primarySm}>渠道</TableHead>
-                  <TableHead className={colPct.badge}>状态</TableHead>
-                  <TableHead className={colPct.badge}>健康</TableHead>
-                  <TableHead className={`${colPct.num} text-right`}>请求</TableHead>
-                  <TableHead className={`${colPct.percent} text-right`}>成功率</TableHead>
-                  <TableHead className={`${colPct.latency} text-right`}>P95 延迟</TableHead>
-                  <TableHead className={`${colPct.numSm} text-right`}>超时</TableHead>
-                  <TableHead className={`${colPct.numSm} text-right`}>模型</TableHead>
-                  <TableHead className={colPct.error}>最近错误</TableHead>
-                  <TableHead className={colPct.timeSm}>最近成功</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {table.isPending ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={10}>
-                        <Skeleton className="h-6 w-full" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : table.data.items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-muted-foreground py-10 text-center text-sm">
-                      暂无渠道
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  table.data.items.map((c) => (
-                    <ChannelRow key={c.id} c={c} onOpen={() => setOpenChannelId(c.id)} />
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <ConfigurableDataTable
+            storageKey="channels:ops-table"
+            data={table.data?.items ?? []}
+            columns={channelOpsColumns()}
+            loading={table.isPending}
+            onRowClick={(c) => setOpenChannelId(c.id)}
+            pinnedColumnId="name"
+            emptyMessage="暂无渠道"
+            getRowId={(r) => String(r.id)}
+            tableClassName={table.isFetching && !table.isPending ? "opacity-60" : undefined}
+            toolbarStart={
+              <>
+                <TableToolbarSelect
+                  value={statusTab}
+                  onValueChange={(v) => {
+                    setStatusTab(v);
+                    setPage(1);
+                  }}
+                  options={OPS_STATUS_FILTER_OPTIONS}
+                />
+                <TableToolbarSearch
+                  value={searchInput}
+                  onChange={(v) => {
+                    setSearchInput(v);
+                    setPage(1);
+                  }}
+                  placeholder="搜索渠道名"
+                />
+              </>
+            }
+          />
           <TablePagination page={page} pageCount={pageCount} total={table.data?.total ?? 0} onPageChange={setPage} />
         </div>
       )}
@@ -180,38 +139,6 @@ export function ChannelsPage() {
       <ChannelDetailSheet channelId={openChannelId} range={rangeQuery} onClose={() => setOpenChannelId(null)} />
       <ChannelFormDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
-  );
-}
-
-function ChannelRow({ c, onOpen }: { c: ChannelOpsRow; onOpen: () => void }) {
-  return (
-    <TableRow className="cursor-pointer" onClick={onOpen}>
-      <TableCell>
-        <div className="truncate font-medium">{c.name}</div>
-        <div className="text-muted-foreground truncate text-xs">
-          {c.provider_name} · {c.base_url}
-        </div>
-      </TableCell>
-      <TableCell>
-        <Badge variant={c.status === "enabled" ? "default" : "outline"}>
-          {c.status === "enabled" ? "启用" : "停用"}
-        </Badge>
-      </TableCell>
-      <TableCell>
-        <Badge variant={HEALTH_VARIANT[c.health]}>{HEALTH_LABEL[c.health]}</Badge>
-      </TableCell>
-      <TableCell className="text-right tabular-nums">{formatCompact(c.attempt_total)}</TableCell>
-      <TableCell className="text-right tabular-nums">{formatPercent(c.success_rate)}</TableCell>
-      <TableCell className="text-right tabular-nums">{formatLatencyMs(c.latency_p95)}</TableCell>
-      <TableCell className="text-right tabular-nums">{formatInt(c.timeout_total)}</TableCell>
-      <TableCell className="text-right tabular-nums">{formatInt(c.bound_models)}</TableCell>
-      <TableCell className="text-muted-foreground max-w-[10rem] truncate text-xs">
-        {c.recent_error_code || "—"}
-      </TableCell>
-      <TableCell className="text-muted-foreground text-xs">
-        {c.last_success_at ? formatRelativeTime(c.last_success_at) : "—"}
-      </TableCell>
-    </TableRow>
   );
 }
 
@@ -242,7 +169,13 @@ function ChannelsCards({
       />
       <MetricCard label="请求量" loading={loading} value={formatCompact(s?.attempt_total ?? 0)} tooltip="attempt 维度（每次上游尝试）" hint={s ? `成功 ${formatCompact(s.attempt_succeeded)}` : undefined} />
       <MetricCard label="成功率" loading={loading} value={formatPercent(s?.success_rate ?? 0)} intent={s ? (s.success_rate >= 0.95 ? "success" : s.success_rate >= 0.8 ? "warning" : "danger") : "default"} tooltip="attempt 成功率" />
-      <MetricCard label="性能" loading={loading} value={formatLatencyMs(s?.latency_p95 ?? 0)} tooltip="P95 完成延迟（attempt）" />
+      <MetricCard
+        label="性能"
+        loading={loading}
+        value={formatLatencyMs(s?.latency.avg ?? 0)}
+        hint={s ? <LatencyHint latency={s.latency} /> : undefined}
+        tooltip={s ? <LatencyTip latency={s.latency} /> : undefined}
+      />
       <MetricCard label="TPS" loading={loading} value={s ? formatTPS(s.tps) : "—"} tooltip="成功请求平均输出 token 速度（最终渠道归因）" />
       <MetricCard label="超时" loading={loading} value={formatInt(s?.timeout_total ?? 0)} intent={s && s.timeout_total > 0 ? "warning" : "default"} />
       <MetricCard label="最近错误" loading={loading} value={s?.recent_error_code || "—"} hint={s?.recent_error_channel || undefined} />

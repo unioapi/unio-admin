@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import {
   getRoutesOpsSummary,
   getRoutesOpsTable,
@@ -11,38 +11,26 @@ import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
+import {
+  ConfigurableDataTable,
+  OPS_STATUS_FILTER_OPTIONS,
+  TableToolbarSearch,
+  TableToolbarSelect,
+  type OpsStatusFilter,
+} from "@/components/data-table";
+import { routeOpsColumns } from "@/components/ops-tables/routes-columns";
 import { RouteDetailSheet } from "@/components/routes/RouteDetailSheet";
 import { RouteFormDialog } from "@/components/routes/RouteFormDialog";
 import { formatCompact, formatInt, formatLatencyMs, formatPercent } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { TablePagination } from "@/components/common/TablePagination";
-import { colPct } from "@/lib/table-columns";
 
 const PAGE_SIZE = 20;
-type StatusTab = "all" | "enabled" | "disabled";
-
-const MODE_LABEL: Record<string, string> = {
-  cheapest: "经济",
-  stable: "稳定",
-  fixed: "固定",
-};
 
 export function RoutesPage() {
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
-  const [statusTab, setStatusTab] = useState<StatusTab>("all");
+  const [statusTab, setStatusTab] = useState<OpsStatusFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -93,25 +81,6 @@ export function RoutesPage() {
 
       <RoutesCards summary={summary.data} loading={summary.isPending} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v as StatusTab); setPage(1); }}>
-          <TabsList>
-            <TabsTrigger value="all">全部</TabsTrigger>
-            <TabsTrigger value="enabled">启用</TabsTrigger>
-            <TabsTrigger value="disabled">停用</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="relative">
-          <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-          <Input
-            value={searchInput}
-            onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
-            placeholder="搜索线路名"
-            className="w-56 pl-8"
-          />
-        </div>
-      </div>
-
       {table.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -119,79 +88,37 @@ export function RoutesPage() {
         </Alert>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={colPct.primaryMd}>线路</TableHead>
-                  <TableHead className={colPct.textSm}>策略</TableHead>
-                  <TableHead className={colPct.badge}>可服务</TableHead>
-                  <TableHead className={`${colPct.num} text-right`}>请求</TableHead>
-                  <TableHead className={`${colPct.percent} text-right`}>成功率</TableHead>
-                  <TableHead className={`${colPct.latency} text-right`}>P95 延迟</TableHead>
-                  <TableHead className={`${colPct.percent} text-right`}>Fallback</TableHead>
-                  <TableHead className={`${colPct.badgeLg} text-right`}>无可用渠道</TableHead>
-                  <TableHead className={`${colPct.num} text-right`}>绑定</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {table.isPending ? (
-                  Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={9}>
-                        <Skeleton className="h-6 w-full" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : table.data.items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-muted-foreground py-10 text-center text-sm">
-                      暂无线路
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  table.data.items.map((rt) => (
-                    <TableRow key={rt.id} className="cursor-pointer" onClick={() => setSelected(rt)}>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 truncate font-medium">
-                          {rt.name}
-                          {rt.is_builtin ? <Badge variant="outline">内置</Badge> : null}
-                        </div>
-                        <div className="text-muted-foreground truncate text-xs">
-                          {rt.pool_kind === "all" ? "全量动态" : "手挑渠道"}
-                          {rt.pool_channels > 0 ? ` · ${rt.pool_channels} 渠道` : ""}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">{MODE_LABEL[rt.mode] ?? rt.mode}</TableCell>
-                      <TableCell>
-                        {rt.status !== "enabled" ? (
-                          <Badge variant="outline">停用</Badge>
-                        ) : rt.serviceable ? (
-                          <Badge variant="default">可服务</Badge>
-                        ) : (
-                          <Badge variant="destructive">异常</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCompact(rt.request_total)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatPercent(rt.success_rate)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatLatencyMs(rt.latency_p95)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatPercent(rt.fallback_rate)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {rt.no_channel_total > 0 ? (
-                          <span className="text-destructive font-medium">{rt.no_channel_total}</span>
-                        ) : (
-                          0
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {rt.bound_projects}/{rt.bound_keys}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <ConfigurableDataTable
+            storageKey="routes:ops-table"
+            data={table.data?.items ?? []}
+            columns={routeOpsColumns()}
+            loading={table.isPending}
+            onRowClick={setSelected}
+            pinnedColumnId="name"
+            emptyMessage="暂无线路"
+            getRowId={(r) => String(r.id)}
+            tableClassName={table.isFetching && !table.isPending ? "opacity-60" : undefined}
+            toolbarStart={
+              <>
+                <TableToolbarSelect
+                  value={statusTab}
+                  onValueChange={(v) => {
+                    setStatusTab(v);
+                    setPage(1);
+                  }}
+                  options={OPS_STATUS_FILTER_OPTIONS}
+                />
+                <TableToolbarSearch
+                  value={searchInput}
+                  onChange={(v) => {
+                    setSearchInput(v);
+                    setPage(1);
+                  }}
+                  placeholder="搜索线路名"
+                />
+              </>
+            }
+          />
           <TablePagination page={page} pageCount={pageCount} total={table.data?.total ?? 0} onPageChange={setPage} />
         </div>
       )}

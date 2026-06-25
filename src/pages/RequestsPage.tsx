@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ActivityIcon, EyeIcon, RefreshCwIcon, SearchIcon } from "lucide-react";
+import { ActivityIcon, RefreshCwIcon } from "lucide-react";
 import { listRequests } from "@/lib/api/requests";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { formatDateTime } from "@/lib/format";
+import { ConfigurableDataTable, TableToolbarSearch } from "@/components/data-table";
+import { requestListColumns } from "@/components/ops-tables/requests-columns";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,14 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -29,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
   EmptyDescription,
@@ -39,11 +31,8 @@ import {
 } from "@/components/ui/empty";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { TablePagination } from "@/components/common/TablePagination";
-import { RequestStatusBadge } from "@/components/requests/RequestStatusBadge";
 import { RequestDetailDialog } from "@/components/requests/RequestDetailDialog";
-import { col } from "@/lib/table-columns";
 
-const COLS = 7;
 const PAGE_SIZE = 20;
 
 const STATUS_OPTIONS = [
@@ -136,50 +125,6 @@ export function RequestsPage() {
         <CardDescription>网关请求记录（只读）与上游尝试链路</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <Select value={status} onValueChange={resetPage(setStatus)}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <div className="relative w-full max-w-xs">
-            <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-            <Input
-              placeholder="按模型筛选"
-              value={modelInput}
-              onChange={(e) => resetPage(setModelInput)(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-
-          <Input
-            placeholder="用户 ID"
-            value={userIdInput}
-            onChange={(e) => resetPage(setUserIdInput)(e.target.value)}
-            inputMode="numeric"
-            className="w-32"
-          />
-
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="ml-auto"
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
-            aria-label="刷新"
-          >
-            <RefreshCwIcon className={query.isFetching ? "animate-spin" : undefined} />
-          </Button>
-        </div>
-
         {query.isError ? (
           <Alert variant="destructive">
             <AlertTitle>加载失败</AlertTitle>
@@ -187,88 +132,57 @@ export function RequestsPage() {
           </Alert>
         ) : (
           <>
-            <Table className={query.isFetching ? "opacity-60" : undefined}>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={col.mono}>请求 ID</TableHead>
-                  <TableHead className={col.primaryLg}>模型</TableHead>
-                  <TableHead className={col.badge}>状态</TableHead>
-                  <TableHead className={col.bool}>流式</TableHead>
-                  <TableHead className={col.numSm}>用户</TableHead>
-                  <TableHead className={col.datetime}>创建时间</TableHead>
-                  <TableHead className={`${col.action} text-right`}>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {query.isPending ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Skeleton className="h-4 w-44" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-32" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-14 rounded-full" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-8" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-10" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-32" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="ml-auto size-8" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={COLS} className="h-48">
-                      <RequestsEmpty />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="max-w-44 truncate font-mono text-xs">
-                        {r.request_id}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {r.requested_model_id}
-                      </TableCell>
-                      <TableCell>
-                        <RequestStatusBadge status={r.status} />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {r.stream ? "是" : "否"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {r.user_id}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {formatDateTime(r.created_at)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <RequestDetailDialog requestId={r.request_id}>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="详情"
-                          >
-                            <EyeIcon />
-                          </Button>
-                        </RequestDetailDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <ConfigurableDataTable
+              storageKey="requests:list"
+              data={items}
+              columns={requestListColumns()}
+              loading={query.isPending}
+              pinnedColumnId="request_id"
+              bordered={false}
+              emptyContent={<RequestsEmpty />}
+              getRowId={(r) => String(r.id)}
+              tableClassName={query.isFetching && !query.isPending ? "opacity-60" : undefined}
+              toolbarStart={
+                <>
+                  <Select value={status} onValueChange={resetPage(setStatus)}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <TableToolbarSearch
+                    value={modelInput}
+                    onChange={resetPage(setModelInput)}
+                    placeholder="按模型筛选"
+                    className="max-w-xs w-full"
+                  />
+                  <Input
+                    placeholder="用户 ID"
+                    value={userIdInput}
+                    onChange={(e) => resetPage(setUserIdInput)(e.target.value)}
+                    inputMode="numeric"
+                    className="w-32"
+                  />
+                </>
+              }
+              toolbarEnd={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => query.refetch()}
+                  disabled={query.isFetching}
+                  aria-label="刷新"
+                >
+                  <RefreshCwIcon className={query.isFetching ? "animate-spin" : undefined} />
+                </Button>
+              }
+            />
 
             <TablePagination
               page={page}

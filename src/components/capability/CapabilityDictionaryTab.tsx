@@ -165,14 +165,14 @@ export function CapabilityDictionaryTab() {
                   <TableHead className={col.text}>domain</TableHead>
                   <TableHead className={col.textLg}>展示名</TableHead>
                   <TableHead className="hidden md:table-cell">描述</TableHead>
-                  <TableHead className={`${col.numSm} text-right`}>排序</TableHead>
-                  <TableHead className={`${col.actionLg} text-right`}>操作</TableHead>
+                  <TableHead className={col.numSm}>排序</TableHead>
+                  <TableHead className={col.actionLg}>操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-muted-foreground h-24 text-center">
+                    <TableCell colSpan={7} className="text-muted-foreground h-24 text-left">
                       暂无数据
                     </TableCell>
                   </TableRow>
@@ -190,10 +190,10 @@ export function CapabilityDictionaryTab() {
                       <TableCell className="text-muted-foreground hidden max-w-md truncate text-xs md:table-cell">
                         {row.description}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="tabular-nums">
                         {row.sort_order}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell >
                         <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"

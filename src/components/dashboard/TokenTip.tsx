@@ -35,7 +35,7 @@ function Row({
       </TableCell>
       <TableCell
         className={cn(
-          "py-1.5 text-right tabular-nums",
+          "py-1.5 tabular-nums",
           indent ? "text-muted-foreground text-[11px]" : "text-xs",
           emphasis ? "font-semibold text-foreground" : "font-medium",
         )}
@@ -82,7 +82,7 @@ export function TokenTip({
             <TableCell className="py-1.5 text-xs font-semibold text-foreground">
               总计
             </TableCell>
-            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums text-foreground">
+            <TableCell className="py-1.5 text-xs font-semibold tabular-nums text-foreground">
               {formatCompact(tokens.total)}
             </TableCell>
           </TableRow>

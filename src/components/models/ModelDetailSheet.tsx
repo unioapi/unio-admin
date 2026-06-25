@@ -213,11 +213,11 @@ function ChannelsTab({ id, range }: { id: number; range: RangeQuery }) {
         <TableRow>
           <TableHead className={col.primary}>渠道</TableHead>
           <TableHead className={col.badge}>健康</TableHead>
-          <TableHead className={`${col.num} text-right`}>尝试</TableHead>
-          <TableHead className={`${col.percent} text-right`}>成功率</TableHead>
-          <TableHead className={`${col.latency} text-right`}>P95</TableHead>
+          <TableHead className={col.num}>尝试</TableHead>
+          <TableHead className={col.percent}>成功率</TableHead>
+          <TableHead className={col.latency}>P95</TableHead>
           <TableHead className={col.price}>价格</TableHead>
-          <TableHead className={`${col.action} text-right`}>操作</TableHead>
+          <TableHead className={col.action}>操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -229,13 +229,13 @@ function ChannelsTab({ id, range }: { id: number; range: RangeQuery }) {
                 {HEALTH_LABEL[healthBucketOf(c.attempt_succeeded, c.attempt_total)]}
               </Badge>
             </TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatCompact(c.attempt_total)}</TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatPercent(c.success_rate)}</TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{formatLatencyMs(c.latency_p95)}</TableCell>
+            <TableCell className="text-xs tabular-nums">{formatCompact(c.attempt_total)}</TableCell>
+            <TableCell className="text-xs tabular-nums">{formatPercent(c.success_rate)}</TableCell>
+            <TableCell className="text-xs tabular-nums">{formatLatencyMs(c.latency_p95)}</TableCell>
             <TableCell>
               {c.has_price ? <Badge variant="default">已配置</Badge> : <Badge variant="destructive">缺价</Badge>}
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell >
               <Button asChild size="sm" variant="ghost">
                 <Link to={`/channels?channel_id=${c.channel_id}`}>打开</Link>
               </Button>
@@ -305,7 +305,7 @@ function RequestsTab({ id, range }: { id: number; range: RangeQuery }) {
           <TableRow>
             <TableHead className={col.time}>时间</TableHead>
             <TableHead className={col.badge}>状态</TableHead>
-            <TableHead className={`${col.latency} text-right`}>延迟</TableHead>
+            <TableHead className={col.latency}>延迟</TableHead>
             <TableHead className={col.mono}>请求</TableHead>
           </TableRow>
         </TableHeader>
@@ -314,7 +314,7 @@ function RequestsTab({ id, range }: { id: number; range: RangeQuery }) {
             <TableRow key={`${rq.request_id}-${i}`}>
               <TableCell className="text-xs">{fmtTs(rq.at)}</TableCell>
               <TableCell className="text-xs">{rq.status}</TableCell>
-              <TableCell className="text-right text-xs tabular-nums">
+              <TableCell className="text-xs tabular-nums">
                 {rq.latency_ms != null ? formatLatencyMs(rq.latency_ms) : "—"}
               </TableCell>
               <TableCell>

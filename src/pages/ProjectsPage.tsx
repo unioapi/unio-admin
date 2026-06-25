@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { SearchIcon } from "lucide-react";
 import {
   getApiKeysOpsTable,
   getProjectsOpsSummary,
@@ -12,9 +11,10 @@ import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
-import { formatCompact, formatInt, formatRelativeTime, formatUSD } from "@/lib/format";
+import { ConfigurableDataTable, TableToolbarSearch } from "@/components/data-table";
+import { projectOpsColumns } from "@/components/ops-tables/projects-columns";
+import { formatCompact, formatInt, formatUSD } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,7 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TablePagination } from "@/components/common/TablePagination";
-import { col, colPct } from "@/lib/table-columns";
+import { col } from "@/lib/table-columns";
 
 const PAGE_SIZE = 20;
 
@@ -79,11 +79,6 @@ export function ProjectsPage() {
         <MetricCard label="区间消费" loading={summary.isPending} value={formatUSD(s?.consumption_usd ?? "0")} />
       </MetricGrid>
 
-      <div className="relative w-64">
-        <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-        <Input value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setPage(1); }} placeholder="搜索项目名 / 用户" className="pl-8" />
-      </div>
-
       {table.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -91,48 +86,27 @@ export function ProjectsPage() {
         </Alert>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={colPct.primarySm}>项目</TableHead>
-                  <TableHead className={colPct.primarySm}>所属用户</TableHead>
-                  <TableHead className={colPct.textMd}>默认线路</TableHead>
-                  <TableHead className={`${colPct.numSm} text-right`}>Key</TableHead>
-                  <TableHead className={`${colPct.num} text-right`}>请求</TableHead>
-                  <TableHead className={`${colPct.money} text-right`}>消费</TableHead>
-                  <TableHead className={colPct.time}>最近</TableHead>
-                  <TableHead className={`${colPct.action} text-right`}>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {table.isPending ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                  ))
-                ) : table.data.items.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-muted-foreground py-10 text-center text-sm">暂无项目</TableCell></TableRow>
-                ) : (
-                  table.data.items.map((p) => (
-                    <TableRow key={p.id} className="cursor-pointer" onClick={() => setSelected(p)}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{p.user_email}</TableCell>
-                      <TableCell className="text-xs">{p.default_route_name || "由 Key 决定"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{p.key_enabled}/{p.key_total}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCompact(p.request_total)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatUSD(p.consumption_usd)}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{p.last_used_at ? formatRelativeTime(p.last_used_at) : "—"}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <Button asChild size="sm" variant="ghost">
-                          <Link to={`/projects/${p.id}/api-keys`}>API Keys</Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <ConfigurableDataTable
+            storageKey="projects:ops-table"
+            data={table.data?.items ?? []}
+            columns={projectOpsColumns()}
+            loading={table.isPending}
+            onRowClick={setSelected}
+            pinnedColumnId="name"
+            emptyMessage="暂无项目"
+            getRowId={(r) => String(r.id)}
+            tableClassName={table.isFetching && !table.isPending ? "opacity-60" : undefined}
+            toolbarStart={
+              <TableToolbarSearch
+                value={searchInput}
+                onChange={(v) => {
+                  setSearchInput(v);
+                  setPage(1);
+                }}
+                placeholder="搜索项目名 / 用户"
+              />
+            }
+          />
           <TablePagination page={page} pageCount={pageCount} total={table.data?.total ?? 0} onPageChange={setPage} />
         </div>
       )}
@@ -179,8 +153,8 @@ function ProjectDetailSheet({ project, range, onClose }: { project: ProjectOpsRo
                       <TableRow>
                         <TableHead className={col.primary}>Key</TableHead>
                         <TableHead className={col.status}>状态</TableHead>
-                        <TableHead className={`${col.num} text-right`}>请求</TableHead>
-                        <TableHead className={`${col.money} text-right`}>消费</TableHead>
+                        <TableHead className={col.num}>请求</TableHead>
+                        <TableHead className={col.money}>消费</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -188,8 +162,8 @@ function ProjectDetailSheet({ project, range, onClose }: { project: ProjectOpsRo
                         <TableRow key={k.id}>
                           <TableCell className="text-sm">{k.name}</TableCell>
                           <TableCell><Badge variant={k.status === "active" ? "default" : "outline"}>{k.status}</Badge></TableCell>
-                          <TableCell className="text-right text-xs tabular-nums">{formatCompact(k.request_total)}</TableCell>
-                          <TableCell className="text-right text-xs tabular-nums">{formatUSD(k.consumption_usd)}</TableCell>
+                          <TableCell className="text-xs tabular-nums">{formatCompact(k.request_total)}</TableCell>
+                          <TableCell className="text-xs tabular-nums">{formatUSD(k.consumption_usd)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

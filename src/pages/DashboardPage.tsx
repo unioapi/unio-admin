@@ -23,14 +23,11 @@ import {
   ZapIcon,
 } from "lucide-react";
 import {
-  getBreakdown,
   getPerformanceSeries,
   getRadar,
   getTimeseries,
   getTopErrors,
-  type BreakdownDimension,
   type HealthBucket,
-  type PlatformLevel,
   type RadarReport,
   type RangeQuery,
   type RequestPoint,
@@ -64,6 +61,9 @@ import {
 } from "@/components/dashboard/SettlementTip";
 import { TokenHint, TokenTip } from "@/components/dashboard/TokenTip";
 import { TpsHint, TpsTip } from "@/components/dashboard/TpsTip";
+import { BreakdownSection } from "@/components/dashboard/breakdown-table/BreakdownSection";
+import { ConfigurableDataTable } from "@/components/data-table";
+import { topErrorsColumns } from "@/components/ops-tables/dashboard-errors-columns";
 import {
   latencyIntent,
   LATENCY_WARN_MS,
@@ -178,7 +178,6 @@ export function DashboardPage() {
         </Alert>
       ) : (
         <>
-          <PlatformBanner data={radar.data} loading={radar.isPending} />
           <RadarCards data={radar.data} loading={radar.isPending} />
           <TrendsSection range={rangeQuery} interval={bucket} />
           <BreakdownSection range={rangeQuery} />
@@ -189,64 +188,6 @@ export function DashboardPage() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-const PLATFORM_META: Record<
-  PlatformLevel,
-  { label: string; className: string }
-> = {
-  healthy: {
-    label: "平台正常",
-    className:
-      "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  },
-  degraded: {
-    label: "平台降级",
-    className:
-      "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  },
-  down: {
-    label: "平台异常",
-    className:
-      "border-destructive/30 bg-destructive/10 text-destructive",
-  },
-  insufficient_data: {
-    label: "样本不足",
-    className: "border-border bg-muted/40 text-muted-foreground",
-  },
-};
-
-function PlatformBanner({
-  data,
-  loading,
-}: {
-  data?: RadarReport;
-  loading: boolean;
-}) {
-  if (loading && !data) {
-    return <Skeleton className="h-16 w-full" />;
-  }
-  if (!data) return null;
-  const status = data.platform_status;
-  const meta = PLATFORM_META[status.level] ?? PLATFORM_META.insufficient_data;
-
-  return (
-    <div
-      className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${meta.className}`}
-    >
-      <div className="flex items-center gap-3">
-        <span className="font-heading text-base font-semibold">{meta.label}</span>
-        <span className="text-sm opacity-80">{status.reason}</span>
-      </div>
-      <div className="flex items-center gap-4 text-xs tabular-nums opacity-90">
-        <span>近 15 分钟成功率 {formatPercent(status.success_rate)}</span>
-        <span>样本 {formatInt(status.terminal)}</span>
-        {status.no_channel > 0 ? (
-          <span>无可用渠道 {formatInt(status.no_channel)}</span>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -412,9 +353,9 @@ function BadChannelsCard({
               <TableRow>
                 <TableHead className={col.primary}>渠道</TableHead>
                 <TableHead className={col.badge}>健康</TableHead>
-                <TableHead className={`${col.percent} text-right`}>成功率</TableHead>
+                <TableHead className={col.percent}>成功率</TableHead>
                 <TableHead className={col.error}>最近错误</TableHead>
-                <TableHead className={`${col.action} text-right`}>操作</TableHead>
+                <TableHead className={col.action}>操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -426,13 +367,13 @@ function BadChannelsCard({
                       {HEALTH_LABEL[c.bucket]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="tabular-nums">
                     {formatPercent(c.success_rate)}
                   </TableCell>
                   <TableCell className="text-muted-foreground max-w-[10rem] truncate text-xs">
                     {c.recent_error_code || "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="tabular-nums">
                     <Button asChild size="sm" variant="ghost">
                       <Link to={`/channels?channel_id=${c.channel_id}`}>查看</Link>
                     </Button>
@@ -1396,157 +1337,6 @@ function UsageChart({
   );
 }
 
-const BREAKDOWN_TABS: { value: BreakdownDimension; label: string }[] = [
-  { value: "route", label: "线路" },
-  { value: "channel", label: "渠道" },
-  { value: "model", label: "模型" },
-];
-
-function BreakdownSection({ range }: { range: RangeQuery }) {
-  const [dim, setDim] = useState<BreakdownDimension>("route");
-  return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle className="text-base">分组表现</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-4">
-        <Tabs value={dim} onValueChange={(v) => setDim(v as BreakdownDimension)}>
-          <TabsList>
-            {BREAKDOWN_TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value}>
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {BREAKDOWN_TABS.map((t) => (
-            <TabsContent key={t.value} value={t.value} className="pt-4">
-              <BreakdownTable dimension={t.value} range={range} active={dim === t.value} />
-            </TabsContent>
-          ))}
-        </Tabs>
-      </CardContent>
-    </Card>
-  );
-}
-
-const BREAKDOWN_LINK: Record<BreakdownDimension, string> = {
-  route: "/routes",
-  channel: "/channels",
-  model: "/models",
-};
-
-function BreakdownTable({
-  dimension,
-  range,
-  active,
-}: {
-  dimension: BreakdownDimension;
-  range: RangeQuery;
-  active: boolean;
-}) {
-  const q = useQuery({
-    queryKey: ["dashboard", "breakdown", dimension, range],
-    queryFn: () => getBreakdown(dimension, range),
-    placeholderData: keepPreviousData,
-    enabled: active,
-  });
-
-  if (q.isPending) return <Skeleton className="h-40 w-full" />;
-  if (q.isError)
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>加载失败</AlertTitle>
-        <AlertDescription>{(q.error as Error).message}</AlertDescription>
-      </Alert>
-    );
-  const rows = q.data?.rows ?? [];
-  if (rows.length === 0)
-    return (
-      <p className="text-muted-foreground py-10 text-center text-sm">
-        区间内暂无数据
-      </p>
-    );
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className={col.primary}>
-            {BREAKDOWN_TABS.find((t) => t.value === dimension)?.label}
-          </TableHead>
-          <TableHead className={`${col.num} text-right`}>请求</TableHead>
-          <TableHead className={`${col.percent} text-right`}>成功率</TableHead>
-          <TableHead className={`${col.num} text-right`}>Token</TableHead>
-          <TableHead className={`${col.money} text-right`}>成本</TableHead>
-          <TableHead className={`${col.latency} text-right`}>P95 延迟</TableHead>
-          <TableHead className={`${col.action} text-right`}>操作</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row, i) => (
-          <TableRow key={`${row.label}-${i}`}>
-            <TableCell className="font-medium">{row.label}</TableCell>
-            <TableCell className="text-right tabular-nums">
-              {formatCompact(row.terminal)}
-            </TableCell>
-            <TableCell
-              className={cn(
-                "text-right tabular-nums",
-                statIntentClass(rateIntent(row.success_rate)),
-              )}
-            >
-              {formatPercent(row.success_rate)}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {formatCompact(row.tokens)}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {formatUSD(row.cost_usd)}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {row.latency_p95 > 0 ? formatLatencyMs(row.latency_p95) : "—"}
-            </TableCell>
-            <TableCell className="text-right">
-              <Button asChild size="sm" variant="ghost">
-                <Link
-                  to={
-                    row.ref_id != null
-                      ? `${BREAKDOWN_LINK[dimension]}?${dimension === "route" ? "route_id" : dimension === "channel" ? "channel_id" : "model_id"}=${row.ref_id}`
-                      : BREAKDOWN_LINK[dimension]
-                  }
-                >
-                  查看
-                </Link>
-              </Button>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-// 常见错误码 → 人话标签；未命中回退原始 code。与后端 BaseSafeRequestLogErrorMessage 口径一致。
-const ERROR_CODE_LABEL: Record<string, string> = {
-  unknown: "未知错误",
-  no_available_channel: "无可用渠道",
-  routing_no_available_channel: "无可用渠道",
-  model_not_found: "模型不存在",
-  model_not_available: "模型暂不可用",
-  insufficient_balance: "余额不足",
-  ledger_insufficient_balance: "余额不足",
-  context_deadline_exceeded: "上游超时",
-  gateway_stream_usage_missing: "流式用量缺失",
-  gateway_chat_settlement_failed: "结算失败",
-  gateway_chat_authorization_failed: "授权失败",
-};
-
-function errorCodeLabel(code: string): string {
-  if (ERROR_CODE_LABEL[code]) return ERROR_CODE_LABEL[code];
-  if (/timeout/i.test(code)) return "上游超时";
-  return code;
-}
-
 // 失败原因 Top：区间内失败请求按错误码聚合，回答「为什么失败」。深链到失败请求列表。
 function TopErrorsSection({ range }: { range: RangeQuery }) {
   const q = useQuery({
@@ -1577,49 +1367,14 @@ function TopErrorsSection({ range }: { range: RangeQuery }) {
             区间内暂无失败请求
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className={col.primaryLg}>错误原因</TableHead>
-                <TableHead className={`${col.num} text-right`}>次数</TableHead>
-                <TableHead className={col.bar}>占比</TableHead>
-                <TableHead className={`${col.action} text-right`}>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {q.data!.errors.map((e) => (
-                <TableRow key={e.code}>
-                  <TableCell className="font-medium">
-                    {errorCodeLabel(e.code)}
-                    <span className="text-muted-foreground ml-2 font-mono text-xs">
-                      {e.code}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatInt(e.total)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="bg-muted/70 h-1.5 w-full overflow-hidden rounded-full">
-                        <div
-                          className="bg-destructive/70 h-full rounded-full"
-                          style={{ width: `${Math.round(e.share * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-muted-foreground w-10 shrink-0 text-right text-xs tabular-nums">
-                        {formatPercent(e.share)}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button asChild size="sm" variant="ghost">
-                      <Link to="/requests?status=failed">查看</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ConfigurableDataTable
+            storageKey="dashboard:top-errors"
+            data={q.data!.errors}
+            columns={topErrorsColumns()}
+            pinnedColumnId="code"
+            bordered={false}
+            getRowId={(e) => e.code}
+          />
         )}
       </CardContent>
     </Card>

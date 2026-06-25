@@ -74,24 +74,6 @@ export interface RangeQuery {
   interval?: TimeseriesInterval;
 }
 
-export type PlatformLevel =
-  | "healthy"
-  | "degraded"
-  | "down"
-  | "insufficient_data";
-
-export interface RadarPlatformStatus {
-  level: PlatformLevel;
-  reason: string;
-  window_from: string;
-  window_to: string;
-  terminal: number;
-  succeeded: number;
-  success_rate: number;
-  no_channel: number;
-  timeout: number;
-}
-
 export interface RadarRequests {
   total: number;
   succeeded: number;
@@ -158,7 +140,6 @@ export interface RadarBadChannel {
 
 export interface RadarReport {
   range: { from: string; to: string };
-  platform_status: RadarPlatformStatus;
   requests: RadarRequests;
   latency: LatencyStats;
   ttft: TtftStats;
@@ -174,7 +155,7 @@ export interface RadarReport {
   bad_channels: RadarBadChannel[];
 }
 
-export type BreakdownDimension = "route" | "channel" | "model";
+export type BreakdownDimension = "provider" | "channel" | "model" | "route";
 
 export interface BreakdownRow {
   label: string;
@@ -182,12 +163,23 @@ export interface BreakdownRow {
   status: string;
   terminal: number;
   succeeded: number;
+  failed: number;
   success_rate: number;
   tokens: number;
+  /** 区间内该分组平台收入合计（USD 十进制字符串） */
+  revenue_usd: string;
   /** 区间内该分组上游成本合计（USD 十进制字符串） */
   cost_usd: string;
-  /** 区间内该分组 P95 完成延迟（毫秒） */
+  /** 贡献利润 = 收入 − 成本（USD 十进制字符串） */
+  margin_usd: string;
+  /** 区间内该分组 P95 完成延迟（毫秒）；route/model 维度仍用此字段 */
   latency_p95: number;
+  /** provider/channel 维度：完整延迟画像 */
+  latency?: LatencyStats;
+  health_bucket: HealthBucket;
+  recent_error: string;
+  /** 服务商维度：命中渠道数 */
+  channel_count: number;
 }
 
 export interface BreakdownResult {

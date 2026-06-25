@@ -98,10 +98,10 @@ export function ModelCatalogTab() {
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className={col.primaryLg}>模型</TableHead>
                     <TableHead className={`hidden ${col.vendor} sm:table-cell`}>厂商</TableHead>
-                    <TableHead className={`${col.numSm} text-right`}>能力</TableHead>
-                    <TableHead className={`${col.numSm} text-right`}>已采纳</TableHead>
+                    <TableHead className={col.numSm}>能力</TableHead>
+                    <TableHead className={col.numSm}>已采纳</TableHead>
                     <TableHead className={col.status}>状态</TableHead>
-                    <TableHead className={`${col.actionLg} text-right`}>操作</TableHead>
+                    <TableHead className={col.actionLg}>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -135,10 +135,10 @@ export function ModelCatalogTab() {
                             {e.lab}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground text-right tabular-nums">
+                        <TableCell className="text-muted-foreground tabular-nums">
                           {e.capability_count}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="tabular-nums">
                           {e.adopted_count > 0 ? (
                             <span className="font-medium">{e.adopted_count}</span>
                           ) : (
@@ -151,7 +151,7 @@ export function ModelCatalogTab() {
                             adopted={e.adopted_count > 0}
                           />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell >
                           <AdoptFromCatalogDialog entry={e}>
                             <Button variant="outline" size="sm">
                               采纳
