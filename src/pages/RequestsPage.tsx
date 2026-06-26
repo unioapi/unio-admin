@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ActivityIcon, RefreshCwIcon } from "lucide-react";
@@ -68,10 +68,15 @@ export function RequestsPage() {
   );
   const [modelInput, setModelInput] = useState("");
   const [userIdInput, setUserIdInput] = useState("");
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   const model = useDebouncedValue(modelInput.trim(), 300);
   const userId = useDebouncedValue(parsePositiveInt(userIdInput), 300);
+  const columns = useMemo(
+    () => requestListColumns(setSelectedRequestId),
+    [],
+  );
 
   const query = useQuery({
     queryKey: ["requests", { status, model, userId, page }],
@@ -120,6 +125,15 @@ export function RequestsPage() {
           }}
         />
       ) : null}
+      {selectedRequestId ? (
+        <RequestDetailDialog
+          requestId={selectedRequestId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSelectedRequestId(null);
+          }}
+        />
+      ) : null}
       <CardHeader className="border-b">
         <CardTitle>请求</CardTitle>
         <CardDescription>网关请求记录（只读）与上游尝试链路</CardDescription>
@@ -135,7 +149,7 @@ export function RequestsPage() {
             <ConfigurableDataTable
               storageKey="requests:list"
               data={items}
-              columns={requestListColumns()}
+              columns={columns}
               loading={query.isPending}
               pinnedColumnId="request_id"
               bordered={false}

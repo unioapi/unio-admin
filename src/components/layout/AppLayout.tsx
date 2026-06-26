@@ -11,7 +11,6 @@ import {
   ServerCogIcon,
   ServerIcon,
   SlidersHorizontalIcon,
-  TriangleAlertIcon,
   UsersIcon,
   WalletIcon,
 } from "lucide-react";
@@ -39,8 +38,6 @@ interface NavItem {
   title: string;
   to: string;
   icon: LucideIcon;
-  // 自定义高亮判定（用于共享路由的 Tab，如「计费异常」= /ledger?tab=exceptions）。
-  match?: (loc: { pathname: string; search: string }) => boolean;
 }
 
 interface NavGroup {
@@ -76,22 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "请求记录", to: "/requests", icon: ActivityIcon },
       { title: "用量分析", to: "/usage", icon: GaugeIcon },
-      {
-        title: "账本流水",
-        to: "/ledger",
-        icon: WalletIcon,
-        match: (loc) =>
-          loc.pathname.startsWith("/ledger") &&
-          !new URLSearchParams(loc.search).get("tab")?.includes("exceptions"),
-      },
-      {
-        title: "计费异常",
-        to: "/ledger?tab=exceptions",
-        icon: TriangleAlertIcon,
-        match: (loc) =>
-          loc.pathname.startsWith("/ledger") &&
-          new URLSearchParams(loc.search).get("tab") === "exceptions",
-      },
+      { title: "账本", to: "/ledger", icon: WalletIcon },
     ],
   },
   {
@@ -111,7 +93,6 @@ function isItemActive(
   item: NavItem,
   loc: { pathname: string; search: string },
 ): boolean {
-  if (item.match) return item.match(loc);
   return defaultActive(item.to, loc.pathname);
 }
 
@@ -126,10 +107,7 @@ export function AppLayout() {
     navigate("/login", { replace: true });
   }
 
-  // 当前页标题：优先精确 match 项，回退到路径前缀首个匹配。
-  const current =
-    NAV_ITEMS.find((item) => item.match && item.match(loc)) ??
-    NAV_ITEMS.find((item) => defaultActive(item.to, loc.pathname));
+  const current = NAV_ITEMS.find((item) => defaultActive(item.to, loc.pathname));
 
   return (
     <SidebarProvider>

@@ -5,9 +5,10 @@ import { resizableColumn } from "@/components/data-table";
 import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { RequestStatusBadge } from "@/components/requests/RequestStatusBadge";
-import { RequestDetailDialog } from "@/components/requests/RequestDetailDialog";
 
-export function requestListColumns(): ColumnDef<RequestSummary, unknown>[] {
+export function requestListColumns(
+  onOpenDetail?: (requestId: string) => void,
+): ColumnDef<RequestSummary, unknown>[] {
   return [
     resizableColumn<RequestSummary>("request_id", {
       header: "请求 ID",
@@ -56,12 +57,15 @@ export function requestListColumns(): ColumnDef<RequestSummary, unknown>[] {
       size: 72,
       enableHiding: false,
       cell: ({ row }) => (
-        <div  onClick={(e) => e.stopPropagation()}>
-          <RequestDetailDialog requestId={row.original.request_id}>
-            <Button variant="ghost" size="icon-sm" aria-label="详情">
-              <EyeIcon />
-            </Button>
-          </RequestDetailDialog>
+        <div onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="详情"
+            onClick={() => onOpenDetail?.(row.original.request_id)}
+          >
+            <EyeIcon />
+          </Button>
         </div>
       ),
     }),
