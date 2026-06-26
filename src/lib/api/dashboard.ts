@@ -174,12 +174,23 @@ export interface BreakdownRow {
   margin_usd: string;
   /** 区间内该分组 P95 完成延迟（毫秒）；route/model 维度仍用此字段 */
   latency_p95: number;
+  /** provider/channel 维度：成功请求的加权平均输出速度 */
+  avg_tps: number;
   /** provider/channel 维度：完整延迟画像 */
   latency?: LatencyStats;
   health_bucket: HealthBucket;
   recent_error: string;
   /** 服务商维度：命中渠道数 */
   channel_count: number;
+  /** 渠道维度：最近 10 分钟 attempt 成功率桶 */
+  success_buckets?: SuccessBucket[];
+}
+
+export interface SuccessBucket {
+  bucket: string;
+  terminal: number;
+  succeeded: number;
+  success_rate: number;
 }
 
 export interface BreakdownResult {

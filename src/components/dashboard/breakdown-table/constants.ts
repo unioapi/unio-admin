@@ -12,6 +12,7 @@ export type BreakdownColumnId =
   | "tokens"
   | "margin"
   | "latency"
+  | "tps"
   | "recent_error"
   | "action";
 
@@ -35,6 +36,7 @@ export const BREAKDOWN_COLUMNS: Record<
     "tokens",
     "margin",
     "latency",
+    "tps",
     "action",
   ],
   channel: [
@@ -45,6 +47,7 @@ export const BREAKDOWN_COLUMNS: Record<
     "margin",
     "recent_error",
     "latency",
+    "tps",
     "action",
   ],
   model: [
@@ -82,6 +85,7 @@ export const BREAKDOWN_COLUMN_LABEL: Record<
   tokens: "Token",
   margin: "利润",
   latency: "P95 延迟",
+  tps: "平均 TPS",
   recent_error: "最近错误",
 };
 
@@ -92,11 +96,12 @@ export const BREAKDOWN_COLUMN_SIZE: Record<BreakdownColumnId, number> = {
   requests: 96,
   succeeded: 80,
   failed: 80,
-  success_rate: 96,
+  success_rate: 168,
   channels: 96,
   tokens: 104,
   margin: 108,
   latency: 112,
+  tps: 104,
   recent_error: 160,
   action: 80,
 };
@@ -109,11 +114,12 @@ export const BREAKDOWN_COLUMN_MIN_SIZE: Record<BreakdownColumnId, number> = {
   requests: 72,
   succeeded: 64,
   failed: 64,
-  success_rate: 80,
+  success_rate: 120,
   channels: 72,
   tokens: 80,
   margin: 88,
   latency: 96,
+  tps: 88,
   recent_error: 120,
   action: 72,
 };
