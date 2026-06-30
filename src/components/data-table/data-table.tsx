@@ -21,12 +21,20 @@ import {
   type Header,
   type Table as TanstackTable,
 } from "@tanstack/react-table";
+import { useMemo } from "react";
 import { GripVerticalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tableAlignClass } from "@/lib/table-columns";
-import type { DataTableColumnMeta } from "./helpers";
 import {
-  Table,
+  headerColStyle,
+  headerMinWidth,
+  isActionColumn,
+  isFixedWidthColumn,
+  sumFlexHeadersMinWidth,
+  sumHeadersMinWidth,
+  type DataTableColumnMeta,
+} from "./helpers";
+import {
   TableBody,
   TableCell,
   TableHead,
@@ -56,20 +64,24 @@ function DraggableTableHead<TData>({
     disabled: !canReorder,
   });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
+  const minWidth = headerMinWidth(header);
+  const fixed = isFixedWidthColumn(header) || isActionColumn(header);
   const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined;
+  const useGutter = !isActionColumn(header) && !isFixedWidthColumn(header);
 
   return (
     <TableHead
       ref={setNodeRef}
-      style={style}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        minWidth,
+        ...(fixed ? { maxWidth: minWidth } : null),
+      }}
       className={cn(
-        "group/head relative select-none pr-3",
-        HEAD_GUTTER,
+        "group/head relative select-none pr-2 align-middle",
+        !fixed && "overflow-hidden truncate",
+        useGutter && HEAD_GUTTER,
         tableAlignClass(meta?.align),
         isDragging && "z-10 bg-muted/80 opacity-90",
       )}
@@ -92,25 +104,11 @@ function DraggableTableHead<TData>({
           </button>
         </span>
       ) : null}
-      <span className="min-w-0">
+      <span className={cn("min-w-0", !fixed && "truncate")}>
         {header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
       </span>
-      {header.column.getCanResize() ? (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="调整列宽"
-          onMouseDown={header.getResizeHandler()}
-          onTouchStart={header.getResizeHandler()}
-          className={cn(
-            "absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none",
-            "opacity-0 group-hover/head:opacity-100 hover:bg-primary/30 focus:opacity-100",
-            header.column.getIsResizing() && "bg-primary/50 opacity-100",
-          )}
-        />
-      ) : null}
     </TableHead>
   );
 }
@@ -151,8 +149,16 @@ export function DataTable<TData>({
   };
 
   const headerGroup = table.getHeaderGroups()[0];
-  const sortableIds = headerGroup?.headers.map((h) => h.column.id) ?? [];
-  const totalSize = Math.max(table.getCenterTotalSize(), 1);
+  const headers = headerGroup?.headers ?? [];
+  const sortableIds = headers.map((h) => h.column.id);
+  const totalMinWidth = useMemo(
+    () => sumHeadersMinWidth(headers),
+    [headers],
+  );
+  const flexMinTotal = useMemo(
+    () => sumFlexHeadersMinWidth(headers),
+    [headers],
+  );
 
   return (
     <DndContext
@@ -160,90 +166,116 @@ export function DataTable<TData>({
       collisionDetection={closestCenter}
       onDragEnd={onDragEnd}
     >
-      <Table
-        className="w-full"
-        style={{ minWidth: totalSize }}
-      >
-        <colgroup>
-          {headerGroup?.headers.map((header) => {
-            const fillColumn =
-              pinnedColumnId != null && header.column.id === pinnedColumnId;
-            return (
+      {/* 窄屏时撑开至列 minWidth 之和，触发外层 overflow-x-auto 出横向滚动条 */}
+      <div className="w-full" style={{ minWidth: totalMinWidth }}>
+        <table className="w-full caption-bottom text-sm table-fixed">
+          <colgroup>
+            {headers.map((header) => (
               <col
                 key={header.id}
-                style={fillColumn ? undefined : { width: header.getSize() }}
+                style={headerColStyle(header, flexMinTotal)}
               />
-            );
-          })}
-        </colgroup>
-        <TableHeader>
-          {table.getHeaderGroups().map((group) => (
-            <TableRow key={group.id}>
-              <SortableContext
-                items={sortableIds}
-                strategy={horizontalListSortingStrategy}
-              >
-                {group.headers.map((header) => (
-                  <DraggableTableHead
-                    key={header.id}
-                    header={header}
+            ))}
+          </colgroup>
+          <TableHeader>
+            {table.getHeaderGroups().map((group) => (
+              <TableRow key={group.id}>
+                <SortableContext
+                  items={sortableIds}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  {group.headers.map((header) => (
+                    <DraggableTableHead
+                      key={header.id}
+                      header={header}
                     canReorder={
                       pinnedColumnId == null
-                        ? true
-                        : header.column.id !== pinnedColumnId
+                        ? header.column.id !== "action" &&
+                          !isFixedWidthColumn(header)
+                        : header.column.id !== pinnedColumnId &&
+                          header.column.id !== "action" &&
+                          !isFixedWidthColumn(header)
                     }
-                  />
-                ))}
-              </SortableContext>
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                className={cn(
-                  onRowClick &&
-                    "cursor-pointer transition-colors hover:bg-accent/50",
-                )}
-                onClick={
-                  onRowClick
-                    ? () => onRowClick(row.original)
-                    : undefined
-                }
-              >
-                {row.getVisibleCells().map((cell) => {
-                  const meta = cell.column.columnDef.meta as
-                    | DataTableColumnMeta
-                    | undefined;
-                  return (
-                    <TableCell
-                      key={cell.id}
-                      className={cn(
-                        "min-w-0",
-                        HEAD_GUTTER,
-                        tableAlignClass(meta?.align),
-                      )}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  );
-                })}
+                    />
+                  ))}
+                </SortableContext>
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell
-                colSpan={table.getVisibleLeafColumns().length}
-                className="text-muted-foreground h-24 text-left"
-              >
-                {emptyMessage}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  className={cn(
+                    onRowClick &&
+                      "cursor-pointer transition-colors hover:bg-accent/50",
+                  )}
+                  onClick={
+                    onRowClick
+                      ? () => onRowClick(row.original)
+                      : undefined
+                  }
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const meta = cell.column.columnDef.meta as
+                      | DataTableColumnMeta
+                      | undefined;
+                    const minWidth = headerMinWidth({
+                      column: { columnDef: cell.column.columnDef },
+                    });
+                    const fixed =
+                      isFixedWidthColumn({
+                        column: { columnDef: cell.column.columnDef },
+                      }) ||
+                      isActionColumn({
+                        column: {
+                          id: cell.column.id,
+                          columnDef: cell.column.columnDef,
+                        },
+                      });
+                    const isAction = cell.column.id === "action";
+                    const useGutter =
+                      !isAction &&
+                      !isFixedWidthColumn({
+                        column: { columnDef: cell.column.columnDef },
+                      });
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        style={{
+                          minWidth,
+                          ...(fixed ? { maxWidth: minWidth } : null),
+                        }}
+                        className={cn(
+                          !isAction && "overflow-hidden",
+                          !fixed && "truncate",
+                          useGutter && HEAD_GUTTER,
+                          tableAlignClass(meta?.align),
+                        )}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={table.getVisibleLeafColumns().length}
+                  className="text-muted-foreground h-24 text-left"
+                >
+                  {emptyMessage}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </table>
+      </div>
     </DndContext>
   );
 }

@@ -14,11 +14,10 @@ export function ProvidersPage() {
   const table = useOpsServerTable({
     queryKey: "providers",
     fetch: getProvidersOpsTable,
-    defaultSort: { id: "success_rate", desc: false },
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {table.query.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>

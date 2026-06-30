@@ -22,71 +22,74 @@ function pageItems(current: number, total: number): (number | "gap")[] {
   return items;
 }
 
-// 客户端分页底栏：左侧条数/页码文案，右侧页码控件。
+// 服务端/客户端分页底栏：左侧条数/页码文案，右侧页码控件（单页时也展示，按钮禁用）。
 export function TablePagination({
   page,
   pageCount,
   total,
   onPageChange,
+  pageSize,
 }: {
   page: number;
   pageCount: number;
   total: number;
   onPageChange: (page: number) => void;
+  pageSize?: number;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <span className="text-muted-foreground text-sm tabular-nums">
         共 {total} 条 · 第 {page}/{pageCount} 页
+        {pageSize != null ? ` · 每页 ${pageSize} 条` : null}
       </span>
-      {pageCount > 1 && (
-        <Pagination className="mx-0 w-auto justify-end">
-          <PaginationContent>
-            <PaginationItem>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => onPageChange(page - 1)}
-              >
-                <ChevronLeftIcon data-icon="inline-start" />
-                上一页
-              </Button>
-            </PaginationItem>
+      <Pagination className="mx-0 w-auto justify-end">
+        <PaginationContent>
+          <PaginationItem>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+            >
+              <ChevronLeftIcon data-icon="inline-start" />
+              上一页
+            </Button>
+          </PaginationItem>
 
-            {pageItems(page, pageCount).map((it, i) =>
-              it === "gap" ? (
-                <PaginationItem key={`gap-${i}`}>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              ) : (
-                <PaginationItem key={it}>
-                  <Button
-                    variant={it === page ? "outline" : "ghost"}
-                    size="icon-sm"
-                    className="tabular-nums"
-                    onClick={() => onPageChange(it)}
-                  >
-                    {it}
-                  </Button>
-                </PaginationItem>
-              ),
-            )}
+          {pageCount > 1
+            ? pageItems(page, pageCount).map((it, i) =>
+                it === "gap" ? (
+                  <PaginationItem key={`gap-${i}`}>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                ) : (
+                  <PaginationItem key={it}>
+                    <Button
+                      variant={it === page ? "outline" : "ghost"}
+                      size="icon-sm"
+                      className="tabular-nums"
+                      onClick={() => onPageChange(it)}
+                    >
+                      {it}
+                    </Button>
+                  </PaginationItem>
+                ),
+              )
+            : null}
 
-            <PaginationItem>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= pageCount}
-                onClick={() => onPageChange(page + 1)}
-              >
-                下一页
-                <ChevronRightIcon data-icon="inline-end" />
-              </Button>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
+          <PaginationItem>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page >= pageCount}
+              onClick={() => onPageChange(page + 1)}
+            >
+              下一页
+              <ChevronRightIcon data-icon="inline-end" />
+            </Button>
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
     </div>
   );
 }

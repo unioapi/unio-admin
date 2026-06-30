@@ -7,7 +7,7 @@ export function ModelCatalogPage() {
     <div className="flex flex-col gap-5">
       <DetailPageHeader
         back={{ href: "/models", label: "返回模型列表" }}
-        title="参考目录"
+        title="参考模型"
       />
       <ModelCatalogTab />
     </div>

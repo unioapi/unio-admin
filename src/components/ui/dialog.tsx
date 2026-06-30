@@ -49,9 +49,14 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeOnOutsideClick = false,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /** 点击遮罩层是否关闭；默认 false（仅 × / 取消 / Esc 关闭）。 */
+  closeOnOutsideClick?: boolean
 }) {
   return (
     <DialogPortal>
@@ -62,6 +67,14 @@ function DialogContent({
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
+        onPointerDownOutside={(e) => {
+          if (!closeOnOutsideClick) e.preventDefault()
+          onPointerDownOutside?.(e)
+        }}
+        onInteractOutside={(e) => {
+          if (!closeOnOutsideClick) e.preventDefault()
+          onInteractOutside?.(e)
+        }}
         {...props}
       >
         {children}

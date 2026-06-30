@@ -80,7 +80,7 @@ export function ModelsPage() {
             <Button size="sm" variant="outline" asChild>
               <Link to="/models/catalog">
                 <LibraryIcon data-icon="inline-start" />
-                参考目录
+                参考模型
               </Link>
             </Button>
           </>

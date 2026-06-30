@@ -13,15 +13,13 @@ import { useOpsServerTable } from "@/hooks/useOpsServerTable";
 
 export function ChannelsPage() {
   const [createOpen, setCreateOpen] = useState(false);
-
   const table = useOpsServerTable({
     queryKey: "channels",
     fetch: getChannelsOpsTable,
-    defaultSort: { id: "success_rate", desc: false },
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {table.query.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -45,7 +43,7 @@ export function ChannelsPage() {
           emptyMessage="暂无渠道"
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
-          searchPlaceholder="搜索渠道名 / 服务商"
+          searchPlaceholder="搜索渠道名"
           chips={table.chips}
           onClearChips={table.resetFilters}
           toolbarLeading={

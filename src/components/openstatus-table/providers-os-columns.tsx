@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-import type { FacetOption, FilterField } from "./types";
 
 type StatIntent = "default" | "success" | "warning" | "danger";
 
@@ -75,37 +74,6 @@ export const PROVIDER_OS_COLUMN_LABELS: Record<string, string> = {
   health: "健康",
   action: "操作",
 };
-
-export const PROVIDER_OS_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "checkbox",
-    value: "status",
-    label: "状态",
-    defaultOpen: true,
-    options: Object.entries(STATUS_LABEL).map(
-      ([value, label]): FacetOption => ({ value, label }),
-    ),
-  },
-  {
-    type: "checkbox",
-    value: "health",
-    label: "健康",
-    defaultOpen: true,
-    options: (Object.keys(HEALTH_LABEL) as (keyof typeof HEALTH_LABEL)[]).map(
-      (value): FacetOption => ({
-        value,
-        label: HEALTH_LABEL[value],
-        render: () => (
-          <Badge variant={HEALTH_VARIANT[value]}>{HEALTH_LABEL[value]}</Badge>
-        ),
-      }),
-    ),
-  },
-];
-
-export function getProviderSearchText(row: ProviderOpsRow): string {
-  return `${row.name} ${row.slug}`;
-}
 
 export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
   return [
@@ -231,6 +199,8 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       id: "status",
       accessorKey: "status",
       header: ({ column }) => <ColumnHeader column={column} title="状态" />,
+      enableHiding: false,
+      meta: { label: "状态", fixedWidth: true },
       filterFn: facetedFilter,
       cell: ({ row }) =>
         row.original.status ? (
@@ -247,6 +217,9 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       id: "health",
       accessorKey: "health",
       header: ({ column }) => <ColumnHeader column={column} title="健康" />,
+      enableSorting: false,
+      enableHiding: false,
+      meta: { label: "健康", fixedWidth: true },
       filterFn: facetedFilter,
       cell: ({ row }) => (
         <Badge variant={HEALTH_VARIANT[row.original.health]}>
@@ -263,7 +236,7 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
         const provider = toProvider(row.original);
         return (
           <div
-            className="flex items-center gap-0.5"
+            className="flex shrink-0 items-center gap-0.5"
             onClick={(e) => e.stopPropagation()}
           >
             <Button asChild variant="ghost" size="icon-sm" aria-label="查看">

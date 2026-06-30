@@ -105,7 +105,7 @@ export function RateLimitInput({
         <SelectTrigger aria-label="单位" className="w-16 shrink-0">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="min-w-(--radix-select-trigger-width)">
           <SelectItem value="K">K</SelectItem>
           <SelectItem value="M">M</SelectItem>
           <SelectItem value="B">B</SelectItem>

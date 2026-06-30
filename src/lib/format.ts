@@ -6,6 +6,15 @@ export function trimDecimal(s: string): string {
   return s.replace(/\.?0+$/, "");
 }
 
+// 价格基线（采纳/同步价）四舍五入到最多 3 位小数并去尾零："2.5000000000" → "2.5"，"0.0750000000" → "0.075"。
+// 空值/非法 → ""（调用方按需转 null 或显示占位）。
+export function roundPrice3(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "";
+  const n = typeof value === "string" ? Number(value) : value;
+  if (Number.isNaN(n)) return "";
+  return String(Number(n.toFixed(3)));
+}
+
 // datetime-local 值（本地时区，无时区信息）→ RFC3339（UTC）。
 export function localToRFC3339(local: string): string {
   return new Date(local).toISOString();
@@ -42,6 +51,18 @@ export function formatCompact(n: number | null | undefined): string {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(n);
+}
+
+/** OpenStatus data-table 底栏计数（纯 number，无空值）。 */
+export function formatCompactNumber(value: number): string {
+  if (value >= 100 && value < 1000) return value.toString();
+  if (value >= 1000 && value < 1_000_000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  return value.toString();
 }
 
 // 比例 [0,1] → 百分比文案。
@@ -110,4 +131,19 @@ export function formatClock(d: number | Date): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+// OpenStatus data-table 日期列（保留兼容）。
+export function formatDate(value: Date | string) {
+  return formatDateTime(String(value));
+}
+
+export function formatLatency(ms: number): string {
+  return formatLatencyMs(ms) === DASH ? `${ms}ms` : formatLatencyMs(ms)!;
+}
+
+export function formatMilliseconds(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(
+    value,
+  );
 }

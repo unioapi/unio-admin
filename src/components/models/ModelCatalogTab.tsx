@@ -80,7 +80,7 @@ export function ModelCatalogTab() {
       emptyContent={<CatalogEmpty search={search} />}
       toolbarLeading={
         <span className="text-muted-foreground text-xs">
-          {query.isPending ? "加载中…" : `共 ${total} 条目录`}
+          {query.isPending ? "加载中…" : `共 ${total} 条参考模型`}
           {search ? (
             <span className="text-foreground/80 ml-1">· 筛选「{search}」</span>
           ) : null}
@@ -102,7 +102,7 @@ function CatalogEmpty({ search }: { search: string }) {
   if (search) {
     return (
       <p className="text-muted-foreground text-center text-sm">
-        没有匹配「{search}」的目录条目
+        没有匹配「{search}」的参考模型
       </p>
     );
   }
@@ -112,7 +112,7 @@ function CatalogEmpty({ search }: { search: string }) {
         <EmptyMedia variant="icon">
           <LibraryIcon />
         </EmptyMedia>
-        <EmptyTitle>目录为空</EmptyTitle>
+        <EmptyTitle>暂无参考模型</EmptyTitle>
         <EmptyDescription>
           点击工具栏「同步」从 models.dev 拉取；历史任务见「系统 → 同步任务」。
         </EmptyDescription>

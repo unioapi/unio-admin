@@ -2,10 +2,12 @@ import type { ColumnDef, ColumnSizingState } from "@tanstack/react-table";
 import type { TableColumnAlign } from "@/lib/table-columns";
 import type { TableLayoutPrefs } from "./use-persisted-table-state";
 
-/** 列定义 meta：列设置菜单用 label；align 控制表头/单元格对齐。 */
+/** 列定义 meta：列设置菜单用 label；align 控制表头/单元格对齐；fixedWidth 不参与比例拉伸。 */
 export type DataTableColumnMeta = {
   label?: string;
   align?: TableColumnAlign;
+  /** 固定宽度（如 Badge 列），不参与剩余空间比例分配 */
+  fixedWidth?: boolean;
 };
 
 const DEFAULT_SIZE = 120;
@@ -46,12 +48,20 @@ export const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: numb
   upstream_status_code: { size: 72, minSize: 56 },
   time: { size: 112, minSize: 88 },
   at: { size: 112, minSize: 88 },
-  created_at: { size: 160, minSize: 120 },
+  created_at: { size: 160, minSize: 128 },
   datetime: { size: 176, minSize: 128 },
   id: { size: 88, minSize: 64 },
   tokens: { size: 96, minSize: 72 },
+  channels: { size: 72, minSize: 56 },
+  tps: { size: 88, minSize: 72 },
+  avg_tps: { size: 88, minSize: 72 },
   margin: { size: 112, minSize: 88 },
   money: { size: 112, minSize: 88 },
+  route_name: { size: 140, minSize: 100 },
+  spend_limit: { size: 96, minSize: 72 },
+  spent: { size: 124, minSize: 96 },
+  consumption: { size: 112, minSize: 88 },
+  last_used: { size: 120, minSize: 96 },
   user: { size: 140, minSize: 100 },
   source: { size: 120, minSize: 88 },
   mode: { size: 100, minSize: 72 },
@@ -60,14 +70,86 @@ export const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: numb
   vendor: { size: 120, minSize: 88 },
   key: { size: 180, minSize: 120 },
   project: { size: 160, minSize: 120 },
-  action: { size: 80, minSize: 64 },
+  action: { size: 120, minSize: 120 },
   capabilities: { size: 88, minSize: 64 },
   adopted: { size: 88, minSize: 64 },
   domain: { size: 120, minSize: 88 },
   key_label: { size: 200, minSize: 140 },
 };
 
-/** 为列定义补全 size / minSize / maxSize / enableResizing（未显式设置的列）。 */
+/** 表头列最小宽度（px）。 */
+export function headerMinWidth<TData>(
+  header: { column: { columnDef: ColumnDef<TData, unknown> } },
+): number {
+  return header.column.columnDef.minSize ?? DEFAULT_MIN;
+}
+
+/** 可见列 minSize 之和，用于表格横向滚动下限。 */
+export function sumHeadersMinWidth<TData>(
+  headers: { column: { columnDef: ColumnDef<TData, unknown> } }[],
+): number {
+  return headers.reduce((sum, header) => sum + headerMinWidth(header), 0);
+}
+
+export function isFixedWidthColumn<TData>(
+  header: { column: { columnDef: ColumnDef<TData, unknown> } },
+): boolean {
+  const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined;
+  return meta?.fixedWidth === true;
+}
+
+/** 参与比例分配的列 minSize 之和（排除 fixedWidth / action 列）。 */
+export function sumFlexHeadersMinWidth<TData>(
+  headers: { column: { columnDef: ColumnDef<TData, unknown> } }[],
+): number {
+  return headers.reduce((sum, header) => {
+    if (isFixedWidthColumn(header) || isActionColumn(header)) return sum;
+    return sum + headerMinWidth(header);
+  }, 0);
+}
+
+/** 按 minSize 比例分配列宽：宽屏一起变宽，窄屏不低于 minSize。 */
+export function proportionalColumnStyle(
+  minWidth: number,
+  totalMin: number,
+): { width: string; minWidth: number } {
+  if (totalMin <= 0) return { width: "auto", minWidth };
+  return {
+    width: `${(minWidth / totalMin) * 100}%`,
+    minWidth,
+  };
+}
+
+export function isActionColumn<TData>(
+  header: {
+    column: {
+      id?: string;
+      columnDef: ColumnDef<TData, unknown>;
+    };
+  },
+): boolean {
+  const id =
+    header.column.id ??
+    (header.column.columnDef.id ??
+      ("accessorKey" in header.column.columnDef
+        ? String(header.column.columnDef.accessorKey)
+        : ""));
+  return id === "action";
+}
+
+/** 单列 col 宽度：fixedWidth / action 列锁死 minSize，其余按比例分配。 */
+export function headerColStyle<TData>(
+  header: { column: { columnDef: ColumnDef<TData, unknown> } },
+  flexMinTotal: number,
+): { width: number | string; minWidth: number; maxWidth?: number } {
+  const minWidth = headerMinWidth(header);
+  if (isFixedWidthColumn(header) || isActionColumn(header)) {
+    return { width: minWidth, minWidth, maxWidth: minWidth };
+  }
+  return proportionalColumnStyle(minWidth, flexMinTotal);
+}
+
+/** 为列定义补全 size / minSize / maxSize（未显式设置的列）。 */
 export function ensureResizableColumns<TData>(
   columns: ColumnDef<TData, unknown>[],
 ): ColumnDef<TData, unknown>[] {
@@ -75,12 +157,14 @@ export function ensureResizableColumns<TData>(
     const id = columnId(col);
     if (!id) return col;
     const preset = STANDARD_COLUMN_SIZES[id];
+    const meta = col.meta as DataTableColumnMeta | undefined;
     return {
       ...col,
       size: col.size ?? preset?.size ?? DEFAULT_SIZE,
       minSize: col.minSize ?? preset?.minSize ?? DEFAULT_MIN,
       maxSize: col.maxSize ?? DEFAULT_MAX,
-      enableResizing: col.enableResizing ?? true,
+      enableResizing: false,
+      meta,
     };
   });
 }
@@ -142,7 +226,8 @@ export function defaultTableLayout<TData>(
     const id = col.id ?? ("accessorKey" in col ? String(col.accessorKey) : "");
     if (!id) continue;
     columnOrder.push(id);
-    columnSizing[id] = col.size ?? DEFAULT_SIZE;
+    const preset = STANDARD_COLUMN_SIZES[id];
+    columnSizing[id] = col.size ?? preset?.size ?? DEFAULT_SIZE;
   }
   return { columnOrder, columnVisibility: {}, columnSizing };
 }
@@ -224,7 +309,7 @@ export function autoSizeTableLayout<TData>(
   return layout;
 }
 
-/** 持久化列宽下限，防止拖拽或旧数据压到不可读。 */
+/** 持久化列宽下限，防止旧数据压到不可读。 */
 export function clampColumnSizing(
   sizing: ColumnSizingState,
   columns: ColumnDef<unknown, unknown>[],

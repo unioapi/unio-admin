@@ -112,7 +112,20 @@ export async function getApiKeysOpsSummary(userId: number): Promise<ApiKeysOpsSu
   return res.data.data;
 }
 
-export async function getApiKeysOpsTable(userId: number, params: RangeQuery): Promise<ApiKeyOpsRow[]> {
-  const res = await api.get<{ data: ApiKeyOpsRow[] }>(`/admin/v1/users/${userId}/api-keys/ops`, { params });
-  return res.data.data;
+export interface ApiKeysOpsTableParams extends RangeQuery {
+  page: number;
+  page_size: number;
+  sort?: string;
+  search?: string;
+}
+
+export async function getApiKeysOpsTable(
+  userId: number,
+  params: ApiKeysOpsTableParams,
+): Promise<Page<ApiKeyOpsRow>> {
+  const res = await api.get<{ data: ApiKeyOpsRow[]; meta: ListMeta }>(
+    `/admin/v1/users/${userId}/api-keys/ops`,
+    { params: buildListQuery(params) },
+  );
+  return { items: res.data.data, total: res.data.meta.total };
 }

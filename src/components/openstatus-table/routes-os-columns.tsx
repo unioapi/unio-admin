@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-import type { FilterField } from "./types";
 
 const MODE_LABEL: Record<string, string> = {
   cheapest: "经济",
@@ -55,33 +54,6 @@ export const ROUTE_OS_COLUMN_LABELS: Record<string, string> = {
   status: "状态",
   action: "操作",
 };
-
-export const ROUTE_OS_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "checkbox",
-    value: "status",
-    label: "状态",
-    defaultOpen: true,
-    options: [
-      { value: "enabled", label: "启用" },
-      { value: "disabled", label: "停用" },
-    ],
-  },
-  {
-    type: "checkbox",
-    value: "mode",
-    label: "策略",
-    options: [
-      { value: "cheapest", label: "经济" },
-      { value: "stable", label: "稳定" },
-      { value: "fixed", label: "固定" },
-    ],
-  },
-];
-
-export function getRouteSearchText(row: RouteOpsRow): string {
-  return `${row.name} ${row.description}`;
-}
 
 function EditRouteAction({ row }: { row: RouteOpsRow }) {
   const [open, setOpen] = useState(false);

@@ -3,7 +3,6 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { ApiKeyOpsRow } from "@/lib/api/customerOps";
 import type { ApiKey } from "@/lib/api/apiKeys";
-import { resizableColumn } from "@/components/data-table";
 import { formatCompact, formatRelativeTime, formatUSD } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ApiKeyRouteDialog } from "@/components/customer/ApiKeyRouteDialog";
 import { ApiKeySpendLimitDialog } from "@/components/customer/ApiKeySpendLimitDialog";
+import { ColumnHeader } from "./column-header";
+
+export const API_KEY_OS_COLUMN_LABELS: Record<string, string> = {
+  name: "Key",
+  status: "状态",
+  route_name: "线路",
+  spend_limit: "限额",
+  spent: "已用",
+  requests: "请求",
+  consumption: "消费",
+  last_used: "最近",
+  action: "操作",
+};
 
 // budgetUsagePercent 计算费用上限使用率（向下取整百分比）；未设上限返回 null（不展示比例）。
 function budgetUsagePercent(
@@ -64,15 +76,15 @@ function toApiKey(row: ApiKeyOpsRow): ApiKey {
   };
 }
 
-export function apiKeyOpsColumns(handlers: {
+export function apiKeyOsColumns(handlers: {
   onToggle: (row: ApiKeyOpsRow) => void;
   onRevoke: (row: ApiKeyOpsRow) => void;
 }): ColumnDef<ApiKeyOpsRow, unknown>[] {
   return [
-    resizableColumn<ApiKeyOpsRow>("name", {
-      header: "Key",
-      size: 200,
-      minSize: 140,
+    {
+      id: "name",
+      accessorKey: "name",
+      header: ({ column }) => <ColumnHeader column={column} title="Key" />,
       enableHiding: false,
       cell: ({ row }) => (
         <>
@@ -82,40 +94,47 @@ export function apiKeyOpsColumns(handlers: {
           </div>
         </>
       ),
-    }),
-    resizableColumn<ApiKeyOpsRow>("status", {
-      header: "状态",
-      size: 88,
+    },
+    {
+      id: "status",
+      accessorKey: "status",
+      header: ({ column }) => <ColumnHeader column={column} title="状态" />,
+      enableSorting: false,
+      enableHiding: false,
+      meta: { label: "状态", fixedWidth: true },
       cell: ({ row }) => (
         <Badge variant={row.original.status === "active" ? "default" : "outline"}>
           {row.original.status}
         </Badge>
       ),
-    }),
-    resizableColumn<ApiKeyOpsRow>("route_name", {
-      header: "线路",
-      size: 160,
+    },
+    {
+      id: "route_name",
+      accessorKey: "route_name",
+      header: ({ column }) => <ColumnHeader column={column} title="线路" />,
+      enableSorting: false,
+      cell: ({ row }) => <span className="text-xs">{row.original.route_name}</span>,
+    },
+    {
+      id: "spend_limit",
+      accessorKey: "spend_limit",
+      header: ({ column }) => <ColumnHeader column={column} title="限额" />,
+      enableSorting: false,
       cell: ({ row }) => (
-        <span className="text-xs">{row.original.route_name}</span>
-      ),
-    }),
-    resizableColumn<ApiKeyOpsRow>("spend_limit", {
-      header: "限额",
-      size: 112,
-      cell: ({ row }) => (
-        <span className="text-xs">
+        <span className="text-xs tabular-nums">
           {row.original.spend_limit ? formatUSD(row.original.spend_limit) : "不限"}
         </span>
       ),
-    }),
-    resizableColumn<ApiKeyOpsRow>("spent_total", {
-      header: "已用",
-      size: 124,
+    },
+    {
+      id: "spent",
+      accessorKey: "spent_total",
+      header: ({ column }) => <ColumnHeader column={column} title="已用" />,
       cell: ({ row }) => {
         const used = formatUSD(row.original.spent_total);
         const pct = budgetUsagePercent(row.original.spend_limit, row.original.spent_total);
         if (pct === null) {
-          return <span className="text-xs">{used}</span>;
+          return <span className="text-xs tabular-nums">{used}</span>;
         }
         // P2-1：软上限可视化——接近/达到上限即高亮告警（不加硬闸门，spend_limit 命中由后端自动停用）。
         const tone =
@@ -125,40 +144,48 @@ export function apiKeyOpsColumns(handlers: {
               ? "text-amber-600 dark:text-amber-500"
               : "text-muted-foreground";
         return (
-          <span className={`text-xs ${tone}`}>
-            {used} <span className="tabular-nums">({pct}%)</span>
+          <span className={`text-xs tabular-nums ${tone}`}>
+            {used} ({pct}%)
           </span>
         );
       },
-    }),
-    resizableColumn<ApiKeyOpsRow>("request_total", {
-      header: "请求",
-      size: 96,
-      cell: ({ row }) => <span className="text-xs">{formatCompact(row.original.request_total)}</span>,
-    }),
-    resizableColumn<ApiKeyOpsRow>("consumption_usd", {
-      header: "消费",
-      size: 112,
-      cell: ({ row }) => <span className="text-xs">{formatUSD(row.original.consumption_usd)}</span>,
-    }),
-    resizableColumn<ApiKeyOpsRow>("last_used_at", {
-      header: "最近",
-      size: 120,
+    },
+    {
+      id: "requests",
+      accessorKey: "request_total",
+      header: ({ column }) => <ColumnHeader column={column} title="请求" />,
       cell: ({ row }) => (
-        <span className="text-muted-foreground text-xs">
+        <span className="text-xs tabular-nums">{formatCompact(row.original.request_total)}</span>
+      ),
+    },
+    {
+      id: "consumption",
+      accessorKey: "consumption_usd",
+      header: ({ column }) => <ColumnHeader column={column} title="消费" />,
+      cell: ({ row }) => (
+        <span className="text-xs tabular-nums">{formatUSD(row.original.consumption_usd)}</span>
+      ),
+    },
+    {
+      id: "last_used",
+      accessorKey: "last_used_at",
+      header: ({ column }) => <ColumnHeader column={column} title="最近" />,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground text-xs tabular-nums">
           {row.original.last_used_at ? formatRelativeTime(row.original.last_used_at) : "—"}
         </span>
       ),
-    }),
-    resizableColumn<ApiKeyOpsRow>("action", {
-      header: "操作",
-      size: 72,
+    },
+    {
+      id: "action",
+      header: () => <span className="text-muted-foreground">操作</span>,
       enableHiding: false,
+      enableSorting: false,
       cell: ({ row }) => (
-        <div >
+        <div onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm">
+              <Button variant="ghost" size="icon-sm" aria-label="更多">
                 <MoreHorizontalIcon />
               </Button>
             </DropdownMenuTrigger>
@@ -189,6 +216,6 @@ export function apiKeyOpsColumns(handlers: {
           </DropdownMenu>
         </div>
       ),
-    }),
+    },
   ];
 }

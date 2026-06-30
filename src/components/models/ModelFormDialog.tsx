@@ -3,10 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createModel, updateModel, type Model } from "@/lib/api/models";
 import { apiErrorMessage } from "@/lib/api/client";
+import { roundPrice3 } from "@/lib/format";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { HintLabel } from "@/components/common/field-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
@@ -136,8 +138,8 @@ export function ModelFormDialog({
         ? String(model.context_window_tokens)
         : "",
     );
-    setInputPrice(model?.input_price_usd_per_million_tokens ?? "");
-    setOutputPrice(model?.output_price_usd_per_million_tokens ?? "");
+    setInputPrice(roundPrice3(model?.input_price_usd_per_million_tokens));
+    setOutputPrice(roundPrice3(model?.output_price_usd_per_million_tokens));
     setReleaseDate(model?.release_date ?? "");
     setErrors({});
     mutation.reset();
@@ -186,7 +188,7 @@ export function ModelFormDialog({
     <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑模型" : "新建模型"}</DialogTitle>
           <DialogDescription>
@@ -330,11 +332,11 @@ export function ModelFormDialog({
                 <HintLabel htmlFor="release_date" hint="模型发布日期；可选，仅作展示。">
                   发布日期
                 </HintLabel>
-                <Input
+                <DatePicker
                   id="release_date"
-                  type="date"
                   value={releaseDate}
-                  onChange={(e) => setReleaseDate(e.target.value)}
+                  onChange={setReleaseDate}
+                  placeholder="可选"
                 />
               </Field>
             </div>

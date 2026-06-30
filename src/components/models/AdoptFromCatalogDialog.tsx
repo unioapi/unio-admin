@@ -12,6 +12,7 @@ import {
 import { listCapabilityKeys, type SupportLevel } from "@/lib/api/capability";
 import { AddCapabilitiesDialog } from "@/components/capability/AddCapabilitiesDialog";
 import { apiErrorMessage } from "@/lib/api/client";
+import { roundPrice3 } from "@/lib/format";
 import { HintLabel } from "@/components/common/field-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,8 +121,11 @@ function AdoptForm({
   });
 
   const mutation = useMutation({
-    mutationFn: () =>
-      createModelFromCatalog({
+    mutationFn: () => {
+      // 采纳价只保留三位小数后入库。
+      const inputPrice = roundPrice3(entry.input_price_usd_per_million_tokens);
+      const outputPrice = roundPrice3(entry.output_price_usd_per_million_tokens);
+      return createModelFromCatalog({
         canonical_id: entry.canonical_id,
         model_id: modelId.trim(),
         display_name: displayName.trim(),
@@ -129,11 +133,12 @@ function AdoptForm({
         status,
         context_window_tokens: entry.context_window_tokens,
         max_output_tokens: entry.max_output_tokens,
-        input_price_usd_per_million_tokens: entry.input_price_usd_per_million_tokens,
-        output_price_usd_per_million_tokens: entry.output_price_usd_per_million_tokens,
+        input_price_usd_per_million_tokens: inputPrice === "" ? null : inputPrice,
+        output_price_usd_per_million_tokens: outputPrice === "" ? null : outputPrice,
         release_date: entry.release_date,
         capabilities: caps,
-      }),
+      });
+    },
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["model-catalog"] });

@@ -9,7 +9,6 @@ import { SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import {
   DataTable,
   DataTableViewOptions,
@@ -20,6 +19,7 @@ import {
   usePersistedTableState,
 } from "@/components/data-table";
 import { FilterChips, type FilterChip } from "./filter-chips";
+import { TablePagination } from "@/components/common/TablePagination";
 
 export interface ServerDataTableProps<TData> {
   storageKey: string;
@@ -31,6 +31,8 @@ export interface ServerDataTableProps<TData> {
   page: number;
   pageCount: number;
   onPageChange: (page: number) => void;
+  /** 每页条数，用于底栏文案；默认 20。 */
+  pageSize?: number;
   /** 服务端排序（受控）。 */
   sorting?: SortingState;
   onSortingChange?: (sorting: SortingState) => void;
@@ -63,6 +65,7 @@ export function ServerDataTable<TData>({
   page,
   pageCount,
   onPageChange,
+  pageSize = 20,
   sorting = [],
   onSortingChange,
   getRowId,
@@ -134,8 +137,7 @@ export function ServerDataTable<TData>({
     manualSorting: true,
     pageCount,
     enableColumnFilters: false,
-    columnResizeMode: "onChange",
-    enableColumnResizing: true,
+    enableColumnResizing: false,
   });
 
   const labels = useMemo(() => columnLabels, [columnLabels]);
@@ -182,7 +184,9 @@ export function ServerDataTable<TData>({
 
       <div
         className={cn(
-          bordered ? "overflow-x-auto rounded-lg border" : "overflow-x-auto",
+          bordered
+            ? "table-scroll-x min-w-0 rounded-lg border"
+            : "table-scroll-x min-w-0",
           refetching && "opacity-60",
         )}
       >
@@ -208,31 +212,13 @@ export function ServerDataTable<TData>({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-muted-foreground text-sm tabular-nums">
-          共 {total} 条 · 第 {page}/{pageCount} 页
-        </span>
-        {pageCount > 1 ? (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-            >
-              上一页
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= pageCount}
-              onClick={() => onPageChange(page + 1)}
-            >
-              下一页
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <TablePagination
+        total={total}
+        page={page}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        onPageChange={onPageChange}
+      />
     </div>
   );
 }

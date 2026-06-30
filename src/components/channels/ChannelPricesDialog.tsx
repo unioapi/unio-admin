@@ -25,6 +25,7 @@ import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { HintLabel } from "@/components/common/field-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -318,11 +319,10 @@ function ChannelPriceForm({
           <HintLabel htmlFor="cp_from" hint="该成本价开始生效的时间点。">
             生效开始
           </HintLabel>
-          <Input
+          <DateTimePicker
             id="cp_from"
-            type="datetime-local"
             value={effectiveFrom}
-            onChange={(e) => setEffectiveFrom(e.target.value)}
+            onChange={setEffectiveFrom}
             aria-invalid={!!errors.effective_from}
           />
           <FieldError>{errors.effective_from}</FieldError>
@@ -332,11 +332,11 @@ function ChannelPriceForm({
           <HintLabel htmlFor="cp_to" hint="该成本价的失效时间；留空表示长期有效。">
             生效结束（可选）
           </HintLabel>
-          <Input
+          <DateTimePicker
             id="cp_to"
-            type="datetime-local"
             value={effectiveTo}
-            onChange={(e) => setEffectiveTo(e.target.value)}
+            onChange={setEffectiveTo}
+            placeholder="留空表示长期有效"
             aria-invalid={!!errors.effective_to}
           />
           <FieldError>{errors.effective_to}</FieldError>
@@ -455,12 +455,11 @@ function ChannelPriceRow({
       </div>
 
       <div className="flex items-center gap-1">
-        <Input
-          type="datetime-local"
+        <DateTimePicker
           value={draftTo}
-          onChange={(e) => setDraftTo(e.target.value)}
-          aria-label="生效结束时间"
-          className="h-8 w-52"
+          onChange={setDraftTo}
+          placeholder="生效结束时间"
+          className="h-8 w-56"
         />
         {dirty && (
           <Button

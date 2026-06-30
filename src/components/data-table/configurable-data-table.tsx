@@ -153,7 +153,9 @@ export function ConfigurableDataTable<TData>({
     getRowId,
   });
 
-  const borderWrap = bordered ? "overflow-x-auto rounded-lg border" : "overflow-x-auto";
+  const borderWrap = bordered
+    ? "table-scroll-x min-w-0 rounded-lg border"
+    : "table-scroll-x min-w-0";
 
   const toolbar = (
     <TableToolbar

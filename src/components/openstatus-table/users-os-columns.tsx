@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-import type { FilterField } from "./types";
 
 const facetedFilter: FilterFn<UserOpsRow> = (row, columnId, filterValue) => {
   const selected = filterValue as string[] | undefined;
@@ -26,23 +25,6 @@ export const USER_OS_COLUMN_LABELS: Record<string, string> = {
   risk: "风险",
   action: "操作",
 };
-
-export const USER_OS_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "checkbox",
-    value: "risk",
-    label: "风险",
-    defaultOpen: true,
-    options: [
-      { value: "low", label: "低余额" },
-      { value: "ok", label: "正常" },
-    ],
-  },
-];
-
-export function getUserSearchText(row: UserOpsRow): string {
-  return `${row.email} ${row.display_name}`;
-}
 
 export function userOsColumns(): ColumnDef<UserOpsRow, unknown>[] {
   return [

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -267,11 +268,11 @@ export function CreateApiKeyDialog({
                   <HintLabel htmlFor="key_expires" hint="Key 过期时间；留空表示永不过期。">
                     过期时间
                   </HintLabel>
-                  <Input
+                  <DateTimePicker
                     id="key_expires"
-                    type="datetime-local"
                     value={expiresLocal}
-                    onChange={(e) => setExpiresLocal(e.target.value)}
+                    onChange={setExpiresLocal}
+                    placeholder="留空表示永不过期"
                   />
                 </Field>
 

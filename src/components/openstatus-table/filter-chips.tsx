@@ -1,53 +1,12 @@
-import { useMemo } from "react";
-import type { Table } from "@tanstack/react-table";
 import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import type { FilterField } from "./types";
 
 export type FilterChip = {
   id: string;
   label: string;
   onRemove: () => void;
 };
-
-export function buildFilterChips<TData>(
-  table: Table<TData>,
-  filterFields: FilterField[],
-  globalFilter: string,
-  onClearGlobalFilter: () => void,
-): FilterChip[] {
-  const chips: FilterChip[] = [];
-
-  const search = globalFilter.trim();
-  if (search) {
-    chips.push({
-      id: "global-search",
-      label: `搜索 · ${search}`,
-      onRemove: onClearGlobalFilter,
-    });
-  }
-
-  for (const field of filterFields) {
-    const column = table.getColumn(field.value);
-    const raw = column?.getFilterValue();
-    const selected = raw == null ? [] : Array.isArray(raw) ? (raw as string[]) : [String(raw)];
-
-    for (const value of selected) {
-      const option = field.options.find((o) => o.value === value);
-      chips.push({
-        id: `${field.value}:${value}`,
-        label: `${field.label} · ${option?.label ?? value}`,
-        onRemove: () => {
-          const next = selected.filter((v) => v !== value);
-          column?.setFilterValue(next.length ? next : undefined);
-        },
-      });
-    }
-  }
-
-  return chips;
-}
 
 /** 当前生效的筛选条件 Chip 条；无筛选时不渲染。 */
 export function FilterChips({
@@ -88,18 +47,5 @@ export function FilterChips({
         清除全部
       </Button>
     </div>
-  );
-}
-
-export function useFilterChips<TData>(
-  table: Table<TData>,
-  filterFields: FilterField[],
-  globalFilter: string,
-  onClearGlobalFilter: () => void,
-  columnFilters: unknown,
-) {
-  return useMemo(
-    () => buildFilterChips(table, filterFields, globalFilter, onClearGlobalFilter),
-    [table, filterFields, globalFilter, onClearGlobalFilter, columnFilters],
   );
 }

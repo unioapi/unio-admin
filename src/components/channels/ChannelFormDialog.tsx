@@ -9,8 +9,8 @@ import {
 } from "@/lib/api/channels";
 import { listAllProviders } from "@/lib/api/providers";
 import { apiErrorMessage } from "@/lib/api/client";
-import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { HintLabel } from "@/components/common/field-hint";
+import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import {
   RateLimitInput,
   composeRateLimit,
@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogClose,
@@ -34,14 +35,11 @@ import {
   Field,
   FieldError,
   FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSeparator,
-  FieldSet,
 } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -60,7 +58,7 @@ export function ChannelFormDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
         {open && (
           <ChannelForm channel={channel} onDone={() => onOpenChange(false)} />
         )}
@@ -269,64 +267,66 @@ function ChannelForm({
     mutation.mutate();
   }
 
+  const rateLimitInvalid =
+    !!errors.rpm_limit || !!errors.tpm_limit || !!errors.rpd_limit;
+
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>{isEdit ? "编辑渠道" : "新建渠道"}</DialogTitle>
-        <DialogDescription>
-          {isEdit
-            ? "所属服务商、协议、adapter 不在此修改;凭据请用「轮换凭据」。"
-            : "配置一条上游渠道;协议与 adapter 复合键须在当前进程注册。"}
-        </DialogDescription>
-      </DialogHeader>
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <div className="space-y-1 px-6 pt-6">
+          <DialogHeader>
+            <DialogTitle>{isEdit ? "编辑渠道" : "新建渠道"}</DialogTitle>
+            <DialogDescription>
+              {isEdit
+                ? "所属服务商、协议、adapter 不在此修改；凭据请用「轮换凭据」。"
+                : "填写上游连接与路由参数。协议、adapter 创建后不可修改。"}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="flex min-h-0 flex-1 flex-col gap-4"
-      >
-        <div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4">
-          <FieldGroup>
-            <FieldSet>
-              <FieldLegend variant="label">基本信息</FieldLegend>
-
-              <Field data-invalid={!!errors.provider_id}>
-                <HintLabel
-                  htmlFor="provider"
-                  hint="该渠道所属的上游服务商;先建服务商,再在其下建渠道。创建后不可修改。"
-                >
-                  服务商
-                </HintLabel>
-                {isEdit ? (
-                  <Input id="provider" value={providerDisplay} disabled />
-                ) : (
-                  <Select value={providerId} onValueChange={setProviderId}>
-                    <SelectTrigger
-                      id="provider"
-                      className="w-full"
-                      aria-invalid={!!errors.provider_id}
-                    >
-                      <SelectValue
-                        placeholder={
-                          providersQuery.isPending ? "加载中…" : "选择服务商"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
+        <ScrollArea className="max-h-[min(68vh,32rem)]">
+          <FieldGroup className="gap-4 px-6 py-5">
+            <Field data-invalid={!!errors.provider_id}>
+              <HintLabel
+                htmlFor="provider"
+                hint="该渠道所属的上游服务商；先建服务商，再在其下建渠道。创建后不可修改。"
+              >
+                服务商
+              </HintLabel>
+              {isEdit ? (
+                <Input id="provider" value={providerDisplay} disabled />
+              ) : (
+                <Select value={providerId} onValueChange={setProviderId}>
+                  <SelectTrigger
+                    id="provider"
+                    className="w-full"
+                    aria-invalid={!!errors.provider_id}
+                  >
+                    <SelectValue
+                      placeholder={
+                        providersQuery.isPending ? "加载中…" : "选择服务商"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
                       {(providersQuery.data ?? []).map((p) => (
                         <SelectItem key={p.id} value={String(p.id)}>
                           {p.name}（{p.slug}）
                         </SelectItem>
                       ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <FieldError>{errors.provider_id}</FieldError>
-              </Field>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              )}
+              <FieldError>{errors.provider_id}</FieldError>
+            </Field>
 
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field data-invalid={!!errors.name}>
                 <HintLabel
                   htmlFor="name"
-                  hint="渠道名称,仅用于后台识别;同一服务商下不可重名。"
+                  hint="渠道名称，仅用于后台识别；同一服务商下不可重名。"
                 >
                   名称
                 </HintLabel>
@@ -341,69 +341,103 @@ function ChannelForm({
                 <FieldError>{errors.name}</FieldError>
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
+              {isEdit ? (
+                <Field>
+                  <HintLabel
+                    htmlFor="status"
+                    hint="启用后该渠道参与路由；停用则新请求不再走它（进行中的请求不受影响）。"
+                  >
+                    状态
+                  </HintLabel>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger id="status" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="enabled">启用</SelectItem>
+                        <SelectItem value="disabled">停用</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              ) : (
                 <Field>
                   <HintLabel
                     htmlFor="protocol"
-                    hint="渠道对外协议族:openai(/v1/chat/completions、/responses)或 anthropic(/v1/messages)。创建后不可修改。"
+                    hint="渠道对外协议族：openai（/v1/chat/completions、/responses）或 anthropic（/v1/messages）。创建后不可修改。"
                   >
                     协议
                   </HintLabel>
-                  {isEdit ? (
-                    <Input id="protocol" value={channel.protocol} disabled />
-                  ) : (
-                    <Select value={protocol} onValueChange={handleProtocolChange}>
-                      <SelectTrigger id="protocol" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
+                  <Select value={protocol} onValueChange={handleProtocolChange}>
+                    <SelectTrigger id="protocol" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
                         <SelectItem value="openai">openai</SelectItem>
                         <SelectItem value="anthropic">anthropic</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </Field>
+              )}
+            </div>
 
-                <Field data-invalid={!!errors.adapter_key}>
-                  <HintLabel
-                    htmlFor="adapter_key"
-                    hint="请求/响应翻译实现。留默认「忠实透传」即可对接 OpenAI/Anthropic 兼容上游;特殊方言才换。创建后不可修改。"
-                  >
-                    adapter_key
-                  </HintLabel>
-                  {isEdit ? (
-                    <Input id="adapter_key" value={channel.adapter_key} disabled />
-                  ) : (
-                    <Select value={adapterKey} onValueChange={setAdapterKey}>
-                      <SelectTrigger
-                        id="adapter_key"
-                        className="w-full"
-                        aria-invalid={!!errors.adapter_key}
-                      >
-                        <SelectValue
-                          placeholder={
-                            adapterKeysQuery.isPending ? "加载中…" : "选择 adapter"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                data-invalid={!!errors.adapter_key}
+                data-disabled={isEdit}
+              >
+                <HintLabel
+                  htmlFor="adapter_key"
+                  hint="请求/响应翻译实现。留默认「忠实透传」即可对接 OpenAI/Anthropic 兼容上游；特殊方言才换。创建后不可修改。"
+                >
+                  adapter_key
+                </HintLabel>
+                {isEdit ? (
+                  <Input
+                    id="adapter_key"
+                    value={channel.adapter_key}
+                    disabled
+                  />
+                ) : (
+                  <Select value={adapterKey} onValueChange={setAdapterKey}>
+                    <SelectTrigger
+                      id="adapter_key"
+                      className="w-full"
+                      aria-invalid={!!errors.adapter_key}
+                    >
+                      <SelectValue
+                        placeholder={
+                          adapterKeysQuery.isPending
+                            ? "加载中…"
+                            : "选择 adapter"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
                         {adapterOptions.map((o) => (
-                          <SelectItem key={o.adapter_key} value={o.adapter_key}>
+                          <SelectItem
+                            key={o.adapter_key}
+                            value={o.adapter_key}
+                          >
                             {o.adapter_key}
                             {o.is_default ? "（默认 · 忠实透传）" : ""}
                           </SelectItem>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <FieldError>{errors.adapter_key}</FieldError>
-                </Field>
-              </div>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                )}
+                <FieldError>{errors.adapter_key}</FieldError>
+              </Field>
 
               <Field data-invalid={!!errors.base_url}>
                 <HintLabel
                   htmlFor="base_url"
-                  hint="上游 API 基础地址。OpenAI 兼容填到 /v1;Anthropic 填根地址(网关自动拼 /v1/messages)。"
+                  hint="上游 API 基础地址。OpenAI 兼容填到 /v1；Anthropic 填根地址（网关自动拼 /v1/messages）。"
                 >
                   上游地址
                 </HintLabel>
@@ -416,80 +450,87 @@ function ChannelForm({
                 />
                 <FieldError>{errors.base_url}</FieldError>
               </Field>
+            </div>
 
-              {!isEdit && (
-                <Field data-invalid={!!errors.credential}>
-                  <HintLabel
-                    htmlFor="credential"
-                    hint="调用上游用的 API Key。明文存储,管理端可在渠道详情查看/复制,或用「轮换凭据」更换。"
-                  >
-                    凭据
-                  </HintLabel>
-                  <Input
-                    id="credential"
-                    type="password"
-                    value={credential}
-                    onChange={(e) => setCredential(e.target.value)}
-                    placeholder="sk-..."
-                    aria-invalid={!!errors.credential}
-                    autoComplete="off"
-                  />
-                  <FieldError>{errors.credential}</FieldError>
-                </Field>
-              )}
-            </FieldSet>
-
-            <FieldSeparator />
-
-            <FieldSet>
-              <FieldLegend variant="label">路由与限流</FieldLegend>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Field data-invalid={!!errors.priority}>
-                  <HintLabel
-                    htmlFor="priority"
-                    hint="路由选渠道的优先级,数值越小越靠前(0 最高);同级再按线路策略(如成本)排。"
-                  >
-                    优先级
-                  </HintLabel>
-                  <Input
-                    id="priority"
-                    type="number"
-                    min={0}
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
-                    aria-invalid={!!errors.priority}
-                  />
-                  <FieldError>{errors.priority}</FieldError>
-                </Field>
-
-                <Field data-invalid={!!errors.timeout_ms}>
-                  <HintLabel
-                    htmlFor="timeout_ms"
-                    hint="本渠道调用上游的单次超时(毫秒);留空用全局默认。"
-                  >
-                    超时（毫秒）
-                  </HintLabel>
-                  <Input
-                    id="timeout_ms"
-                    type="number"
-                    min={1}
-                    value={timeoutMs}
-                    onChange={(e) => setTimeoutMs(e.target.value)}
-                    placeholder="留空表示不单独设置"
-                    aria-invalid={!!errors.timeout_ms}
-                  />
-                  <FieldError>{errors.timeout_ms}</FieldError>
-                </Field>
-              </div>
-
-              <Field>
-                <HintLabel hint="限制本网关调用该上游渠道的速率(网关→上游),命中自动跳过该渠道回退到下一个。RPM 每分钟请求 / TPM 每分钟 token / RPD 每日请求;TPM、RPD 可带单位 K/M/B(默认 K);留空=继承全局默认,0=不限。">
-                  渠道级限流
+            {isEdit ? (
+              <Field data-disabled>
+                <HintLabel htmlFor="protocol" hint="创建后不可修改。">
+                  协议
                 </HintLabel>
-                <div className="grid grid-cols-3 gap-4">
+                <Input id="protocol" value={channel.protocol} disabled />
+              </Field>
+            ) : null}
+
+            {!isEdit && (
+              <Field data-invalid={!!errors.credential}>
+                <HintLabel
+                  htmlFor="credential"
+                  hint="调用上游用的 API Key。明文存储，管理端可在渠道详情查看/复制，或用「轮换凭据」更换。"
+                >
+                  凭据
+                </HintLabel>
+                <Input
+                  id="credential"
+                  type="password"
+                  value={credential}
+                  onChange={(e) => setCredential(e.target.value)}
+                  placeholder="sk-..."
+                  aria-invalid={!!errors.credential}
+                  autoComplete="off"
+                />
+                <FieldError>{errors.credential}</FieldError>
+              </Field>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field data-invalid={!!errors.priority}>
+                <HintLabel
+                  htmlFor="priority"
+                  hint="路由选渠道的优先级，数值越小越靠前（0 最高）；同级再按线路策略（如成本）排。"
+                >
+                  优先级
+                </HintLabel>
+                <Input
+                  id="priority"
+                  type="number"
+                  min={0}
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  aria-invalid={!!errors.priority}
+                />
+                <FieldError>{errors.priority}</FieldError>
+              </Field>
+
+              <Field data-invalid={!!errors.timeout_ms}>
+                <HintLabel
+                  htmlFor="timeout_ms"
+                  hint="本渠道调用上游的单次超时（毫秒）；留空用全局默认。"
+                >
+                  超时（毫秒）
+                </HintLabel>
+                <Input
+                  id="timeout_ms"
+                  type="number"
+                  min={1}
+                  value={timeoutMs}
+                  onChange={(e) => setTimeoutMs(e.target.value)}
+                  placeholder="留空表示不单独设置"
+                  aria-invalid={!!errors.timeout_ms}
+                />
+                <FieldError>{errors.timeout_ms}</FieldError>
+              </Field>
+            </div>
+
+            <Field data-invalid={rateLimitInvalid}>
+              <HintLabel hint="限制本网关调用该上游渠道的速率（网关→上游），命中自动跳过该渠道回退到下一个。留空=继承全局默认，0=不限；TPM、RPD 可带单位 K/M/B（默认 K）。">
+                渠道级限流
+              </HintLabel>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <Field data-invalid={!!errors.rpm_limit}>
-                    <FieldLabel htmlFor="rpm_limit">RPM</FieldLabel>
+                    <HintLabel htmlFor="rpm_limit" hint="每分钟请求数。">
+                      RPM
+                    </HintLabel>
                     <Input
                       id="rpm_limit"
                       type="number"
@@ -502,7 +543,9 @@ function ChannelForm({
                     <FieldError>{errors.rpm_limit}</FieldError>
                   </Field>
                   <Field data-invalid={!!errors.tpm_limit}>
-                    <FieldLabel htmlFor="tpm_limit">TPM</FieldLabel>
+                    <HintLabel htmlFor="tpm_limit" hint="每分钟 token 数。">
+                      TPM
+                    </HintLabel>
                     <RateLimitInput
                       id="tpm_limit"
                       value={tpmLimit}
@@ -512,7 +555,9 @@ function ChannelForm({
                     <FieldError>{errors.tpm_limit}</FieldError>
                   </Field>
                   <Field data-invalid={!!errors.rpd_limit}>
-                    <FieldLabel htmlFor="rpd_limit">RPD</FieldLabel>
+                    <HintLabel htmlFor="rpd_limit" hint="每日请求数。">
+                      RPD
+                    </HintLabel>
                     <RateLimitInput
                       id="rpd_limit"
                       value={rpdLimit}
@@ -522,32 +567,34 @@ function ChannelForm({
                     <FieldError>{errors.rpd_limit}</FieldError>
                   </Field>
                 </div>
-              </Field>
-            </FieldSet>
-
-            <FieldSeparator />
-
-            <Field>
-              <HintLabel
-                htmlFor="status"
-                hint="启用后该渠道参与路由;停用则新请求不再走它(进行中的请求不受影响)。"
-              >
-                状态
-              </HintLabel>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="status" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="enabled">启用</SelectItem>
-                  <SelectItem value="disabled">停用</SelectItem>
-                </SelectContent>
-              </Select>
+              </div>
             </Field>
-          </FieldGroup>
-        </div>
 
-        <DialogFooter>
+            {!isEdit && (
+              <Field>
+                <HintLabel
+                  htmlFor="status"
+                  hint="启用后该渠道参与路由；停用则新请求不再走它（进行中的请求不受影响）。"
+                >
+                  状态
+                </HintLabel>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger id="status" className="w-full sm:max-w-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="enabled">启用</SelectItem>
+                      <SelectItem value="disabled">停用</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+          </FieldGroup>
+        </ScrollArea>
+
+        <DialogFooter className="mx-0 mb-0 border-t px-6 py-4">
           <DialogClose asChild>
             <Button type="button" variant="outline">
               取消

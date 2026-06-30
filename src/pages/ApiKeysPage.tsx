@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -12,16 +12,24 @@ import { getUser } from "@/lib/api/users";
 import { revokeApiKey, updateApiKey } from "@/lib/api/apiKeys";
 import { apiErrorMessage } from "@/lib/api/client";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
+import { useServerList } from "@/hooks/useServerList";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
-import { ConfigurableDataTable } from "@/components/data-table";
-import { apiKeyOpsColumns } from "@/components/ops-tables/api-keys-columns";
+import { ServerDataTable } from "@/components/openstatus-table";
+import type { FilterChip } from "@/components/openstatus-table";
+import {
+  apiKeyOsColumns,
+  API_KEY_OS_COLUMN_LABELS,
+} from "@/components/openstatus-table/api-keys-os-columns";
 import { CreateApiKeyDialog } from "@/components/customer/CreateApiKeyDialog";
 import { formatInt } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const PAGE_SIZE = 20;
 
 type PendingKeyAction =
   | { type: "toggle"; key: ApiKeyOpsRow }
@@ -30,33 +38,55 @@ type PendingKeyAction =
 export function ApiKeysPage() {
   const { userId: userIdParam } = useParams();
   const userId = Number(userIdParam);
+  const validUser = Number.isFinite(userId) && userId > 0;
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
   const queryClient = useQueryClient();
-  const rangeQuery = { ...params, range: value.preset };
 
-  if (!Number.isFinite(userId) || userId <= 0) {
-    return <Navigate to="/users" replace />;
-  }
+  const { page, setPage, sorting, setSorting, sort } = useServerList({
+    pageSize: PAGE_SIZE,
+    defaultSort: { id: "requests", desc: true },
+  });
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebouncedValue(searchInput.trim(), 300);
+  const [pendingAction, setPendingAction] = useState<PendingKeyAction | null>(null);
 
   const user = useQuery({
     queryKey: ["user", userId],
     queryFn: () => getUser(userId),
+    enabled: validUser,
   });
 
   const summary = useQuery({
     queryKey: ["api-keys", userId, "ops-summary"],
     queryFn: () => getApiKeysOpsSummary(userId),
     refetchInterval: 60_000,
+    enabled: validUser,
   });
-  const table = useQuery({
-    queryKey: ["api-keys", userId, "ops-table", rangeQuery],
-    queryFn: () => getApiKeysOpsTable(userId, rangeQuery),
+
+  const query = useQuery({
+    queryKey: ["api-keys", userId, "ops-table", { ...params, range: value.preset, page, sort, search }],
+    queryFn: () =>
+      getApiKeysOpsTable(userId, {
+        ...params,
+        range: value.preset,
+        page,
+        page_size: PAGE_SIZE,
+        sort,
+        search: search || undefined,
+      }),
     placeholderData: keepPreviousData,
+    enabled: validUser,
   });
+
+  const items = query.data?.items ?? [];
+  const total = query.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount, setPage]);
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["api-keys", userId] });
-
-  const [pendingAction, setPendingAction] = useState<PendingKeyAction | null>(null);
 
   const toggle = useMutation({
     mutationFn: (k: ApiKeyOpsRow) => updateApiKey({ id: k.id, disabled: k.status !== "disabled" ? true : false }),
@@ -77,20 +107,36 @@ export function ApiKeysPage() {
     else revoke.mutate(pendingAction.key.id);
   }
 
-  const s = summary.data;
   const columns = useMemo(
     () =>
-      apiKeyOpsColumns({
+      apiKeyOsColumns({
         onToggle: (k) => setPendingAction({ type: "toggle", key: k }),
         onRevoke: (k) => setPendingAction({ type: "revoke", key: k }),
       }),
     [],
   );
 
+  const chips: FilterChip[] = [];
+  if (search) {
+    chips.push({
+      id: "search",
+      label: `搜索 · ${search}`,
+      onRemove: () => {
+        setSearchInput("");
+        setPage(1);
+      },
+    });
+  }
+
   const disabling = pendingAction?.type === "toggle" && pendingAction.key.status !== "disabled";
+  const s = summary.data;
+
+  if (!validUser) {
+    return <Navigate to="/users" replace />;
+  }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Button asChild variant="ghost" size="sm" className="mb-1 -ml-2">
@@ -106,7 +152,15 @@ export function ApiKeysPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <RangeFilter value={value} onChange={setRange} refreshedAt={refreshedAt} onRefresh={refresh} />
+          <RangeFilter
+            value={value}
+            onChange={(v) => {
+              setRange(v);
+              setPage(1);
+            }}
+            refreshedAt={refreshedAt}
+            onRefresh={refresh}
+          />
           <CreateApiKeyDialog userId={userId}>
             <Button size="sm"><PlusIcon data-icon="inline-start" />新建 Key</Button>
           </CreateApiKeyDialog>
@@ -119,21 +173,38 @@ export function ApiKeysPage() {
         <MetricCard label="已达上限" loading={summary.isPending} value={formatInt(s?.spend_capped ?? 0)} intent={s && s.spend_capped > 0 ? "warning" : "default"} />
       </MetricGrid>
 
-      {table.isError ? (
+      {query.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription>{(table.error as Error).message}</AlertDescription>
+          <AlertDescription>{(query.error as Error).message}</AlertDescription>
         </Alert>
       ) : (
-        <ConfigurableDataTable
+        <ServerDataTable
           storageKey={`api-keys:${userId}:ops-table`}
-          data={table.data ?? []}
           columns={columns}
-          loading={table.isPending}
-          pinnedColumnId="name"
-          emptyMessage="暂无 API Key"
+          data={items}
+          columnLabels={API_KEY_OS_COLUMN_LABELS}
+          total={total}
+          page={page}
+          pageCount={pageCount}
+          onPageChange={setPage}
+          sorting={sorting}
+          onSortingChange={setSorting}
           getRowId={(r) => String(r.id)}
-          tableClassName={table.isFetching && !table.isPending ? "opacity-60" : undefined}
+          loading={query.isPending}
+          refetching={query.isFetching && !query.isPending}
+          emptyMessage="暂无 API Key"
+          searchValue={searchInput}
+          onSearchChange={(v) => {
+            setSearchInput(v);
+            setPage(1);
+          }}
+          searchPlaceholder="搜索 Key 名称 / 前缀"
+          chips={chips}
+          onClearChips={() => {
+            setSearchInput("");
+            setPage(1);
+          }}
         />
       )}
 

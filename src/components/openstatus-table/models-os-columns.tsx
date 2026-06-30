@@ -7,12 +7,22 @@ import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent"
 import { ModelRowActions } from "@/components/models/ModelRowActions";
 import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
 import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
-import { formatCompact, formatDateTime, formatPercent, formatUSD } from "@/lib/format";
+import {
+  formatCompact,
+  formatDateTime,
+  formatPercent,
+  formatUSD,
+  trimDecimal,
+} from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-import type { FilterField } from "./types";
 
 type StatIntent = "default" | "success" | "warning" | "danger";
 
@@ -54,7 +64,7 @@ export const MODEL_OS_COLUMN_LABELS: Record<string, string> = {
   failed: "失败",
   latency: "平均延迟",
   margin: "利润",
-  price: "价格",
+  price: "基准价",
   margin_rate: "毛利率",
   created_at: "创建时间",
   status: "状态",
@@ -62,30 +72,64 @@ export const MODEL_OS_COLUMN_LABELS: Record<string, string> = {
   action: "操作",
 };
 
-export const MODEL_OS_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "checkbox",
-    value: "status",
-    label: "状态",
-    defaultOpen: true,
-    options: [
-      { value: "enabled", label: "启用" },
-      { value: "disabled", label: "停用" },
-    ],
-  },
-  {
-    type: "checkbox",
-    value: "sellable",
-    label: "可售",
-    options: [
-      { value: "true", label: "可售" },
-      { value: "false", label: "不可售" },
-    ],
-  },
+// 基准价 tooltip 的完整明细字段（每 1M tokens）；顺序与文案固定，渲染时仅展示非空项。
+const BASE_PRICE_BREAKDOWN: {
+  key:
+    | "base_uncached_input_price"
+    | "base_cache_read_input_price"
+    | "base_output_price"
+    | "base_reasoning_output_price"
+    | "base_cache_write_5m_input_price"
+    | "base_cache_write_1h_input_price";
+  label: string;
+}[] = [
+  { key: "base_uncached_input_price", label: "输入（未缓存）" },
+  { key: "base_cache_read_input_price", label: "缓存读取输入" },
+  { key: "base_output_price", label: "输出" },
+  { key: "base_reasoning_output_price", label: "reasoning 输出" },
+  { key: "base_cache_write_5m_input_price", label: "5 分钟缓存写入" },
+  { key: "base_cache_write_1h_input_price", label: "1 小时缓存写入" },
 ];
 
-export function getModelSearchText(row: ModelOpsRow): string {
-  return `${row.model_id} ${row.display_name} ${row.owned_by}`;
+// BasePriceCell 渲染模型「基准价」（model_prices 当前生效行，每 1M tokens）：
+// 无基准价（uncached_input 为空）→「缺价」徽标；否则 `输入 / 输出` 紧凑值 + 悬浮显示完整明细。
+function BasePriceCell({ row }: { row: ModelOpsRow }) {
+  const input = row.base_uncached_input_price;
+  if (input == null) {
+    return <Badge variant="destructive">缺价</Badge>;
+  }
+  const output = row.base_output_price;
+  const breakdown = BASE_PRICE_BREAKDOWN.flatMap(({ key, label }) => {
+    const value = row[key];
+    return value == null ? [] : [{ label, value: trimDecimal(value) }];
+  });
+  breakdown.push({ label: "币种", value: row.base_currency ?? "USD" });
+
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="cursor-default tabular-nums underline decoration-dotted underline-offset-2"
+        >
+          输入 {trimDecimal(input)} / 输出 {output == null ? "—" : trimDecimal(output)}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent align="start" className="max-w-xs">
+        <div className="flex flex-col gap-1.5">
+          <div className="font-medium">基准价 · 每 1M tokens</div>
+          <div className="flex flex-col gap-0.5">
+            {breakdown.map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between gap-4">
+                <span className="text-background/70">{label}</span>
+                <span className="tabular-nums">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function modelOsColumns(): ColumnDef<ModelOpsRow, unknown>[] {
@@ -179,14 +223,9 @@ export function modelOsColumns(): ColumnDef<ModelOpsRow, unknown>[] {
     },
     {
       id: "price",
-      accessorFn: (r) => (r.has_price ? "true" : "false"),
-      header: ({ column }) => <ColumnHeader column={column} title="价格" />,
-      cell: ({ row }) =>
-        row.original.has_price ? (
-          <Badge variant="secondary">已配置</Badge>
-        ) : (
-          <Badge variant="destructive">缺价</Badge>
-        ),
+      accessorFn: (r) => r.base_uncached_input_price,
+      header: ({ column }) => <ColumnHeader column={column} title="基准价" />,
+      cell: ({ row }) => <BasePriceCell row={row.original} />,
     },
     {
       id: "margin_rate",

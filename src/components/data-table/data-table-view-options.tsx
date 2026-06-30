@@ -1,5 +1,5 @@
 import type { Table } from "@tanstack/react-table";
-import { ChevronDownIcon } from "lucide-react";
+import { Settings2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,12 +24,19 @@ export function DataTableViewOptions<TData>({
     .getAllColumns()
     .filter((column) => column.getCanHide());
 
+  if (hideable.length === 0) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" title="勾选显示列；表头悬停可拖拽 ⋮⋮ 调序、右缘调宽；布局保存在本浏览器">
-          列设置
-          <ChevronDownIcon data-icon="inline-end" />
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="shadow-none"
+          title="显示列"
+          aria-label="列设置"
+        >
+          <Settings2Icon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">

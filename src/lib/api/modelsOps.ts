@@ -40,6 +40,14 @@ export interface ModelOpsRow {
   revenue_usd: string;
   margin_usd: string;
   margin_rate: number;
+  // 基准售价（DEC-026 model_prices，每 1M tokens）；无基准价时为 null。
+  base_currency: string | null;
+  base_uncached_input_price: string | null;
+  base_cache_read_input_price: string | null;
+  base_cache_write_5m_input_price: string | null;
+  base_cache_write_1h_input_price: string | null;
+  base_output_price: string | null;
+  base_reasoning_output_price: string | null;
 }
 
 export interface ModelOpsDetail {

@@ -1,4 +1,4 @@
-import type { ColumnDef, FilterFn } from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
 import type { ChannelOpsRow } from "@/lib/api/channelsOps";
 import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
@@ -15,7 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-import type { FacetOption, FilterField } from "./types";
 
 type StatIntent = "default" | "success" | "warning" | "danger";
 
@@ -32,12 +31,6 @@ function statIntentClass(intent: StatIntent | undefined): string {
   }
 }
 
-const facetedFilter: FilterFn<ChannelOpsRow> = (row, columnId, filterValue) => {
-  const selected = filterValue as string[] | undefined;
-  if (!selected?.length) return true;
-  return selected.includes(String(row.getValue(columnId)));
-};
-
 export const CHANNEL_OS_COLUMN_LABELS: Record<string, string> = {
   name: "渠道",
   requests: "请求",
@@ -52,38 +45,6 @@ export const CHANNEL_OS_COLUMN_LABELS: Record<string, string> = {
   health: "健康",
   action: "操作",
 };
-
-export const CHANNEL_OS_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "checkbox",
-    value: "status",
-    label: "状态",
-    defaultOpen: true,
-    options: [
-      { value: "enabled", label: "启用" },
-      { value: "disabled", label: "停用" },
-    ],
-  },
-  {
-    type: "checkbox",
-    value: "health",
-    label: "健康",
-    defaultOpen: true,
-    options: (Object.keys(HEALTH_LABEL) as (keyof typeof HEALTH_LABEL)[]).map(
-      (value): FacetOption => ({
-        value,
-        label: HEALTH_LABEL[value],
-        render: () => (
-          <Badge variant={HEALTH_VARIANT[value]}>{HEALTH_LABEL[value]}</Badge>
-        ),
-      }),
-    ),
-  },
-];
-
-export function getChannelSearchText(row: ChannelOpsRow): string {
-  return `${row.name} ${row.provider_name} ${row.base_url}`;
-}
 
 export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
   return [
@@ -149,6 +110,7 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       id: "recent_error",
       accessorKey: "recent_error_code",
       header: ({ column }) => <ColumnHeader column={column} title="最近错误" />,
+      enableSorting: false,
       cell: ({ row }) => (
         <TruncateCell
           className="text-muted-foreground text-xs"
@@ -182,7 +144,8 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       id: "status",
       accessorKey: "status",
       header: ({ column }) => <ColumnHeader column={column} title="状态" />,
-      filterFn: facetedFilter,
+      enableHiding: false,
+      meta: { label: "状态", fixedWidth: true },
       cell: ({ row }) => (
         <Badge variant={row.original.status === "enabled" ? "default" : "outline"}>
           {row.original.status === "enabled" ? "启用" : "停用"}
@@ -193,7 +156,9 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       id: "health",
       accessorKey: "health",
       header: ({ column }) => <ColumnHeader column={column} title="健康" />,
-      filterFn: facetedFilter,
+      enableSorting: false,
+      enableHiding: false,
+      meta: { label: "健康", fixedWidth: true },
       cell: ({ row }) => (
         <Badge variant={HEALTH_VARIANT[row.original.health]}>
           {HEALTH_LABEL[row.original.health]}

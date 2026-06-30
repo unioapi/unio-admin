@@ -18,12 +18,14 @@ import {
   formatDateTime,
   localToRFC3339,
   rfc3339ToLocal,
+  roundPrice3,
   trimDecimal,
 } from "@/lib/format";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { HintLabel } from "@/components/common/field-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -106,6 +108,8 @@ function ModelPriceManager({ model }: { model: Model }) {
         </DialogHeader>
         <ModelPriceForm
           modelId={model.id}
+          referenceInput={roundPrice3(model.input_price_usd_per_million_tokens)}
+          referenceOutput={roundPrice3(model.output_price_usd_per_million_tokens)}
           onCancel={() => setMode("list")}
           onCreated={() => {
             invalidate();
@@ -162,10 +166,14 @@ function ModelPriceManager({ model }: { model: Model }) {
 
 function ModelPriceForm({
   modelId,
+  referenceInput,
+  referenceOutput,
   onCancel,
   onCreated,
 }: {
   modelId: number;
+  referenceInput?: string;
+  referenceOutput?: string;
   onCancel: () => void;
   onCreated: () => void;
 }) {
@@ -230,6 +238,15 @@ function ModelPriceForm({
     mutation.mutate();
   }
 
+  const hasReference = !!(referenceInput || referenceOutput);
+  function fillReference() {
+    setPrice((s) => ({
+      ...s,
+      uncached_input: referenceInput || s.uncached_input,
+      output: referenceOutput || s.output,
+    }));
+  }
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <Field data-invalid={!!errors.currency}>
@@ -246,6 +263,24 @@ function ModelPriceForm({
         />
         <FieldError>{errors.currency}</FieldError>
       </Field>
+
+      {hasReference ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
+          <span className="text-muted-foreground">
+            采纳参考价（每百万 token）：输入 {referenceInput || "—"} / 输出{" "}
+            {referenceOutput || "—"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-7"
+            onClick={fillReference}
+          >
+            填入未缓存输入 / 输出
+          </Button>
+        </div>
+      ) : null}
 
       {/* 基准售价：每个分项一栏（前两项必填）。 */}
       <div className="overflow-hidden rounded-md border">
@@ -270,11 +305,10 @@ function ModelPriceForm({
           <HintLabel htmlFor="mp_from" hint="该基准价开始生效的时间点。">
             生效开始
           </HintLabel>
-          <Input
+          <DateTimePicker
             id="mp_from"
-            type="datetime-local"
             value={effectiveFrom}
-            onChange={(e) => setEffectiveFrom(e.target.value)}
+            onChange={setEffectiveFrom}
             aria-invalid={!!errors.effective_from}
           />
           <FieldError>{errors.effective_from}</FieldError>
@@ -284,11 +318,11 @@ function ModelPriceForm({
           <HintLabel htmlFor="mp_to" hint="该基准价的失效时间；留空表示长期有效。">
             生效结束（可选）
           </HintLabel>
-          <Input
+          <DateTimePicker
             id="mp_to"
-            type="datetime-local"
             value={effectiveTo}
-            onChange={(e) => setEffectiveTo(e.target.value)}
+            onChange={setEffectiveTo}
+            placeholder="留空表示长期有效"
             aria-invalid={!!errors.effective_to}
           />
           <FieldError>{errors.effective_to}</FieldError>
@@ -406,12 +440,11 @@ function ModelPriceRow({
       </div>
 
       <div className="flex items-center gap-1">
-        <Input
-          type="datetime-local"
+        <DateTimePicker
           value={draftTo}
-          onChange={(e) => setDraftTo(e.target.value)}
-          aria-label="生效结束时间"
-          className="h-8 w-52"
+          onChange={setDraftTo}
+          placeholder="生效结束时间"
+          className="h-8 w-56"
         />
         {dirty && (
           <Button

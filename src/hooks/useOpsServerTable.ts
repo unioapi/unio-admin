@@ -25,7 +25,8 @@ interface UseOpsServerTableOptions<T> {
     status?: string;
     search?: string;
   }) => Promise<Page<T>>;
-  defaultSort: { id: string; desc: boolean };
+  /** 缺省不传则列表无默认排序 */
+  defaultSort?: { id: string; desc: boolean };
 }
 
 /** 运维聚合表通用服务端列表：分页 / 排序 / status / search。 */

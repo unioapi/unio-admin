@@ -28,7 +28,7 @@ export function ColumnHeader<TData, TValue>({
         className,
       )}
     >
-      <span className="truncate">{title}</span>
+      <span className="whitespace-nowrap">{title}</span>
       {sorted === "asc" ? (
         <ChevronUpIcon className="size-3.5 shrink-0" />
       ) : sorted === "desc" ? (
