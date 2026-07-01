@@ -41,7 +41,6 @@ function providerStubFromList(
       coverage: 0,
     },
     health: "no_data",
-    last_success_at: null,
     tokens: 0,
     revenue_usd: "0",
     cost_usd: "0",

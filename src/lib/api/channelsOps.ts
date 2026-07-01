@@ -41,15 +41,19 @@ export interface ChannelOpsRow {
   base_url: string;
   priority: number;
   provider_name: string;
+  credential: string;
   attempt_total: number;
   attempt_succeeded: number;
   success_rate: number;
   timeout_total: number;
   latency: LatencyStats;
   health: HealthBucket;
-  last_success_at: string | null;
   bound_models: number;
   recent_error_code: string;
+  // 渠道级限流（P2-8）：null=继承全局默认，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
+  rpm_limit: number | null;
+  tpm_limit: number | null;
+  rpd_limit: number | null;
 }
 
 export interface ChannelOpsDetail {

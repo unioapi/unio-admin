@@ -164,6 +164,7 @@ function SheetContent({
   showCloseButton = true,
   resizable = true,
   closeOnOutsideClick = false,
+  overlayClassName,
   onPointerDownOutside,
   onInteractOutside,
   style,
@@ -174,6 +175,7 @@ function SheetContent({
   resizable?: boolean
   /** 点击遮罩层是否关闭；默认 false。 */
   closeOnOutsideClick?: boolean
+  overlayClassName?: string
 }) {
   const contentRef = React.useRef<HTMLDivElement>(null)
   const { size, resizing, onResizeStart, isHorizontal } = useSheetResize(
@@ -191,7 +193,7 @@ function SheetContent({
 
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay className={overlayClassName} />
       <SheetPrimitive.Content
         ref={contentRef}
         data-slot="sheet-content"

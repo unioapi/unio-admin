@@ -4,12 +4,23 @@ import { toast } from "sonner";
 import { createRoute, updateRoute, type Route } from "@/lib/api/routes";
 import { listChannels } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
+import { RoutePriceCalculator } from "@/components/routes/RoutePriceCalculator";
+import { RouteChannelMarginTable } from "@/components/routes/RouteChannelMarginTable";
+import { formatRouteRatioInput } from "@/components/routes/route-pricing";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { HintLabel } from "@/components/common/field-hint";
+import {
+  RateLimitInput,
+  composeRateLimit,
+  decomposeRateLimit,
+  rateLimitWithUnitError,
+  type RateLimitFieldValue,
+} from "@/components/common/rate-limit-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +42,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// RPM 用普通整数输入：null/undefined → 空串（继承默认）；0 → "0"（不限）。
+function rateLimitToInput(v: number | null | undefined): string {
+  return v == null ? "" : String(v);
+}
+
+// parseRpmLimit：空串→null（继承默认）；否则取整数（0=不限，>0=上限）。
+function parseRpmLimit(raw: string): number | null {
+  const t = raw.trim();
+  if (t === "") return null;
+  return Number(t);
+}
+
+// rpmLimitError：空放行；否则须为 ≥0 整数。
+function rpmLimitError(raw: string): string | undefined {
+  const t = raw.trim();
+  if (t === "") return undefined;
+  const n = Number(t);
+  if (!Number.isInteger(n) || n < 0) return "需为 ≥ 0 的整数（0=不限，留空=继承默认）";
+  return undefined;
+}
+
 export function RouteFormDialog({
   open,
   onOpenChange,
@@ -44,7 +76,7 @@ export function RouteFormDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-3xl">
         {open && (
           <RouteForm route={route} onCancel={() => onOpenChange(false)} onSaved={onSaved} />
         )}
@@ -66,7 +98,15 @@ function RouteForm({
   const [mode, setMode] = useState(route?.mode ?? "cheapest");
   const [poolKind, setPoolKind] = useState(route?.pool_kind ?? "all");
   const [status, setStatus] = useState(route?.status ?? "enabled");
-  const [priceRatio, setPriceRatio] = useState(route?.price_ratio ?? "1");
+  const [priceRatio, setPriceRatio] = useState(() => formatRouteRatioInput(route?.price_ratio));
+  // 线路级限流（DEC-027）：RPM 量级小用普通输入；TPM/RPD 量级大用「数字+单位 K/M/B」。
+  const [rpmLimit, setRpmLimit] = useState(rateLimitToInput(route?.rpm_limit));
+  const [tpmLimit, setTpmLimit] = useState<RateLimitFieldValue>(
+    decomposeRateLimit(route?.tpm_limit),
+  );
+  const [rpdLimit, setRpdLimit] = useState<RateLimitFieldValue>(
+    decomposeRateLimit(route?.rpd_limit),
+  );
   const [description, setDescription] = useState(route?.description ?? "");
   const [channelIds, setChannelIds] = useState<number[]>(
     route?.channels.map((c) => c.channel_id) ?? [],
@@ -89,7 +129,10 @@ function RouteForm({
         mode,
         pool_kind: effectivePool,
         status,
-        price_ratio: priceRatio.trim() || "1",
+        price_ratio: formatRouteRatioInput(priceRatio),
+        rpm_limit: parseRpmLimit(rpmLimit),
+        tpm_limit: composeRateLimit(tpmLimit),
+        rpd_limit: composeRateLimit(rpdLimit),
         description: description.trim() || null,
         channel_ids: effectivePool === "all" ? [] : channelIds,
       };
@@ -109,6 +152,12 @@ function RouteForm({
     if (ratio !== "" && (!/^\d+(\.\d+)?$/.test(ratio) || Number(ratio) < 0)) {
       next.price_ratio = "需为 ≥ 0 的倍率（如 1、1.5、0.8）";
     }
+    const rpmErr = rpmLimitError(rpmLimit);
+    if (rpmErr) next.rpm_limit = rpmErr;
+    const tpmErr = rateLimitWithUnitError(tpmLimit);
+    if (tpmErr) next.tpm_limit = tpmErr;
+    const rpdErr = rateLimitWithUnitError(rpdLimit);
+    if (rpdErr) next.rpd_limit = rpdErr;
     if (effectivePool === "explicit") {
       if (mode === "fixed" && channelIds.length !== 1) {
         next.channels = "固定线路必须恰好选择一条渠道";
@@ -131,9 +180,10 @@ function RouteForm({
   }
 
   function toggleChannel(id: number) {
-    setChannelIds((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
-    );
+    setChannelIds((prev) => {
+      if (mode === "fixed") return prev.includes(id) ? [] : [id];
+      return prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id];
+    });
   }
 
   const orderedChannels = useMemo(() => {
@@ -141,17 +191,25 @@ function RouteForm({
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [channelsQuery.data]);
 
+  const channelNameMap = useMemo(
+    () => Object.fromEntries(orderedChannels.map((c) => [c.id, c.name])),
+    [orderedChannels],
+  );
+
   return (
     <>
-    <form onSubmit={handleSubmit}>
-      <DialogHeader>
-        <DialogTitle>{route ? "编辑线路" : "新建线路"}</DialogTitle>
-        <DialogDescription>
-          选择选路策略与候选池。fixed 策略锁定单条渠道（自动使用手挑池）。
-        </DialogDescription>
-      </DialogHeader>
+    <form onSubmit={handleSubmit} className="flex flex-col">
+      <div className="space-y-1 px-6 pt-6">
+        <DialogHeader>
+          <DialogTitle>{route ? "编辑线路" : "新建线路"}</DialogTitle>
+          <DialogDescription>
+            选择选路策略与候选池。fixed 策略锁定单条渠道（自动使用手挑池）。
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
-      <FieldGroup className="py-4">
+      <ScrollArea className="max-h-[min(68vh,32rem)]">
+      <FieldGroup className="gap-4 px-6 py-5">
         <div className="grid grid-cols-2 gap-4">
           <Field data-invalid={!!errors.name}>
             <HintLabel
@@ -226,55 +284,97 @@ function RouteForm({
         <Field data-invalid={!!errors.price_ratio}>
           <HintLabel
             htmlFor="rt_ratio"
-            hint="客户售价 = 模型基准价 × 倍率（1=原价，1.5=加价 50%，0.8=8 折）。"
+            hint="客户售价 = 模型基准价 × 倍率。可直接输入，或打开「倍率试算」预览各渠道毛利。"
           >
             售价倍率
           </HintLabel>
-          <Input
-            id="rt_ratio"
-            value={priceRatio}
-            onChange={(e) => setPriceRatio(e.target.value)}
-            placeholder="1.0"
-            inputMode="decimal"
-            aria-invalid={!!errors.price_ratio}
-          />
+          <div className="flex items-center gap-2">
+            <RoutePriceCalculator
+              priceRatio={priceRatio}
+              onChange={(ratio) => {
+                setPriceRatio(ratio);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.price_ratio;
+                  return next;
+                });
+              }}
+              channelIds={channelIds}
+              poolKind={effectivePool as "all" | "explicit"}
+              channelNames={channelNameMap}
+            />
+          </div>
           <FieldError>{errors.price_ratio}</FieldError>
         </Field>
 
         {effectivePool === "explicit" && (
           <Field data-invalid={!!errors.channels}>
-            <HintLabel hint="手动指定本线路的候选渠道；手挑线路至少选一条，固定线路恰好选一条。">
+            <HintLabel hint="勾选候选渠道；下方列表实时对比各模型成本、售价与毛利（随倍率变化）。">
               渠道池
             </HintLabel>
             {channelsQuery.isPending ? (
-              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-48 w-full" />
             ) : (
-              <div className="max-h-48 overflow-y-auto rounded-md border p-2">
-                {orderedChannels.length === 0 ? (
-                  <p className="text-muted-foreground p-2 text-sm">暂无渠道</p>
-                ) : (
-                  orderedChannels.map((c) => (
-                    <label
-                      key={c.id}
-                      className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={channelIds.includes(c.id)}
-                        onChange={() => toggleChannel(c.id)}
-                      />
-                      <span className="font-medium">{c.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {c.provider_name} · {c.protocol}
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+              <RouteChannelMarginTable
+                channels={orderedChannels}
+                channelIds={channelIds}
+                onToggleChannel={toggleChannel}
+                priceRatio={priceRatio}
+                fixedSingle={mode === "fixed"}
+              />
             )}
             <FieldError>{errors.channels}</FieldError>
           </Field>
         )}
+
+        <Field>
+          <HintLabel hint="线路级限流：绑定该线路的每个用户合计生效（多建 Key 不放大配额），不同用户各自独立。留空=继承全局默认，0=不限；TPM、RPD 可带单位 K/M/B。">
+            线路级限流
+          </HintLabel>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field data-invalid={!!errors.rpm_limit}>
+                <HintLabel htmlFor="rt_rpm" hint="每分钟请求数。">
+                  RPM
+                </HintLabel>
+                <Input
+                  id="rt_rpm"
+                  type="number"
+                  min={0}
+                  value={rpmLimit}
+                  onChange={(e) => setRpmLimit(e.target.value)}
+                  placeholder="继承默认"
+                  aria-invalid={!!errors.rpm_limit}
+                />
+                <FieldError>{errors.rpm_limit}</FieldError>
+              </Field>
+              <Field data-invalid={!!errors.tpm_limit}>
+                <HintLabel htmlFor="rt_tpm" hint="每分钟 token 数。">
+                  TPM
+                </HintLabel>
+                <RateLimitInput
+                  id="rt_tpm"
+                  value={tpmLimit}
+                  onChange={setTpmLimit}
+                  ariaInvalid={!!errors.tpm_limit}
+                />
+                <FieldError>{errors.tpm_limit}</FieldError>
+              </Field>
+              <Field data-invalid={!!errors.rpd_limit}>
+                <HintLabel htmlFor="rt_rpd" hint="每日请求数。">
+                  RPD
+                </HintLabel>
+                <RateLimitInput
+                  id="rt_rpd"
+                  value={rpdLimit}
+                  onChange={setRpdLimit}
+                  ariaInvalid={!!errors.rpd_limit}
+                />
+                <FieldError>{errors.rpd_limit}</FieldError>
+              </Field>
+            </div>
+          </div>
+        </Field>
 
         <Field>
           <HintLabel htmlFor="rt_desc" hint="展示给客户的商品说明；可选。">
@@ -288,8 +388,9 @@ function RouteForm({
           />
         </Field>
       </FieldGroup>
+      </ScrollArea>
 
-      <DialogFooter>
+      <DialogFooter className="mx-0 mb-0 border-t px-6 py-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           取消
         </Button>

@@ -34,6 +34,25 @@ export async function listChannelPrices(
   return res.data.data;
 }
 
+/** 取某模型当前生效中的渠道成本价（enabled 且在生效窗口内）。 */
+export function pickCurrentChannelPrice(
+  prices: ChannelPrice[],
+  modelId: number,
+): ChannelPrice | null {
+  const now = Date.now();
+  const candidates = prices.filter((p) => {
+    if (p.model_id !== modelId) return false;
+    if (p.status !== "enabled") return false;
+    if (new Date(p.effective_from).getTime() > now) return false;
+    if (p.effective_to && new Date(p.effective_to).getTime() <= now) return false;
+    return true;
+  });
+  if (candidates.length === 0) return null;
+  return candidates.sort(
+    (a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime(),
+  )[0]!;
+}
+
 // 主成本必填（uncached_input_cost/output_cost），其余成本分项可空（null）。时间为 RFC3339（UTC）。
 export interface CreateChannelPriceInput {
   channelId: number;

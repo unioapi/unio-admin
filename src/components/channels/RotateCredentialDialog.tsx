@@ -53,7 +53,7 @@ function RotateForm({
     mutationFn: () =>
       rotateChannelCredential({ id: channel.id, credential: credential.trim() }),
     onSuccess: () => {
-      toast.success(`已轮换「${channel.name}」的凭据`);
+      toast.success(`已更新「${channel.name}」的 API Key`);
       onDone();
     },
     onError: (err) => {
@@ -74,9 +74,9 @@ function RotateForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>轮换凭据</DialogTitle>
+        <DialogTitle>修改 API Key</DialogTitle>
         <DialogDescription>
-          为「{channel.name}」写入新的上游凭据；保存后立即生效，可在详情查看/复制。
+          为「{channel.name}」写入新的上游 API Key；保存后立即生效，可在列表或详情查看/复制。
         </DialogDescription>
       </DialogHeader>
 
@@ -84,9 +84,9 @@ function RotateForm({
         <Field data-invalid={!!error}>
           <HintLabel
             htmlFor="new_credential"
-            hint="调用上游用的新 API Key；明文存储，保存后立即生效，可在详情查看/复制。"
+            hint="调用上游用的新 API Key；明文存储，保存后立即生效，可在列表或详情查看/复制。"
           >
-            新凭据
+            新 API Key
           </HintLabel>
           <Input
             id="new_credential"
@@ -109,7 +109,7 @@ function RotateForm({
           </DialogClose>
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending && <Spinner data-icon="inline-start" />}
-            {mutation.isPending ? "提交中..." : "轮换"}
+            {mutation.isPending ? "提交中..." : "保存"}
           </Button>
         </DialogFooter>
       </form>

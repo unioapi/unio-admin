@@ -147,3 +147,16 @@ export function formatMilliseconds(value: number) {
     value,
   );
 }
+
+// maskSecret 脱敏展示密钥：保留前缀与后缀，中间以 *** 替代。
+export function maskSecret(
+  value: string,
+  opts?: { head?: number; tail?: number },
+): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "—";
+  const head = opts?.head ?? 11;
+  const tail = opts?.tail ?? 8;
+  if (trimmed.length <= head + tail + 3) return trimmed;
+  return `${trimmed.slice(0, head)}***${trimmed.slice(-tail)}`;
+}

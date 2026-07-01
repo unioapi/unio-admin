@@ -12,7 +12,7 @@ export interface ApiKey {
   spend_limit: string | null;
   spent_total: string;
   route_id: number;
-  // 令牌级限流（P2-8）：null=继承全局默认，0=不限，>0=具体上限。
+  // 已废弃（DEC-027 限流已归线路，改由所绑线路决定、按 (线路,用户) 计数）；恒为 null，仅兼容旧响应。
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
@@ -29,13 +29,6 @@ export interface CreatedApiKey extends ApiKey {
   plaintext: string;
 }
 
-// 令牌级限流三维（P2-8）：null=继承全局默认，0=不限，>0=具体上限。
-export interface RateLimitsInput {
-  rpm: number | null;
-  tpm: number | null;
-  rpd: number | null;
-}
-
 export interface CreateApiKeyInput {
   userId: number;
   name: string;
@@ -43,10 +36,8 @@ export interface CreateApiKeyInput {
   expiresAt?: string | null;
   // 费用上限（十进制字符串），不传/空串表示不限额。
   spendLimit?: string;
-  // 线路绑定（必填）：正整数 route id。
+  // 线路绑定（必填）：正整数 route id。限流由所绑线路决定（DEC-027），此处不再配置。
   routeId: number;
-  // 可选令牌级限流；省略表示三维全继承全局默认。
-  rateLimits?: RateLimitsInput;
 }
 
 export async function createApiKey(
@@ -59,21 +50,18 @@ export async function createApiKey(
       expires_at: input.expiresAt || undefined,
       spend_limit: input.spendLimit ?? undefined,
       route_id: input.routeId,
-      rate_limits: input.rateLimits ?? undefined,
     },
   );
   return res.data.data;
 }
 
 // 更新：disabled 启停；spend_limit 设上限（""=清除上限/改为不限额，省略=不变）；
-// route_id 换绑线路（正整数；省略=不变，不可清除）。
+// route_id 换绑线路（正整数；省略=不变，不可清除）。限流已归线路（DEC-027），不在此设置。
 export interface UpdateApiKeyInput {
   id: number;
   disabled?: boolean;
   spendLimit?: string;
   routeId?: number;
-  // 令牌级限流；省略表示不变，传对象即原子替换三维。
-  rateLimits?: RateLimitsInput;
 }
 
 export async function updateApiKey(input: UpdateApiKeyInput): Promise<ApiKey> {
@@ -81,7 +69,6 @@ export async function updateApiKey(input: UpdateApiKeyInput): Promise<ApiKey> {
   if (input.disabled !== undefined) body.disabled = input.disabled;
   if (input.spendLimit !== undefined) body.spend_limit = input.spendLimit;
   if (input.routeId !== undefined) body.route_id = input.routeId;
-  if (input.rateLimits !== undefined) body.rate_limits = input.rateLimits;
   const res = await api.patch<{ data: ApiKey }>(
     `/admin/v1/api-keys/${input.id}`,
     body,
@@ -90,7 +77,13 @@ export async function updateApiKey(input: UpdateApiKeyInput): Promise<ApiKey> {
 }
 
 // 永久吊销（不可逆）。
+// 吊销：软失效、保留行与调用历史（不可逆）；走子资源 POST，与硬删除区分。
 export async function revokeApiKey(id: number): Promise<ApiKey> {
-  const res = await api.delete<{ data: ApiKey }>(`/admin/v1/api-keys/${id}`);
+  const res = await api.post<{ data: ApiKey }>(`/admin/v1/api-keys/${id}/revoke`);
   return res.data.data;
+}
+
+// 删除：物理清除误建/未使用的 Key。无调用历史才可删；有历史后端返回 409，前端提示改用吊销。
+export async function deleteApiKey(id: number): Promise<void> {
+  await api.delete(`/admin/v1/api-keys/${id}`);
 }

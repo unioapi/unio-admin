@@ -22,6 +22,11 @@ export interface Channel {
   rpd_limit: number | null;
   created_at: string;
   updated_at: string;
+  // 最近一次主动检测结果（渠道检测，阶段一）：全 null 表示从未检测。
+  last_tested_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_latency_ms: number | null;
+  last_test_error: string | null;
 }
 
 // 限流三维入参（P2-8）：null=继承全局默认，0=不限，>0=具体上限。
@@ -137,5 +142,30 @@ export async function rotateChannelCredential({
   credential,
 }: RotateCredentialInput): Promise<void> {
   await api.put(`/admin/v1/channels/${id}/credential`, { credential });
+}
+
+// 与后端 channelTestResultDTO 对齐：一次渠道检测结果。
+// 始终代表「检测已执行」（HTTP 200）；success 表达渠道是否健康，error_code 成功时为 null。
+export interface ChannelTestResult {
+  success: boolean;
+  latency_ms: number;
+  tested_model: string;
+  http_status: number;
+  error_code: string | null;
+  message: string;
+  tested_at: string;
+}
+
+// 触发一次渠道主动检测：用渠道自己的 base_url + 凭据挑一个绑定模型向真实上游发一个最小请求，
+// 验证「连得上 + 凭据有效 + 模型可用」。model 省略时后端自动取第一个启用绑定模型；stream 阶段一忽略。
+export async function testChannel(
+  id: number,
+  params?: { model?: string; stream?: boolean },
+): Promise<ChannelTestResult> {
+  const res = await api.post<{ data: ChannelTestResult }>(
+    `/admin/v1/channels/${id}/test`,
+    { model: params?.model ?? "", stream: params?.stream ?? false },
+  );
+  return res.data.data;
 }
 

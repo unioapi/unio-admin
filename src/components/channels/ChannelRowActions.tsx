@@ -8,6 +8,7 @@ import { apiErrorMessage } from "@/lib/api/client";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
 import { ChannelModelsDialog } from "@/components/channels/ChannelModelsDialog";
+import { ChannelTestDialog } from "@/components/channels/ChannelTestDialog";
 import { ChannelPricesDialog } from "@/components/channels/ChannelPricesDialog";
 import { RotateCredentialDialog } from "@/components/channels/RotateCredentialDialog";
 import { Button } from "@/components/ui/button";
@@ -25,10 +26,17 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
   const [modelsOpen, setModelsOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
   const [credOpen, setCredOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
 
   const needChannel =
-    editOpen || modelsOpen || pricesOpen || credOpen || menuOpen || statusConfirmOpen;
+    editOpen ||
+    modelsOpen ||
+    pricesOpen ||
+    credOpen ||
+    testOpen ||
+    menuOpen ||
+    statusConfirmOpen;
   const channelQ = useQuery({
     queryKey: ["channel", channelId],
     queryFn: () => getChannel(channelId),
@@ -88,13 +96,14 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
             </Button>
           </HoverDropdownMenuTrigger>
           <HoverDropdownMenuContent align="end" className="min-w-36">
+            <DropdownMenuItem onClick={() => openDialog(setTestOpen)}>检测</DropdownMenuItem>
             <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
             <DropdownMenuItem disabled={!channel} onClick={requestStatusChange}>
               {channel?.status === "enabled" ? "停用" : "启用"}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => openDialog(setModelsOpen)}>管理模型</DropdownMenuItem>
             <DropdownMenuItem onClick={() => openDialog(setPricesOpen)}>价格</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openDialog(setCredOpen)}>轮换凭据</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openDialog(setCredOpen)}>修改APIKey</DropdownMenuItem>
           </HoverDropdownMenuContent>
         </HoverDropdownMenu>
       </div>
@@ -102,6 +111,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
       {channel ? (
         <>
           <ChannelFormDialog open={editOpen} onOpenChange={setEditOpen} channel={channel} />
+          <ChannelTestDialog open={testOpen} onOpenChange={setTestOpen} channel={channel} />
           <ChannelModelsDialog open={modelsOpen} onOpenChange={setModelsOpen} channel={channel} />
           <ChannelPricesDialog open={pricesOpen} onOpenChange={setPricesOpen} channel={channel} />
           <RotateCredentialDialog open={credOpen} onOpenChange={setCredOpen} channel={channel} />

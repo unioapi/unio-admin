@@ -19,7 +19,6 @@ export interface ProviderOpsRow {
   timeout_total: number;
   latency: LatencyStats;
   health: HealthBucket;
-  last_success_at: string | null;
   tokens: number;
   revenue_usd: string;
   cost_usd: string;

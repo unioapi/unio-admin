@@ -33,7 +33,6 @@ export function ModelsPage() {
   const table = useOpsServerTable({
     queryKey: "models",
     fetch: getModelsOpsTable,
-    defaultSort: { id: "success_rate", desc: false },
   });
 
   if (searchParams.get("tab") === "catalog") {

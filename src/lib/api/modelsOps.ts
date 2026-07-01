@@ -74,6 +74,8 @@ export interface ModelOpsChannel {
   success_rate: number;
   latency_p95: number;
   has_price: boolean;
+  input_cost: string | null;
+  output_cost: string | null;
 }
 
 export interface ModelOpsPerfPoint {

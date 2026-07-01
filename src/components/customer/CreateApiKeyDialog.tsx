@@ -11,13 +11,6 @@ import { apiErrorMessage } from "@/lib/api/client";
 import { localToRFC3339 } from "@/lib/format";
 import { HintLabel } from "@/components/common/field-hint";
 import {
-  RateLimitInput,
-  composeRateLimit,
-  rateLimitWithUnitError,
-  EMPTY_RATE_LIMIT,
-  type RateLimitFieldValue,
-} from "@/components/common/rate-limit-input";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -43,7 +36,6 @@ import {
   Field,
   FieldError,
   FieldGroup,
-  FieldLabel,
 } from "@/components/ui/field";
 
 const MONEY_PATTERN = /^\d+(\.\d+)?$/;
@@ -52,25 +44,6 @@ interface FieldErrors {
   name?: string;
   spendLimit?: string;
   routeId?: string;
-  rpm?: string;
-  tpm?: string;
-  rpd?: string;
-}
-
-// 限流输入解析：空串→null（继承全局默认）；否则取整数（0=不限，>0=具体上限）。
-function parseRateLimit(raw: string): number | null {
-  const t = raw.trim();
-  if (t === "") return null;
-  return Number(t);
-}
-
-// 校验单个限流维度：空串放行；否则须为非负整数。
-function rateLimitError(raw: string): string | undefined {
-  const t = raw.trim();
-  if (t === "") return undefined;
-  const n = Number(t);
-  if (!Number.isInteger(n) || n < 0) return "需为 ≥ 0 的整数（0=不限，留空=继承默认）";
-  return undefined;
 }
 
 // 创建 API Key 弹窗：成功后切到「明文展示」态，明文只展示这一次。
@@ -86,14 +59,6 @@ export function CreateApiKeyDialog({
   const [expiresLocal, setExpiresLocal] = useState("");
   const [spendLimit, setSpendLimit] = useState("");
   const [routeId, setRouteId] = useState("");
-  const [rpmLimit, setRpmLimit] = useState("");
-  // TPM/RPD 量级大,用「数字 + 单位(K/M/B)」输入;入库换算成真实整数。
-  const [tpmLimit, setTpmLimit] = useState<RateLimitFieldValue>({
-    ...EMPTY_RATE_LIMIT,
-  });
-  const [rpdLimit, setRpdLimit] = useState<RateLimitFieldValue>({
-    ...EMPTY_RATE_LIMIT,
-  });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [created, setCreated] = useState<CreatedApiKey | null>(null);
 
@@ -114,11 +79,6 @@ export function CreateApiKeyDialog({
         expiresAt: expiresLocal ? localToRFC3339(expiresLocal) : undefined,
         spendLimit: spendLimit.trim() || undefined,
         routeId: Number(routeId),
-        rateLimits: {
-          rpm: parseRateLimit(rpmLimit),
-          tpm: composeRateLimit(tpmLimit),
-          rpd: composeRateLimit(rpdLimit),
-        },
       }),
     onSuccess: (key) => {
       queryClient.invalidateQueries({ queryKey: ["api-keys", userId] });
@@ -136,9 +96,6 @@ export function CreateApiKeyDialog({
       setExpiresLocal("");
       setSpendLimit("");
       setRouteId("");
-      setRpmLimit("");
-      setTpmLimit({ ...EMPTY_RATE_LIMIT });
-      setRpdLimit({ ...EMPTY_RATE_LIMIT });
       setErrors({});
       setCreated(null);
       mutation.reset();
@@ -156,9 +113,6 @@ export function CreateApiKeyDialog({
     if (routeId === "") {
       next.routeId = "请选择线路";
     }
-    next.rpm = rateLimitError(rpmLimit);
-    next.tpm = rateLimitWithUnitError(tpmLimit);
-    next.rpd = rateLimitWithUnitError(rpdLimit);
     setErrors(next);
     return Object.values(next).every((v) => v === undefined);
   }
@@ -300,47 +254,9 @@ export function CreateApiKeyDialog({
                     </SelectContent>
                   </Select>
                   <FieldError>{errors.routeId}</FieldError>
-                </Field>
-
-                <Field>
-                  <HintLabel hint="令牌级限流（用户→网关侧）：RPM 每分钟请求 / TPM 每分钟 token / RPD 每日请求；TPM、RPD 可带单位 K/M/B（默认 K）；留空=继承全局默认，0=不限。">
-                    令牌级限流
-                  </HintLabel>
-                  <div className="grid grid-cols-3 gap-4">
-                    <Field data-invalid={!!errors.rpm}>
-                      <FieldLabel htmlFor="key_rpm">RPM</FieldLabel>
-                      <Input
-                        id="key_rpm"
-                        type="number"
-                        min={0}
-                        value={rpmLimit}
-                        onChange={(e) => setRpmLimit(e.target.value)}
-                        placeholder="继承默认"
-                        aria-invalid={!!errors.rpm}
-                      />
-                      <FieldError>{errors.rpm}</FieldError>
-                    </Field>
-                    <Field data-invalid={!!errors.tpm}>
-                      <FieldLabel htmlFor="key_tpm">TPM</FieldLabel>
-                      <RateLimitInput
-                        id="key_tpm"
-                        value={tpmLimit}
-                        onChange={setTpmLimit}
-                        ariaInvalid={!!errors.tpm}
-                      />
-                      <FieldError>{errors.tpm}</FieldError>
-                    </Field>
-                    <Field data-invalid={!!errors.rpd}>
-                      <FieldLabel htmlFor="key_rpd">RPD</FieldLabel>
-                      <RateLimitInput
-                        id="key_rpd"
-                        value={rpdLimit}
-                        onChange={setRpdLimit}
-                        ariaInvalid={!!errors.rpd}
-                      />
-                      <FieldError>{errors.rpd}</FieldError>
-                    </Field>
-                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    限流由所选线路统一决定（按用户计量，多建 Key 不放大配额）；如需调整请在线路上配置。
+                  </p>
                 </Field>
               </FieldGroup>
 

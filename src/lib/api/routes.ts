@@ -18,6 +18,10 @@ export interface Route {
   status: string;
   // price_ratio 客户售价倍率（DEC-026：客户售价 = 模型基准价 × 倍率），十进制字符串。
   price_ratio: string;
+  // 线路级限流（DEC-027：按 (线路,用户) 计数）：null=继承全局默认，0=不限，>0=具体上限。
+  rpm_limit: number | null;
+  tpm_limit: number | null;
+  rpd_limit: number | null;
   description: string | null;
   channels: RouteChannel[];
   created_at: string;
@@ -40,6 +44,10 @@ export interface CreateRouteInput {
   pool_kind: string;
   status: string;
   price_ratio: string; // 客户售价倍率（十进制字符串，空=默认 1.0）
+  // 线路级限流（DEC-027）：null=继承全局默认，0=不限，>0=具体上限。
+  rpm_limit: number | null;
+  tpm_limit: number | null;
+  rpd_limit: number | null;
   description: string | null;
   channel_ids: number[];
 }

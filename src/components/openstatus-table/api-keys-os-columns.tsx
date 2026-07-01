@@ -79,6 +79,7 @@ function toApiKey(row: ApiKeyOpsRow): ApiKey {
 export function apiKeyOsColumns(handlers: {
   onToggle: (row: ApiKeyOpsRow) => void;
   onRevoke: (row: ApiKeyOpsRow) => void;
+  onDelete: (row: ApiKeyOpsRow) => void;
 }): ColumnDef<ApiKeyOpsRow, unknown>[] {
   return [
     {
@@ -212,6 +213,12 @@ export function apiKeyOsColumns(handlers: {
                   吊销
                 </DropdownMenuItem>
               ) : null}
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => handlers.onDelete(row.original)}
+              >
+                删除
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

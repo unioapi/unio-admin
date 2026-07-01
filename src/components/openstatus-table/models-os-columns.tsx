@@ -1,5 +1,9 @@
+/* eslint-disable react-refresh/only-export-components */
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef, FilterFn } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
+import { getModelOpsChannels } from "@/lib/api/modelsOps";
 import type { ModelOpsRow } from "@/lib/api/modelsOps";
 import { profitIntent } from "@/components/dashboard/metrics";
 import { RevenueTip } from "@/components/dashboard/RevenueTip";
@@ -16,6 +20,7 @@ import {
 } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -92,7 +97,7 @@ const BASE_PRICE_BREAKDOWN: {
 ];
 
 // BasePriceCell 渲染模型「基准价」（model_prices 当前生效行，每 1M tokens）：
-// 无基准价（uncached_input 为空）→「缺价」徽标；否则 `输入 / 输出` 紧凑值 + 悬浮显示完整明细。
+// 无基准价（uncached_input 为空）→「缺价」徽标；否则 `{输入价} / {输出价}` + 悬浮显示完整明细。
 function BasePriceCell({ row }: { row: ModelOpsRow }) {
   const input = row.base_uncached_input_price;
   if (input == null) {
@@ -112,7 +117,7 @@ function BasePriceCell({ row }: { row: ModelOpsRow }) {
           type="button"
           className="cursor-default tabular-nums underline decoration-dotted underline-offset-2"
         >
-          输入 {trimDecimal(input)} / 输出 {output == null ? "—" : trimDecimal(output)}
+          {trimDecimal(input)} / {output == null ? "—" : trimDecimal(output)}
         </button>
       </TooltipTrigger>
       <TooltipContent align="start" className="max-w-xs">
@@ -129,6 +134,158 @@ function BasePriceCell({ row }: { row: ModelOpsRow }) {
         </div>
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function ModelBindingsTip({
+  modelRef,
+  displayName,
+  available,
+  total,
+  channels,
+}: {
+  modelRef: string;
+  displayName: string;
+  available: number;
+  total: number;
+  channels: Array<{
+    channel_id: number;
+    channel_name: string;
+    channel_status: string;
+    upstream_model: string;
+    input_cost: string | null;
+    output_cost: string | null;
+  }>;
+}) {
+  const showDisplayName =
+    displayName && displayName.toLowerCase() !== modelRef.toLowerCase();
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-mono text-sm font-semibold leading-tight">{modelRef}</div>
+          {showDisplayName ? (
+            <div className="text-muted-foreground mt-0.5 truncate text-[11px]">{displayName}</div>
+          ) : null}
+        </div>
+        <Badge variant={available > 0 ? "secondary" : "outline"} className="shrink-0 tabular-nums">
+          {available}/{total} 可用
+        </Badge>
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2">
+        <div className="text-muted-foreground grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-0.5 text-[10px] font-medium uppercase tracking-wide">
+          <span>渠道</span>
+          <span className="text-right">成本 / 1M</span>
+        </div>
+        <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
+          {channels.map((c) => {
+            const isAvailable =
+              c.channel_status === "enabled" &&
+              c.input_cost != null &&
+              c.output_cost != null;
+            const showUpstream = c.upstream_model && c.upstream_model !== modelRef;
+            return (
+              <li
+                key={c.channel_id}
+                className={cn(
+                  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 rounded-md border px-2.5 py-2",
+                  isAvailable ? "bg-muted/35 border-border/60" : "bg-muted/15 border-dashed",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs font-medium">{c.channel_name}</span>
+                    {!isAvailable ? (
+                      <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
+                        不可用
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {showUpstream ? (
+                    <div className="text-muted-foreground mt-0.5 truncate font-mono text-[10px]">
+                      → {c.upstream_model}
+                    </div>
+                  ) : null}
+                </div>
+                {c.input_cost != null && c.output_cost != null ? (
+                  <div className="text-muted-foreground shrink-0 text-right text-[10px] leading-snug tabular-nums">
+                    <div>
+                      <span className="text-muted-foreground/70">In </span>
+                      {trimDecimal(c.input_cost)}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground/70">Out </span>
+                      {trimDecimal(c.output_cost)}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground shrink-0 self-center text-[10px]">无价</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function ModelBindingsCell({
+  modelId,
+  modelRef,
+  displayName,
+  available,
+  total,
+}: {
+  modelId: number;
+  modelRef: string;
+  displayName: string;
+  available: number;
+  total: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const channelsQuery = useQuery({
+    queryKey: ["model", modelId, "ops-channels", "bindings-tip"],
+    queryFn: () => getModelOpsChannels(modelId, { range: "all" }),
+    enabled: open,
+  });
+  const channels = (channelsQuery.data ?? []).filter((c) => c.binding_status === "enabled");
+  const loading = channelsQuery.isPending;
+
+  return (
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <span
+          className={cn(
+            "tabular-nums",
+            "cursor-default underline decoration-dotted decoration-muted-foreground/40 underline-offset-2",
+          )}
+        >
+          {available}/{total}
+        </span>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start">
+        {loading ? (
+          <p className="text-muted-foreground text-xs">加载渠道…</p>
+        ) : channelsQuery.isError ? (
+          <p className="text-destructive text-xs">加载失败</p>
+        ) : channels.length === 0 ? (
+          <p className="text-muted-foreground text-xs">暂无绑定渠道</p>
+        ) : (
+          <ModelBindingsTip
+            modelRef={modelRef}
+            displayName={displayName}
+            available={available}
+            total={total}
+            channels={channels}
+          />
+        )}
+      </TipHoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -152,9 +309,13 @@ export function modelOsColumns(): ColumnDef<ModelOpsRow, unknown>[] {
       accessorFn: (r) => r.bindings_available,
       header: ({ column }) => <ColumnHeader column={column} title="渠道" />,
       cell: ({ row }) => (
-        <span className="tabular-nums">
-          {row.original.bindings_available}/{row.original.bindings_total}
-        </span>
+        <ModelBindingsCell
+          modelId={row.original.id}
+          modelRef={row.original.model_id}
+          displayName={row.original.display_name}
+          available={row.original.bindings_available}
+          total={row.original.bindings_total}
+        />
       ),
     },
     {

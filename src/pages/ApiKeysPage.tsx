@@ -9,8 +9,8 @@ import {
   type ApiKeyOpsRow,
 } from "@/lib/api/customerOps";
 import { getUser } from "@/lib/api/users";
-import { revokeApiKey, updateApiKey } from "@/lib/api/apiKeys";
-import { apiErrorMessage } from "@/lib/api/client";
+import { deleteApiKey, revokeApiKey, updateApiKey } from "@/lib/api/apiKeys";
+import { apiErrorMessage, apiErrorStatus } from "@/lib/api/client";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { useServerList } from "@/hooks/useServerList";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -33,7 +33,8 @@ const PAGE_SIZE = 20;
 
 type PendingKeyAction =
   | { type: "toggle"; key: ApiKeyOpsRow }
-  | { type: "revoke"; key: ApiKeyOpsRow };
+  | { type: "revoke"; key: ApiKeyOpsRow }
+  | { type: "delete"; key: ApiKeyOpsRow };
 
 export function ApiKeysPage() {
   const { userId: userIdParam } = useParams();
@@ -98,13 +99,24 @@ export function ApiKeysPage() {
     onSuccess: () => { toast.success("已吊销 Key"); refetch(); setPendingAction(null); },
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
+  const del = useMutation({
+    mutationFn: (id: number) => deleteApiKey(id),
+    onSuccess: () => { toast.success("已删除 Key"); refetch(); setPendingAction(null); },
+    onError: (err) =>
+      toast.error(
+        apiErrorStatus(err) === 409
+          ? "该 Key 已有调用记录，无法删除；请改用吊销"
+          : apiErrorMessage(err),
+      ),
+  });
 
-  const mutating = toggle.isPending || revoke.isPending;
+  const mutating = toggle.isPending || revoke.isPending || del.isPending;
 
   function confirmPending() {
     if (!pendingAction) return;
     if (pendingAction.type === "toggle") toggle.mutate(pendingAction.key);
-    else revoke.mutate(pendingAction.key.id);
+    else if (pendingAction.type === "revoke") revoke.mutate(pendingAction.key.id);
+    else del.mutate(pendingAction.key.id);
   }
 
   const columns = useMemo(
@@ -112,6 +124,7 @@ export function ApiKeysPage() {
       apiKeyOsColumns({
         onToggle: (k) => setPendingAction({ type: "toggle", key: k }),
         onRevoke: (k) => setPendingAction({ type: "revoke", key: k }),
+        onDelete: (k) => setPendingAction({ type: "delete", key: k }),
       }),
     [],
   );
@@ -212,25 +225,37 @@ export function ApiKeysPage() {
         open={pendingAction != null}
         onOpenChange={(o) => { if (!o && !mutating) setPendingAction(null); }}
         title={
-          pendingAction?.type === "revoke"
-            ? "吊销 API Key"
-            : disabling
-              ? "停用 API Key"
-              : "启用 API Key"
+          pendingAction?.type === "delete"
+            ? "删除 API Key"
+            : pendingAction?.type === "revoke"
+              ? "吊销 API Key"
+              : disabling
+                ? "停用 API Key"
+                : "启用 API Key"
         }
         description={
           pendingAction
-            ? pendingAction.type === "revoke"
-              ? `确认吊销「${pendingAction.key.name}」？吊销不可恢复，该 Key 将立即失效，使用它的调用会全部失败。`
-              : disabling
-                ? `确认停用「${pendingAction.key.name}」？停用后该 Key 暂停服务，可随时重新启用。`
-                : `确认启用「${pendingAction.key.name}」？启用后该 Key 恢复正常调用。`
+            ? pendingAction.type === "delete"
+              ? `确认删除「${pendingAction.key.name}」？仅未产生调用记录的 Key 可物理删除，删除不可恢复；若该 Key 已有调用记录，请改用「吊销」。`
+              : pendingAction.type === "revoke"
+                ? `确认吊销「${pendingAction.key.name}」？吊销不可恢复，该 Key 将立即失效，使用它的调用会全部失败。`
+                : disabling
+                  ? `确认停用「${pendingAction.key.name}」？停用后该 Key 暂停服务，可随时重新启用。`
+                  : `确认启用「${pendingAction.key.name}」？启用后该 Key 恢复正常调用。`
             : undefined
         }
         confirmLabel={
-          pendingAction?.type === "revoke" ? "确认吊销" : disabling ? "确认停用" : "确认启用"
+          pendingAction?.type === "delete"
+            ? "确认删除"
+            : pendingAction?.type === "revoke"
+              ? "确认吊销"
+              : disabling
+                ? "确认停用"
+                : "确认启用"
         }
-        destructive={pendingAction?.type === "revoke" || disabling}
+        destructive={
+          pendingAction?.type === "delete" || pendingAction?.type === "revoke" || disabling
+        }
         pending={mutating}
         onConfirm={confirmPending}
       />

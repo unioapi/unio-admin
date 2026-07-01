@@ -19,13 +19,10 @@ export function RoutesPage() {
   const table = useOpsServerTable({
     queryKey: "routes",
     fetch: getRoutesOpsTable,
-    defaultSort: { id: "success_rate", desc: false },
   });
 
-  const refetchAll = () => queryClient.invalidateQueries({ queryKey: ["routes"] });
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {table.query.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -76,7 +73,7 @@ export function RoutesPage() {
         route={null}
         onSaved={() => {
           setCreateOpen(false);
-          refetchAll();
+          queryClient.invalidateQueries({ queryKey: ["routes"] });
         }}
       />
     </div>

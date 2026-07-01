@@ -1,14 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeftIcon, CheckIcon, PlusIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, CheckIcon, PlusIcon } from "lucide-react";
 import {
   createChannelPrice,
   listChannelPrices,
+  pickCurrentChannelPrice,
   updateChannelPrice,
   type ChannelPrice,
 } from "@/lib/api/channelPrices";
@@ -19,8 +20,10 @@ import {
   formatDateTime,
   localToRFC3339,
   rfc3339ToLocal,
+  roundPrice3,
   trimDecimal,
 } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { HintLabel } from "@/components/common/field-hint";
 import { Button } from "@/components/ui/button";
@@ -49,6 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ChannelCostCalculator } from "@/components/channels/ChannelCostCalculator";
 
 const MONEY_PATTERN = /^\d+(\.\d+)?$/;
 
@@ -64,6 +68,26 @@ const COST_FIELDS = [
 
 type CostFieldKey = (typeof COST_FIELDS)[number]["key"];
 
+const COST_PRICE_FIELD: Record<
+  CostFieldKey,
+  | "uncached_input_cost"
+  | "output_cost"
+  | "cache_read_input_cost"
+  | "reasoning_output_cost"
+  | "cache_write_5m_input_cost"
+  | "cache_write_1h_input_cost"
+> = {
+  uncached_input: "uncached_input_cost",
+  output: "output_cost",
+  cache_read_input: "cache_read_input_cost",
+  reasoning_output: "reasoning_output_cost",
+  cache_write_5m_input: "cache_write_5m_input_cost",
+  cache_write_1h_input: "cache_write_1h_input_cost",
+};
+
+const COST_TABLE_GRID =
+  "grid grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_minmax(0,0.75fr)] gap-2";
+
 export function ChannelPricesDialog({
   open,
   onOpenChange,
@@ -75,7 +99,7 @@ export function ChannelPricesDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-4xl">
         {open && <ChannelPriceManager channel={channel} />}
       </DialogContent>
     </Dialog>
@@ -117,6 +141,7 @@ function ChannelPriceManager({ channel }: { channel: Channel }) {
           bindings={bindingsQuery.data ?? []}
           bindingsLoading={bindingsQuery.isPending}
           onCancel={() => setMode("list")}
+          onSaved={invalidate}
           onCreated={() => {
             invalidate();
             setMode("list");
@@ -175,12 +200,14 @@ function ChannelPriceForm({
   bindings,
   bindingsLoading,
   onCancel,
+  onSaved,
   onCreated,
 }: {
   channelId: number;
   bindings: { model_id: number; model_external_id: string }[];
   bindingsLoading: boolean;
   onCancel: () => void;
+  onSaved: () => void;
   onCreated: () => void;
 }) {
   const [modelId, setModelId] = useState("");
@@ -190,6 +217,18 @@ function ChannelPriceForm({
   const [effectiveTo, setEffectiveTo] = useState("");
   const [status, setStatus] = useState("enabled");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [continueAfterCreate, setContinueAfterCreate] = useState(false);
+
+  const pricesQuery = useQuery({
+    queryKey: ["channel-prices", channelId],
+    queryFn: () => listChannelPrices(channelId),
+    enabled: Number(modelId) > 0,
+  });
+
+  const currentPrice = useMemo(
+    () => pickCurrentChannelPrice(pricesQuery.data ?? [], Number(modelId)),
+    [modelId, pricesQuery.data],
+  );
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -210,10 +249,28 @@ function ChannelPriceForm({
       }),
     onSuccess: (created) => {
       toast.success(`已为「${created.model_external_id}」新增渠道-模型成本价`);
-      onCreated();
+      if (continueAfterCreate) {
+        onSaved();
+        resetForm();
+        setContinueAfterCreate(false);
+      } else {
+        onCreated();
+      }
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => {
+      setContinueAfterCreate(false);
+      toast.error(apiErrorMessage(err));
+    },
   });
+
+  function resetForm() {
+    setModelId("");
+    setCost(emptyAmounts());
+    setEffectiveFrom("");
+    setEffectiveTo("");
+    setStatus("enabled");
+    setErrors({});
+  }
 
   function validate(): boolean {
     const next: Record<string, string> = {};
@@ -241,10 +298,20 @@ function ChannelPriceForm({
     return Object.keys(next).length === 0;
   }
 
+  function submit(continueEditing: boolean) {
+    if (!validate()) return;
+    setContinueAfterCreate(continueEditing);
+    mutation.mutate();
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
-    mutation.mutate();
+    submit(false);
+  }
+
+  function handleCreateAndContinue(e: FormEvent) {
+    e.preventDefault();
+    submit(true);
   }
 
   return (
@@ -278,6 +345,21 @@ function ChannelPriceForm({
               ))}
             </SelectContent>
           </Select>
+          <div className="mt-2">
+            <ChannelCostCalculator
+              channelId={channelId}
+              modelId={Number(modelId) > 0 ? Number(modelId) : null}
+              modelLabel={
+                bindings.find((b) => String(b.model_id) === modelId)?.model_external_id
+              }
+              onApply={(amounts) =>
+                setCost((prev) => ({
+                  ...prev,
+                  ...amounts,
+                }))
+              }
+            />
+          </div>
           <FieldError>{errors.model_id}</FieldError>
         </Field>
 
@@ -298,9 +380,11 @@ function ChannelPriceForm({
 
       {/* 只录成本：每个分项一栏成本（前两项必填）。 */}
       <div className="overflow-hidden rounded-md border">
-        <div className="bg-muted/40 text-muted-foreground grid grid-cols-[1.4fr_1fr] gap-2 px-3 py-2 text-xs font-medium">
+        <div className={cn("bg-muted/40 text-muted-foreground px-3 py-2 text-xs font-medium", COST_TABLE_GRID)}>
           <div>分项</div>
+          <div>当前价</div>
           <div>成本</div>
+          <div>差额</div>
         </div>
         {COST_FIELDS.map((f) => (
           <CostRow
@@ -308,6 +392,7 @@ function ChannelPriceForm({
             label={f.label}
             required={f.required}
             cost={cost[f.key]}
+            currentCost={readCurrentCost(currentPrice, f.key)}
             costError={errors[`cost_${f.key}`]}
             onCost={(v) => setCost((s) => ({ ...s, [f.key]: v }))}
           />
@@ -360,12 +445,24 @@ function ChannelPriceForm({
 
       <div className="mt-2 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          <ArrowLeftIcon data-icon="inline-start" />
           返回
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={mutation.isPending}
+          onClick={handleCreateAndContinue}
+        >
+          {mutation.isPending && continueAfterCreate && (
+            <Spinner data-icon="inline-start" />
+          )}
+          创建并继续
+        </Button>
         <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending && <Spinner data-icon="inline-start" />}
-          {mutation.isPending ? "保存中..." : "创建"}
+          {mutation.isPending && !continueAfterCreate && (
+            <Spinner data-icon="inline-start" />
+          )}
+          {mutation.isPending && !continueAfterCreate ? "保存中..." : "创建"}
         </Button>
       </div>
     </form>
@@ -376,20 +473,25 @@ function CostRow({
   label,
   required,
   cost,
+  currentCost,
   costError,
   onCost,
 }: {
   label: string;
   required: boolean;
   cost: string;
+  currentCost: string | null;
   costError?: string;
   onCost: (v: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-[1.4fr_1fr] items-start gap-2 border-t px-3 py-2">
+    <div className={cn("items-start border-t px-3 py-2", COST_TABLE_GRID)}>
       <div className="pt-2 text-sm">
         {label}
         {required && <span className="text-destructive"> *</span>}
+      </div>
+      <div className="text-muted-foreground pt-2 tabular-nums text-sm">
+        {currentCost ?? "—"}
       </div>
       <div>
         <Input
@@ -404,8 +506,56 @@ function CostRow({
           <p className="text-destructive mt-1 text-xs">{costError}</p>
         )}
       </div>
+      <div className="flex items-center pt-2">
+        <CostDelta current={currentCost} next={cost} />
+      </div>
     </div>
   );
+}
+
+function CostDelta({ current, next }: { current: string | null; next: string }) {
+  const nextTrimmed = next.trim();
+  if (current == null || nextTrimmed === "" || !MONEY_PATTERN.test(nextTrimmed)) {
+    return <span className="text-muted-foreground text-sm">—</span>;
+  }
+
+  const cur = Number(current);
+  const n = Number(nextTrimmed);
+  if (!Number.isFinite(cur) || !Number.isFinite(n)) {
+    return <span className="text-muted-foreground text-sm">—</span>;
+  }
+
+  const delta = n - cur;
+  if (delta === 0) {
+    return <span className="text-muted-foreground tabular-nums text-sm">0</span>;
+  }
+
+  const abs = roundPrice3(Math.abs(delta));
+  if (delta > 0) {
+    return (
+      <span className="text-destructive inline-flex items-center gap-0.5 tabular-nums text-sm">
+        +{abs}
+        <ArrowUpIcon className="size-3.5 shrink-0" />
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-0.5 tabular-nums text-sm text-emerald-600 dark:text-emerald-400">
+      -{abs}
+      <ArrowDownIcon className="size-3.5 shrink-0" />
+    </span>
+  );
+}
+
+function readCurrentCost(
+  price: ChannelPrice | null,
+  key: CostFieldKey,
+): string | null {
+  if (!price) return null;
+  const raw = price[COST_PRICE_FIELD[key]];
+  if (raw == null || raw === "") return null;
+  return trimDecimal(String(raw));
 }
 
 function ChannelPriceRow({
