@@ -40,6 +40,7 @@ export interface ChannelOpsRow {
   adapter_key: string;
   base_url: string;
   priority: number;
+  timeout_ms: number | null;
   provider_name: string;
   credential: string;
   attempt_total: number;

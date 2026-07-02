@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { getChannel } from "@/lib/api/channels";
 import { getBreakdown } from "@/lib/api/dashboard";
-import { getChannelOpsDetail } from "@/lib/api/channelsOps";
+import { getChannelOpsDetail, getChannelsOpsTable } from "@/lib/api/channelsOps";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { DetailPageHeader } from "@/components/common/DetailPageHeader";
@@ -44,6 +44,16 @@ export function ChannelDetailPage() {
     enabled: channelQ.isSuccess,
   });
 
+  const opsRow = useQuery({
+    queryKey: ["channels", "ops-table", "row", channelId, rangeQuery],
+    queryFn: async () => {
+      const page = await getChannelsOpsTable({ ...rangeQuery, page: 1, page_size: 500 });
+      return page.items.find((c) => c.id === channelId) ?? null;
+    },
+    placeholderData: keepPreviousData,
+    enabled: channelQ.isSuccess,
+  });
+
   const channel = channelQ.data ?? null;
   const breakdownRow = channelBreakdown.data?.rows.find((row) => row.ref_id === channelId);
   const entityLoading = channelQ.isPending;
@@ -68,6 +78,9 @@ export function ChannelDetailPage() {
               {channel.status === "enabled" ? "启用" : "停用"}
             </Badge>
           ) : null
+        }
+        subtitle={
+          channel ? `${channel.provider_name} · ${channel.base_url}` : null
         }
         actions={
           <RangeFilter
@@ -97,7 +110,12 @@ export function ChannelDetailPage() {
           </AlertDescription>
         </Alert>
       ) : channel ? (
-        <ChannelDetailContent channelId={channel.id} range={rangeQuery} />
+        <ChannelDetailContent
+          channelId={channel.id}
+          channel={channel}
+          range={rangeQuery}
+          opsRow={opsRow.data}
+        />
       ) : null}
     </div>
   );

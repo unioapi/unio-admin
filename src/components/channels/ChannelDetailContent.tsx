@@ -14,8 +14,9 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { getChannel } from "@/lib/api/channels";
+import { getChannel, type Channel } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
+import type { ChannelOpsRow } from "@/lib/api/channelsOps";
 import {
   getChannelOpsErrors,
   getChannelOpsModels,
@@ -34,6 +35,7 @@ import {
   channelOpsRouteColumns,
 } from "@/components/detail-tables/channel-detail-columns";
 import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
+import { ChannelOverviewSection } from "@/components/channels/ChannelOverviewSection";
 import { DetailSideNav } from "@/components/common/DetailSideNav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -136,13 +138,22 @@ function ChartSkeleton() {
 
 export function ChannelDetailContent({
   channelId,
+  channel,
   range,
+  opsRow,
 }: {
   channelId: number;
+  channel: Channel;
   range: RangeQuery;
+  opsRow?: ChannelOpsRow | null;
 }) {
   const sections = useMemo(
     () => [
+      {
+        id: "overview",
+        label: "概览",
+        content: <ChannelOverviewSection channel={channel} opsRow={opsRow} />,
+      },
       {
         id: "performance",
         label: "性能",
@@ -174,10 +185,10 @@ export function ChannelDetailContent({
         content: <AuditSection />,
       },
     ],
-    [channelId, range],
+    [channelId, channel, range, opsRow],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="performance" />;
+  return <DetailSideNav sections={sections} defaultSectionId="overview" />;
 }
 
 function PerformanceSection({

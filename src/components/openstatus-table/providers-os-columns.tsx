@@ -1,6 +1,4 @@
 import type { ColumnDef, FilterFn } from "@tanstack/react-table";
-import { EyeIcon, PencilIcon, Trash2Icon } from "lucide-react";
-import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/api/providers";
 import type { ProviderOpsRow } from "@/lib/api/providersOps";
@@ -10,8 +8,7 @@ import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent"
 import { STATUS_LABEL } from "@/components/dashboard/breakdown-table/constants";
 import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
 import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
-import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
-import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
+import { ProviderRowActions } from "@/components/providers/ProviderRowActions";
 import {
   formatCompact,
   formatDateTime,
@@ -21,7 +18,6 @@ import {
   formatUSD,
 } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
@@ -232,31 +228,7 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       header: () => <span className="text-muted-foreground">操作</span>,
       enableHiding: false,
       enableSorting: false,
-      cell: ({ row }) => {
-        const provider = toProvider(row.original);
-        return (
-          <div
-            className="flex shrink-0 items-center gap-0.5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Button asChild variant="ghost" size="icon-sm" aria-label="查看">
-              <Link to={`/providers/${row.original.id}`}>
-                <EyeIcon />
-              </Link>
-            </Button>
-            <ProviderFormDialog provider={provider}>
-              <Button variant="ghost" size="icon-sm" aria-label="编辑">
-                <PencilIcon />
-              </Button>
-            </ProviderFormDialog>
-            <DeleteProviderDialog provider={provider}>
-              <Button variant="ghost" size="icon-sm" aria-label="删除">
-                <Trash2Icon className="text-destructive" />
-              </Button>
-            </DeleteProviderDialog>
-          </div>
-        );
-      },
+      cell: ({ row }) => <ProviderRowActions provider={toProvider(row.original)} />,
     },
   ];
 }

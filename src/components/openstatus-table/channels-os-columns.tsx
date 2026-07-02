@@ -8,13 +8,13 @@ import { cn } from "@/lib/utils";
 import { listChannelModels } from "@/lib/api/channelModels";
 import { listChannelPrices, pickCurrentChannelPrice } from "@/lib/api/channelPrices";
 import type { ChannelOpsRow } from "@/lib/api/channelsOps";
-import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
 import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
 import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
 import { ChannelRowActions } from "@/components/channels/ChannelRowActions";
 import {
   formatDateTime,
   formatInt,
+  formatLatencyMs,
   maskSecret,
   trimDecimal,
 } from "@/lib/format";
@@ -30,16 +30,15 @@ import { TruncateCell } from "./truncate-cell";
 
 export const CHANNEL_OS_COLUMN_LABELS: Record<string, string> = {
   name: "渠道",
-  credential: "API 密钥",
-  success_rate: "成功率",
-  latency: "平均延迟",
-  timeout: "超时",
+  status: "状态",
+  protocol_adapter: "协议/Adapter",
+  credential: "凭证",
   rate_limit: "限流",
   bound_models: "模型",
-  recent_error: "最近错误",
+  timeout: "超时",
+  success_rate: "成功率",
+  latency: "平均延迟",
   created_at: "创建时间",
-  status: "状态",
-  health: "健康",
   action: "操作",
 };
 
@@ -178,14 +177,30 @@ function ChannelCredentialCell({ credential }: { credential: string }) {
   );
 }
 
-// 限流语义：null=继承全局默认，0=不限，>0=具体上限。RPM 无单位；TPM/RPD 带单位(K/M/B)。
+function ChannelProtocolAdapterCell({
+  protocol,
+  adapterKey,
+}: {
+  protocol: string;
+  adapterKey: string;
+}) {
+  const showAdapter = adapterKey && adapterKey !== protocol;
+  return (
+    <div className="min-w-0">
+      <div className="truncate font-medium">{protocol || "—"}</div>
+      {showAdapter ? (
+        <div className="truncate font-mono text-muted-foreground text-xs">{adapterKey}</div>
+      ) : null}
+    </div>
+  );
+}
+
 function formatRpmLimit(v: number | null): string {
   if (v == null) return "默认";
   if (v === 0) return "不限";
   return formatInt(v);
 }
 
-// 悬浮卡里给出完整描述与精确值（不缩写）。
 function rateLimitDetail(v: number | null): string {
   if (v == null) return "继承全局默认";
   if (v === 0) return "不限";
@@ -201,7 +216,6 @@ function ChannelRateLimitCell({
   tpm: number | null;
   rpd: number | null;
 }) {
-  // 三维全继承时收敛为单个「默认」，避免整列被重复文案淹没。
   if (rpm == null && tpm == null && rpd == null) {
     return <span className="text-muted-foreground text-xs">默认</span>;
   }
@@ -236,6 +250,13 @@ function ChannelRateLimitCell({
   );
 }
 
+function ChannelTimeoutCell({ timeoutMs }: { timeoutMs: number | null }) {
+  if (timeoutMs == null) {
+    return <span className="text-muted-foreground text-xs">默认</span>;
+  }
+  return <span className="tabular-nums text-xs">{formatLatencyMs(timeoutMs)}</span>;
+}
+
 export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
   return [
     {
@@ -244,11 +265,7 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       header: ({ column }) => <ColumnHeader column={column} title="渠道" />,
       enableHiding: false,
       cell: ({ row }) => (
-        <TruncateCell
-          text={row.original.name}
-          className="font-medium"
-          subtext={`${row.original.provider_name} · ${row.original.base_url}`}
-        />
+        <TruncateCell text={row.original.name} className="font-medium" />
       ),
     },
     {
@@ -264,22 +281,21 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       ),
     },
     {
-      id: "health",
-      accessorKey: "health",
-      header: ({ column }) => <ColumnHeader column={column} title="健康" />,
+      id: "protocol_adapter",
+      accessorFn: (r) => `${r.protocol}/${r.adapter_key}`,
+      header: ({ column }) => <ColumnHeader column={column} title="协议/Adapter" />,
       enableSorting: false,
-      enableHiding: false,
-      meta: { label: "健康", fixedWidth: true },
       cell: ({ row }) => (
-        <Badge variant={HEALTH_VARIANT[row.original.health]}>
-          {HEALTH_LABEL[row.original.health]}
-        </Badge>
+        <ChannelProtocolAdapterCell
+          protocol={row.original.protocol}
+          adapterKey={row.original.adapter_key}
+        />
       ),
     },
     {
       id: "credential",
       accessorKey: "credential",
-      header: ({ column }) => <ColumnHeader column={column} title="API 密钥" />,
+      header: ({ column }) => <ColumnHeader column={column} title="凭证" />,
       enableSorting: false,
       cell: ({ row }) => <ChannelCredentialCell credential={row.original.credential} />,
     },
@@ -294,6 +310,24 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
           rpd={row.original.rpd_limit}
         />
       ),
+    },
+    {
+      id: "bound_models",
+      accessorKey: "bound_models",
+      header: ({ column }) => <ColumnHeader column={column} title="模型" />,
+      cell: ({ row }) => (
+        <BoundModelsCell
+          channelId={row.original.id}
+          boundModels={row.original.bound_models}
+        />
+      ),
+    },
+    {
+      id: "timeout",
+      accessorKey: "timeout_ms",
+      header: ({ column }) => <ColumnHeader column={column} title="超时" />,
+      enableSorting: false,
+      cell: ({ row }) => <ChannelTimeoutCell timeoutMs={row.original.timeout_ms} />,
     },
     {
       id: "success_rate",
@@ -312,37 +346,6 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       accessorFn: (r) => r.latency.avg,
       header: ({ column }) => <ColumnHeader column={column} title="平均延迟" />,
       cell: ({ row }) => <AttemptLatencyCell latency={row.original.latency} />,
-    },
-    {
-      id: "timeout",
-      accessorKey: "timeout_total",
-      header: ({ column }) => <ColumnHeader column={column} title="超时" />,
-      cell: ({ row }) => (
-        <span className="tabular-nums">{formatInt(row.original.timeout_total)}</span>
-      ),
-    },
-    {
-      id: "bound_models",
-      accessorKey: "bound_models",
-      header: ({ column }) => <ColumnHeader column={column} title="模型" />,
-      cell: ({ row }) => (
-        <BoundModelsCell
-          channelId={row.original.id}
-          boundModels={row.original.bound_models}
-        />
-      ),
-    },
-    {
-      id: "recent_error",
-      accessorKey: "recent_error_code",
-      header: ({ column }) => <ColumnHeader column={column} title="最近错误" />,
-      enableSorting: false,
-      cell: ({ row }) => (
-        <TruncateCell
-          className="text-muted-foreground text-xs"
-          text={row.original.recent_error_code || "—"}
-        />
-      ),
     },
     {
       id: "created_at",

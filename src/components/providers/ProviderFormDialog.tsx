@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -47,13 +47,23 @@ interface FieldErrors {
 export function ProviderFormDialog({
   provider,
   children,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   provider?: Provider;
-  children: ReactNode;
+  children?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const isEdit = !!provider;
 
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [status, setStatus] = useState("enabled");
@@ -85,16 +95,21 @@ export function ProviderFormDialog({
   });
 
   // 打开时按当前 provider 预填（编辑）或清空（新建），并清掉上次的校验/请求状态。
+  // 用 effect 而非 onOpenChange：受控用法（ProviderRowActions 编辑）通过 open prop 程序化打开，
+  // 不会触发 Dialog 的 onOpenChange，必须在 open 变 true 时主动回填。
+  useEffect(() => {
+    if (!open) return;
+    setSlug(provider?.slug ?? "");
+    setName(provider?.name ?? "");
+    setStatus(provider?.status ?? "enabled");
+    setErrors({});
+    mutation.reset();
+    setStatusConfirmOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, provider?.id]);
+
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    if (next) {
-      setSlug(provider?.slug ?? "");
-      setName(provider?.name ?? "");
-      setStatus(provider?.status ?? "enabled");
-      setErrors({});
-      mutation.reset();
-      setStatusConfirmOpen(false);
-    }
   }
 
   function validate(): boolean {
@@ -123,7 +138,7 @@ export function ProviderFormDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑服务商" : "新建服务商"}</DialogTitle>

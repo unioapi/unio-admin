@@ -21,11 +21,17 @@ import {
 export function DeleteProviderDialog({
   provider,
   children,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   provider: Provider;
-  children: ReactNode;
+  children?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
@@ -48,7 +54,7 @@ export function DeleteProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>删除服务商</DialogTitle>
