@@ -11,7 +11,7 @@ import {
   ChannelOverviewStats,
   ChannelOverviewStatsSkeleton,
 } from "@/components/channels/ChannelOverviewStats";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function ChannelDetailPage() {
@@ -19,14 +19,12 @@ export function ChannelDetailPage() {
   const channelId = Number(channelIdParam);
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
   const rangeQuery = { ...params, range: value.preset };
-
-  if (!Number.isFinite(channelId) || channelId <= 0) {
-    return <Navigate to="/channels" replace />;
-  }
+  const validId = Number.isFinite(channelId) && channelId > 0;
 
   const channelQ = useQuery({
     queryKey: ["channel", channelId],
     queryFn: () => getChannel(channelId),
+    enabled: validId,
   });
 
   const opsDetail = useQuery({
@@ -54,17 +52,22 @@ export function ChannelDetailPage() {
     enabled: channelQ.isSuccess,
   });
 
+  if (!validId) {
+    return <Navigate to="/channels" replace />;
+  }
+
   const channel = channelQ.data ?? null;
   const breakdownRow = channelBreakdown.data?.rows.find((row) => row.ref_id === channelId);
   const entityLoading = channelQ.isPending;
   const notFound = channelQ.isSuccess && channel == null;
 
-  const overviewSummary =
-    opsDetail.isPending && !opsDetail.data ? (
-      <ChannelOverviewStatsSkeleton />
-    ) : opsDetail.data ? (
-      <ChannelOverviewStats detail={opsDetail.data} breakdownRow={breakdownRow} />
-    ) : null;
+  const overviewSummary = opsDetail.isError ? (
+    <p className="text-destructive text-sm">概览加载失败：{(opsDetail.error as Error).message}</p>
+  ) : opsDetail.isPending && !opsDetail.data ? (
+    <ChannelOverviewStatsSkeleton />
+  ) : opsDetail.data ? (
+    <ChannelOverviewStats detail={opsDetail.data} breakdownRow={breakdownRow} />
+  ) : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -74,9 +77,7 @@ export function ChannelDetailPage() {
         titleLoading={entityLoading}
         badge={
           channel ? (
-            <Badge variant={channel.status === "enabled" ? "default" : "outline"}>
-              {channel.status === "enabled" ? "启用" : "停用"}
-            </Badge>
+            <StatusBadge status={channel.status} />
           ) : null
         }
         subtitle={

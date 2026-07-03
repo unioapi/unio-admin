@@ -10,15 +10,17 @@ import {
 import { RouteFormDialog } from "@/components/routes/RouteFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useOpsServerTable } from "@/hooks/useOpsServerTable";
+import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
 
 export function RoutesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const table = useOpsServerTable({
+  const table = useServerTable({
     queryKey: "routes",
-    fetch: getRoutesOpsTable,
+    fetch: (p) => getRoutesOpsTable({ range: "all", ...p }),
+    defaultSort: { id: "name", desc: false },
+    statusOptions: ENTITY_STATUS_OPTIONS,
   });
 
   return (

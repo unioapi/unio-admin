@@ -13,6 +13,8 @@ declare module "@tanstack/react-table" {
     kind?: string;
     /** 固定宽度列，不参与比例拉伸（如 Badge 列） */
     fixedWidth?: boolean;
+    /** 按行估算列内容宽度（用于动态 minWidth） */
+    autoSizeValue?: (row: any) => unknown;
   }
 
   interface FilterFns {

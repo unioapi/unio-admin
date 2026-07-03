@@ -1,15 +1,19 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { GaugeIcon } from "lucide-react";
 import { listUsage } from "@/lib/api/usage";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
+import { useRangeQuery } from "@/hooks/useRangeQuery";
+import { RangeFilter } from "@/components/common/RangeFilter";
 import { ServerDataTable } from "@/components/openstatus-table";
 import type { FilterChip } from "@/components/openstatus-table";
 import {
   usageOsColumns,
   USAGE_OS_COLUMN_LABELS,
 } from "@/components/openstatus-table/usage-os-columns";
+import { RequestDetailDialog } from "@/components/requests/RequestDetailDialog";
 import { Input } from "@/components/ui/input";
 import {
   Empty,
@@ -23,18 +27,44 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const PAGE_SIZE = 20;
 
 export function UsagePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepRequestId = searchParams.get("request_id");
+  const closeDeep = () => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.delete("request_id");
+        return sp;
+      },
+      { replace: true },
+    );
+  };
+
   const [modelInput, setModelInput] = useState("");
   const [userIdInput, setUserIdInput] = useState("");
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const { value: range, setRange, params: rangeParams, refresh, refreshedAt } =
+    useRangeQuery("24h");
   const { page, setPage, sorting, setSorting, sort } = useServerList({
     defaultSort: { id: "created_at", desc: true },
   });
 
   const model = useDebouncedValue(modelInput.trim(), 300);
   const userId = useDebouncedValue(parsePositiveInt(userIdInput), 300);
+  const columns = useMemo(() => usageOsColumns(setSelectedRequestId), []);
 
   const query = useQuery({
-    queryKey: ["usage", { model, userId, page, sort }],
-    queryFn: () => listUsage({ page, pageSize: PAGE_SIZE, sort, model, userId }),
+    queryKey: ["usage", { model, userId, page, sort, range: rangeParams }],
+    queryFn: () =>
+      listUsage({
+        page,
+        pageSize: PAGE_SIZE,
+        sort,
+        model,
+        userId,
+        from: rangeParams.from,
+        to: rangeParams.to,
+      }),
     placeholderData: keepPreviousData,
   });
 
@@ -59,6 +89,25 @@ export function UsagePage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {deepRequestId ? (
+        <RequestDetailDialog
+          requestId={deepRequestId}
+          open
+          onOpenChange={(o) => {
+            if (!o) closeDeep();
+          }}
+        />
+      ) : null}
+      {selectedRequestId ? (
+        <RequestDetailDialog
+          requestId={selectedRequestId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSelectedRequestId(null);
+          }}
+        />
+      ) : null}
+
       {query.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
@@ -67,7 +116,7 @@ export function UsagePage() {
       ) : (
         <ServerDataTable
           storageKey="usage"
-          columns={usageOsColumns()}
+          columns={columns}
           data={items}
           columnLabels={USAGE_OS_COLUMN_LABELS}
           total={total}
@@ -96,6 +145,17 @@ export function UsagePage() {
               onChange={(e) => reset(setUserIdInput)(e.target.value)}
               inputMode="numeric"
               className="h-8 w-28"
+            />
+          }
+          toolbarActions={
+            <RangeFilter
+              value={range}
+              onChange={(v) => {
+                setRange(v);
+                setPage(1);
+              }}
+              refreshedAt={refreshedAt}
+              onRefresh={refresh}
             />
           }
         />

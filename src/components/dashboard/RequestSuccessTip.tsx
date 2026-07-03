@@ -11,7 +11,6 @@ import {
 const FINISHED_FIELDS = [
   { key: "succeeded", getValue: (r: RadarRequests) => r.succeeded, meaning: "请求已成功完成" },
   { key: "failed", getValue: (r: RadarRequests) => r.failed, meaning: "请求已失败" },
-  { key: "canceled", getValue: (r: RadarRequests) => r.canceled, meaning: "请求已取消" },
 ] as const;
 
 function TipSection({
@@ -103,7 +102,6 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
 
   const successPct = terminal > 0 ? requests.succeeded / terminal : 0;
   const failedPct = terminal > 0 ? requests.failed / terminal : 0;
-  const canceledPct = terminal > 0 ? requests.canceled / terminal : 0;
 
   return (
     <div className="w-full space-y-3">
@@ -139,19 +137,10 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
                 style={{ width: `${failedPct * 100}%` }}
               />
             ) : null}
-            {canceledPct > 0 ? (
-              <div
-                className="bg-amber-500/70 h-full"
-                style={{ width: `${canceledPct * 100}%` }}
-              />
-            ) : null}
           </div>
           <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
             <LegendDot className="bg-emerald-500/85" label={`成功 ${formatCompact(requests.succeeded)}`} />
             <LegendDot className="bg-destructive/75" label={`失败 ${formatCompact(requests.failed)}`} />
-            {requests.canceled > 0 ? (
-              <LegendDot className="bg-amber-500/70" label={`取消 ${formatCompact(requests.canceled)}`} />
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -159,7 +148,10 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
       <TipSection title="汇总">
         <div className="space-y-1.5">
           <SummaryRow label="总请求" value={formatCompact(requests.total)} />
-          <SummaryRow label="完成" value={formatCompact(terminal)} emphasis />
+          <SummaryRow label="完成（成功+失败）" value={formatCompact(terminal)} emphasis />
+          {requests.canceled > 0 ? (
+            <SummaryRow label="取消（不计入成功率）" value={formatCompact(requests.canceled)} />
+          ) : null}
           <SummaryRow label="进行中" value={formatCompact(inFlight)} />
           {requests.timeout > 0 ? (
             <SummaryRow label="超时" value={formatCompact(requests.timeout)} />
@@ -181,6 +173,7 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
             title="总请求"
             rows={[
               { op: "=", label: "完成", value: formatCompact(terminal) },
+              { op: "+", label: "取消", value: formatCompact(requests.canceled) },
               { op: "+", label: "进行中", value: formatCompact(inFlight) },
             ]}
           />
@@ -200,11 +193,11 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
           <div className="border-border/40 border-t pt-1.5" />
           <p className="text-muted-foreground leading-relaxed">
             <span className="text-foreground/90 font-medium">失败率</span>
-            {" = (失败 + 取消) ÷ 完成"}
+            {" = 失败 ÷ 完成"}
           </p>
           <p className="text-foreground font-mono text-[10px] tabular-nums">
-            ({formatCompact(requests.failed)} + {formatCompact(requests.canceled)}) ÷{" "}
-            {formatCompact(terminal)} = {formatPercent(requests.error_rate)}
+            {formatCompact(requests.failed)} ÷ {formatCompact(terminal)} ={" "}
+            {formatPercent(requests.error_rate)}
           </p>
         </div>
       </TipSection>
@@ -219,6 +212,14 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
               <p className="text-muted-foreground text-[11px] leading-relaxed">{meaning}</p>
             </li>
           ))}
+          <li className="space-y-0.5">
+            <code className="bg-muted/60 rounded px-1 py-px font-mono text-[10px]">
+              canceled
+            </code>
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              客户端取消，非渠道/平台责任，不计入成功率分母
+            </p>
+          </li>
           <li className="space-y-0.5">
             <code className="bg-muted/60 rounded px-1 py-px font-mono text-[10px]">
               in_flight

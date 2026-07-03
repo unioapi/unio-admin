@@ -77,7 +77,7 @@ export function AttemptSuccessTip({
       <div className="flex items-end justify-between gap-3">
         <div>
           <div className="text-sm font-semibold leading-tight">成功率</div>
-          <div className="text-muted-foreground mt-0.5 text-[11px]">成功 ÷ 总尝试</div>
+          <div className="text-muted-foreground mt-0.5 text-[11px]">成功 ÷（成功 + 失败）</div>
         </div>
         <div className={cn("font-heading text-xl font-semibold tabular-nums", rateColor(successRate))}>
           {formatPercent(successRate)}
@@ -101,7 +101,7 @@ export function AttemptSuccessTip({
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="size-1.5 shrink-0 rounded-full bg-destructive/75" />
-              非成功 {formatCompact(attemptFailed)}
+              失败 {formatCompact(attemptFailed)}
             </span>
           </div>
         </div>
@@ -109,9 +109,9 @@ export function AttemptSuccessTip({
 
       <TipSection title="汇总">
         <div className="space-y-1.5">
-          <SummaryRow label="总尝试" value={formatCompact(attemptTotal)} emphasis />
+          <SummaryRow label="合格尝试（成功 + 失败）" value={formatCompact(attemptTotal)} emphasis />
           <SummaryRow label="成功" value={formatCompact(attemptSucceeded)} />
-          <SummaryRow label="非成功" value={formatCompact(attemptFailed)} />
+          <SummaryRow label="失败" value={formatCompact(attemptFailed)} />
         </div>
       </TipSection>
 
@@ -119,7 +119,7 @@ export function AttemptSuccessTip({
         <div className="bg-muted/30 space-y-1.5 rounded-md px-2.5 py-2 text-[11px]">
           <p className="text-muted-foreground leading-relaxed">
             <span className="text-foreground/90 font-medium">成功率</span>
-            {" = 成功 ÷ 总尝试"}
+            {" = 成功 ÷（成功 + 失败）"}
           </p>
           <p className="text-foreground font-mono text-[10px] tabular-nums">
             {formatCompact(attemptSucceeded)} ÷ {formatCompact(attemptTotal)} ={" "}
@@ -136,7 +136,8 @@ export function AttemptSuccessTip({
 
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          统计所选时间范围内该维度的全部 request attempt；非成功包括失败、取消及其他终态。
+          分母为「合格尝试」= 成功 + 失败；不含客户端取消（canceled）与进行中（running），
+          与运行时熔断口径一致，避免把客户端取消/在途算作渠道失败。
         </p>
       </TipSection>
     </div>

@@ -1,39 +1,17 @@
 import type { ColumnDef, FilterFn } from "@tanstack/react-table";
-import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/api/providers";
 import type { ProviderOpsRow } from "@/lib/api/providersOps";
-import { profitIntent, rateIntent } from "@/components/dashboard/metrics";
-import { RevenueTip } from "@/components/dashboard/RevenueTip";
-import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
-import { STATUS_LABEL } from "@/components/dashboard/breakdown-table/constants";
-import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
-import { ProviderRowActions } from "@/components/providers/ProviderRowActions";
 import {
-  formatCompact,
-  formatDateTime,
-  formatPercent,
-  formatTPS,
-  formatUSD,
-} from "@/lib/format";
+  ProviderChannelsCountCell,
+  ProviderModelsCountCell,
+  ProviderRoutesCountCell,
+} from "@/components/providers/ProviderListCountCells";
+import { ProviderRowActions } from "@/components/providers/ProviderRowActions";
+import { STATUS_LABEL } from "@/components/dashboard/breakdown-table/constants";
+import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-
-type StatIntent = "default" | "success" | "warning" | "danger";
-
-function statIntentClass(intent: StatIntent | undefined): string {
-  switch (intent) {
-    case "success":
-      return "text-emerald-600 dark:text-emerald-400";
-    case "warning":
-      return "text-amber-600 dark:text-amber-400";
-    case "danger":
-      return "text-destructive";
-    default:
-      return "text-foreground";
-  }
-}
 
 function toProvider(row: ProviderOpsRow): Provider {
   return {
@@ -46,7 +24,6 @@ function toProvider(row: ProviderOpsRow): Provider {
   };
 }
 
-/** facet 多选筛选：列值（标量）命中所选集合即保留。 */
 const facetedFilter: FilterFn<ProviderOpsRow> = (row, columnId, filterValue) => {
   const selected = filterValue as string[] | undefined;
   if (!selected?.length) return true;
@@ -57,12 +34,8 @@ export const PROVIDER_OS_COLUMN_LABELS: Record<string, string> = {
   name: "服务商",
   status: "状态",
   channels: "渠道",
-  requests: "请求",
-  success_rate: "成功率",
-  latency: "平均延迟",
-  tps: "平均 TPS",
-  tokens: "Token",
-  margin: "利润",
+  models: "模型",
+  routes: "线路",
   created_at: "创建时间",
   action: "操作",
 };
@@ -74,6 +47,9 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       accessorKey: "name",
       header: ({ column }) => <ColumnHeader column={column} title="服务商" />,
       enableHiding: false,
+      meta: {
+        autoSizeValue: (row: ProviderOpsRow) => `${row.name} ${row.slug}`,
+      },
       cell: ({ row }) => (
         <TruncateCell
           text={row.original.name}
@@ -87,13 +63,15 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       accessorKey: "status",
       header: ({ column }) => <ColumnHeader column={column} title="状态" />,
       enableHiding: false,
-      meta: { label: "状态", fixedWidth: true },
+      meta: {
+        label: "状态",
+        autoSizeValue: (row: ProviderOpsRow) =>
+          STATUS_LABEL[row.status] ?? row.status,
+      },
       filterFn: facetedFilter,
       cell: ({ row }) =>
         row.original.status ? (
-          <Badge
-            variant={row.original.status === "enabled" ? "default" : "secondary"}
-          >
+          <Badge variant={row.original.status === "enabled" ? "default" : "secondary"}>
             {STATUS_LABEL[row.original.status] ?? row.original.status}
           </Badge>
         ) : (
@@ -102,89 +80,31 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     },
     {
       id: "channels",
-      accessorFn: (r) => r.channel_enabled,
+      accessorFn: (r) => r.channel_total,
       header: ({ column }) => <ColumnHeader column={column} title="渠道" />,
       cell: ({ row }) => (
-        <span className="tabular-nums">
-          {row.original.channel_enabled}/{row.original.channel_total}
-        </span>
+        <ProviderChannelsCountCell
+          providerId={row.original.id}
+          count={row.original.channel_total}
+        />
       ),
     },
     {
-      id: "requests",
-      accessorKey: "attempt_total",
-      header: ({ column }) => <ColumnHeader column={column} title="请求" />,
+      id: "models",
+      accessorFn: (r) => r.models_count,
+      header: () => <span className="text-muted-foreground">模型</span>,
+      enableSorting: false,
       cell: ({ row }) => (
-        <span className="tabular-nums">
-          {formatCompact(row.original.attempt_total)}
-        </span>
+        <ProviderModelsCountCell providerId={row.original.id} count={row.original.models_count} />
       ),
     },
     {
-      id: "success_rate",
-      accessorKey: "success_rate",
-      header: ({ column }) => <ColumnHeader column={column} title="成功率" />,
+      id: "routes",
+      accessorFn: (r) => r.routes_count,
+      header: () => <span className="text-muted-foreground">线路</span>,
+      enableSorting: false,
       cell: ({ row }) => (
-        <span
-          className={cn(
-            "tabular-nums",
-            statIntentClass(rateIntent(row.original.success_rate)),
-          )}
-        >
-          {formatPercent(row.original.success_rate)}
-        </span>
-      ),
-    },
-    {
-      id: "latency",
-      accessorFn: (r) => r.latency.avg,
-      header: ({ column }) => <ColumnHeader column={column} title="平均延迟" />,
-      cell: ({ row }) => <AttemptLatencyCell latency={row.original.latency} />,
-    },
-    {
-      id: "tps",
-      accessorKey: "avg_tps",
-      header: ({ column }) => <ColumnHeader column={column} title="平均 TPS" />,
-      cell: ({ row }) => (
-        <span className="tabular-nums">{formatTPS(row.original.avg_tps)}</span>
-      ),
-    },
-    {
-      id: "tokens",
-      accessorKey: "tokens",
-      header: ({ column }) => <ColumnHeader column={column} title="Token" />,
-      cell: ({ row }) => (
-        <span className="tabular-nums">{formatCompact(row.original.tokens)}</span>
-      ),
-    },
-    {
-      id: "margin",
-      accessorFn: (r) => Number(r.margin_usd),
-      header: ({ column }) => <ColumnHeader column={column} title="利润" />,
-      cell: ({ row }) => (
-        <HoverCard openDelay={120} closeDelay={120}>
-          <HoverCardTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "cursor-default tabular-nums underline decoration-dotted underline-offset-2",
-                statIntentClass(profitIntent(Number(row.original.margin_usd))),
-              )}
-            >
-              {formatUSD(row.original.margin_usd)}
-            </button>
-          </HoverCardTrigger>
-          <TipHoverCardContent align="end">
-            <RevenueTip
-              revenue={{
-                revenue_usd: row.original.revenue_usd,
-                cost_usd: row.original.cost_usd,
-                margin_usd: row.original.margin_usd,
-              }}
-              title={row.original.name}
-            />
-          </TipHoverCardContent>
-        </HoverCard>
+        <ProviderRoutesCountCell providerId={row.original.id} count={row.original.routes_count} />
       ),
     },
     {

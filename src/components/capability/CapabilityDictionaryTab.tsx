@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PlusIcon } from "lucide-react";
@@ -18,16 +18,18 @@ import {
   protocolScopeLabel,
   type ProtocolScopeFilter,
 } from "@/lib/capability/protocolScope";
-import { ConfigurableDataTable } from "@/components/data-table";
-import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useServerList } from "@/hooks/useServerList";
+import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
+import type { FilterChip } from "@/components/openstatus-table";
 import {
-  CAPABILITY_DICTIONARY_COLUMN_LABELS,
-  capabilityDictionaryColumns,
-} from "@/components/detail-tables/capability-dictionary-columns";
+  CAPABILITY_KEY_OS_COLUMN_LABELS,
+  capabilityKeyOsColumns,
+} from "@/components/openstatus-table/capability-keys-os-columns";
+import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -44,30 +46,134 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const PAGE_SIZE = 20;
+
+const PROTOCOL_SCOPE_OPTIONS = PROTOCOL_SCOPE_ORDER.map((value) => ({
+  value,
+  label: protocolScopeLabel(value),
+}));
+
+function compareCapabilityKeys(
+  a: CapabilityKeyDef,
+  b: CapabilityKeyDef,
+  columnId: string,
+  desc: boolean,
+): number {
+  let cmp = 0;
+  switch (columnId) {
+    case "key":
+      cmp = a.key.localeCompare(b.key);
+      break;
+    case "protocol_scope":
+      cmp =
+        PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(a.protocol_scope)) -
+        PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(b.protocol_scope));
+      break;
+    case "domain":
+      cmp = a.domain.localeCompare(b.domain);
+      break;
+    case "display_name":
+      cmp = a.display_name.localeCompare(b.display_name);
+      break;
+    case "description":
+      cmp = a.description.localeCompare(b.description);
+      break;
+    case "sort_order":
+      cmp = a.sort_order - b.sort_order;
+      break;
+    default:
+      cmp =
+        a.sort_order - b.sort_order ||
+        PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(a.protocol_scope)) -
+          PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(b.protocol_scope)) ||
+        a.key.localeCompare(b.key);
+  }
+  return desc ? -cmp : cmp;
+}
+
 export function CapabilityDictionaryTab() {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CapabilityKeyDef | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CapabilityKeyDef | null>(null);
-  const [scopeFilter, setScopeFilter] = useState<ProtocolScopeFilter>("all");
+  const [protocolScope, setProtocolScope] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebouncedValue(searchInput.trim(), 300);
+
+  const { page, setPage, sorting, setSorting } = useServerList({
+    pageSize: PAGE_SIZE,
+    defaultSort: { id: "sort_order", desc: false },
+  });
 
   const keysQuery = useQuery({
     queryKey: ["capability-keys", "v2"],
     queryFn: listCapabilityKeys,
   });
 
-  const rows = useMemo(() => {
-    const filtered = filterKeysByProtocolScope(keysQuery.data ?? [], scopeFilter);
-    return [...filtered].sort((a, b) => {
-      if (scopeFilter === "all") {
-        const scopeCmp =
-          PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(a.protocol_scope)) -
-          PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(b.protocol_scope));
-        if (scopeCmp !== 0) return scopeCmp;
-      }
-      return a.sort_order - b.sort_order || a.key.localeCompare(b.key);
-    });
-  }, [keysQuery.data, scopeFilter]);
+  const filteredRows = useMemo(() => {
+    let rows = keysQuery.data ?? [];
+    if (protocolScope) {
+      rows = filterKeysByProtocolScope(
+        rows,
+        protocolScope as ProtocolScopeFilter,
+      );
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      rows = rows.filter(
+        (row) =>
+          row.key.toLowerCase().includes(q) ||
+          row.domain.toLowerCase().includes(q) ||
+          row.display_name.toLowerCase().includes(q) ||
+          row.description.toLowerCase().includes(q),
+      );
+    }
+    const sorted = [...rows];
+    if (sorting.length > 0) {
+      const { id, desc } = sorting[0]!;
+      sorted.sort((a, b) => compareCapabilityKeys(a, b, id, desc));
+    } else {
+      sorted.sort((a, b) => compareCapabilityKeys(a, b, "sort_order", false));
+    }
+    return sorted;
+  }, [keysQuery.data, protocolScope, search, sorting]);
+
+  const total = filteredRows.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount, setPage]);
+
+  const items = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [filteredRows, page]);
+
+  const chips = useMemo((): FilterChip[] => {
+    const out: FilterChip[] = [];
+    if (protocolScope) {
+      out.push({
+        id: `protocol:${protocolScope}`,
+        label: `协议 · ${protocolScopeLabel(protocolScope as ProtocolScope)}`,
+        onRemove: () => {
+          setProtocolScope("");
+          setPage(1);
+        },
+      });
+    }
+    if (search) {
+      out.push({
+        id: "search",
+        label: `搜索 · ${search}`,
+        onRemove: () => {
+          setSearchInput("");
+          setPage(1);
+        },
+      });
+    }
+    return out;
+  }, [protocolScope, search, setPage]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteCapabilityKey,
@@ -87,7 +193,7 @@ export function CapabilityDictionaryTab() {
 
   const columns = useMemo(
     () =>
-      capabilityDictionaryColumns({
+      capabilityKeyOsColumns({
         onEdit: (row) => {
           setEditing(row);
           setFormOpen(true);
@@ -107,66 +213,67 @@ export function CapabilityDictionaryTab() {
     if (!open) setEditing(null);
   }
 
+  function resetFilters() {
+    setProtocolScope("");
+    setSearchInput("");
+    setPage(1);
+  }
+
+  if (keysQuery.isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>加载失败</AlertTitle>
+        <AlertDescription>{apiErrorMessage(keysQuery.error)}</AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">
-          能力 key 字典是合法 key 的唯一真源；新增能力只需在此维护，无需改代码。
-        </p>
-        <Button size="sm" onClick={openCreate}>
-          <PlusIcon data-icon="inline-start" />
-          新建 key
-        </Button>
-      </div>
-
-      {keysQuery.isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription>{apiErrorMessage(keysQuery.error)}</AlertDescription>
-        </Alert>
-      ) : keysQuery.isPending ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {(
-              [
-                ["all", "全部"],
-                ["shared", "通用"],
-                ["openai", "OpenAI"],
-                ["anthropic", "Anthropic"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button
-                key={value}
-                type="button"
-                size="sm"
-                variant={scopeFilter === value ? "default" : "outline"}
-                onClick={() => setScopeFilter(value)}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-
-          <ConfigurableDataTable
-            storageKey="capability:dictionary"
-            data={rows}
-            columns={columns}
-            columnLabels={CAPABILITY_DICTIONARY_COLUMN_LABELS}
-            layoutMode="content"
-            bordered
-            getRowId={(row) => row.key}
-            toolbarStart={
-              <span className="text-muted-foreground text-xs">共 {rows.length} 项</span>
-            }
+    <>
+      <ServerDataTable
+        storageKey="capability:dictionary"
+        columns={columns}
+        data={items}
+        columnLabels={CAPABILITY_KEY_OS_COLUMN_LABELS}
+        total={total}
+        page={page}
+        pageCount={pageCount}
+        onPageChange={setPage}
+        pageSize={PAGE_SIZE}
+        sorting={sorting}
+        onSortingChange={setSorting}
+        getRowId={(row) => row.key}
+        loading={keysQuery.isPending}
+        refetching={keysQuery.isFetching && !keysQuery.isPending}
+        emptyMessage="暂无能力 key"
+        searchValue={searchInput}
+        onSearchChange={(v) => {
+          setSearchInput(v);
+          setPage(1);
+        }}
+        searchPlaceholder="搜索 key / 展示名 / 描述"
+        chips={chips}
+        onClearChips={resetFilters}
+        pinnedColumnId="key"
+        toolbarLeading={
+          <Button size="sm" onClick={openCreate}>
+            <PlusIcon data-icon="inline-start" />
+            新建 key
+          </Button>
+        }
+        toolbarFilters={
+          <FacetFilterButton
+            label="协议归属"
+            multiple={false}
+            value={protocolScope ? [protocolScope] : []}
+            options={PROTOCOL_SCOPE_OPTIONS}
+            onChange={(v) => {
+              setProtocolScope(v[0] ?? "");
+              setPage(1);
+            }}
           />
-        </div>
-      )}
+        }
+      />
 
       <CapabilityKeyFormDialog
         key={editing?.key ?? "new"}
@@ -197,7 +304,7 @@ export function CapabilityDictionaryTab() {
           if (pendingDelete) deleteMutation.mutate(pendingDelete.key);
         }}
       />
-    </div>
+    </>
   );
 }
 

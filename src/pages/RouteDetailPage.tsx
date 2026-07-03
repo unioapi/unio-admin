@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { getRoute } from "@/lib/api/routes";
-import { getRouteOpsDetail, getRoutesOpsTable } from "@/lib/api/routesOps";
+import { getRouteOpsDetail } from "@/lib/api/routesOps";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { DetailPageHeader } from "@/components/common/DetailPageHeader";
@@ -11,28 +11,22 @@ import {
   RouteOverviewStatsSkeleton,
 } from "@/components/routes/RouteOverviewStats";
 import { RouteDetailActions } from "@/components/routes/RouteDetailActions";
+import { ROUTE_MODE_LABEL, routePoolKindLabel } from "@/lib/routes/display";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-const MODE_LABEL: Record<string, string> = {
-  cheapest: "经济",
-  stable: "稳定",
-  fixed: "固定",
-};
 
 export function RouteDetailPage() {
   const { routeId: routeIdParam } = useParams();
   const routeId = Number(routeIdParam);
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
   const rangeQuery = { ...params, range: value.preset };
-
-  if (!Number.isFinite(routeId) || routeId <= 0) {
-    return <Navigate to="/routes" replace />;
-  }
+  const validId = Number.isFinite(routeId) && routeId > 0;
 
   const routeQ = useQuery({
     queryKey: ["route", routeId],
     queryFn: () => getRoute(routeId),
+    enabled: validId,
   });
 
   const opsDetail = useQuery({
@@ -42,33 +36,27 @@ export function RouteDetailPage() {
     enabled: routeQ.isSuccess,
   });
 
-  const opsRow = useQuery({
-    queryKey: ["routes", routeId, "ops-row", rangeQuery],
-    queryFn: async () => {
-      const res = await getRoutesOpsTable({ ...rangeQuery, page: 1, page_size: 500 });
-      return res.items.find((r) => r.id === routeId) ?? null;
-    },
-    enabled: routeQ.isSuccess,
-  });
+  if (!validId) {
+    return <Navigate to="/routes" replace />;
+  }
 
   const route = routeQ.data ?? null;
   const entityLoading = routeQ.isPending;
   const notFound = routeQ.isSuccess && route == null;
+  const detail = opsDetail.data;
 
-  const overviewSummary =
-    opsDetail.isPending && !opsDetail.data ? (
-      <RouteOverviewStatsSkeleton />
-    ) : opsDetail.data ? (
-      <RouteOverviewStats detail={opsDetail.data} />
-    ) : null;
+  const overviewSummary = opsDetail.isError ? (
+    <p className="text-destructive text-sm">概览加载失败：{(opsDetail.error as Error).message}</p>
+  ) : opsDetail.isPending && !opsDetail.data ? (
+    <RouteOverviewStatsSkeleton />
+  ) : detail ? (
+    <RouteOverviewStats detail={detail} />
+  ) : null;
 
   const subtitle = route ? (
     <>
-      {MODE_LABEL[route.mode] ?? route.mode} ·{" "}
-      {route.pool_kind === "all" ? "全量动态" : "手挑渠道"}
-      {opsRow.data
-        ? ` · 绑定 用户 ${opsRow.data.bound_users} / Key ${opsRow.data.bound_keys}`
-        : ""}
+      {ROUTE_MODE_LABEL[route.mode] ?? route.mode} ·{" "}
+      {routePoolKindLabel(route.pool_kind, route.mode)}
       {route.description ? ` · ${route.description}` : ""}
     </>
   ) : null;
@@ -82,11 +70,9 @@ export function RouteDetailPage() {
         badge={
           route ? (
             <>
-              <Badge variant={route.status === "enabled" ? "default" : "outline"}>
-                {route.status === "enabled" ? "启用" : "停用"}
-              </Badge>
-              {route.status === "enabled" && opsRow.data ? (
-                opsRow.data.serviceable ? (
+              <StatusBadge status={route.status} />
+              {detail && route.status === "enabled" ? (
+                detail.serviceable ? (
                   <Badge variant="default">可服务</Badge>
                 ) : (
                   <Badge variant="destructive">异常</Badge>

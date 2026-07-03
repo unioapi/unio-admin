@@ -10,7 +10,7 @@ import {
 import { ModelFormDialog } from "@/components/models/ModelFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useOpsServerTable } from "@/hooks/useOpsServerTable";
+import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
 
 export function ModelsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,9 +30,11 @@ export function ModelsPage() {
     }
   }, [qParam, setSearchParams]);
 
-  const table = useOpsServerTable({
+  const table = useServerTable({
     queryKey: "models",
-    fetch: getModelsOpsTable,
+    fetch: (p) => getModelsOpsTable({ range: "all", ...p }),
+    defaultSort: { id: "name", desc: false },
+    statusOptions: ENTITY_STATUS_OPTIONS,
   });
 
   if (searchParams.get("tab") === "catalog") {

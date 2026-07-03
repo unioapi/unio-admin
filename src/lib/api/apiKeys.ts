@@ -56,12 +56,14 @@ export async function createApiKey(
 }
 
 // 更新：disabled 启停；spend_limit 设上限（""=清除上限/改为不限额，省略=不变）；
-// route_id 换绑线路（正整数；省略=不变，不可清除）。限流已归线路（DEC-027），不在此设置。
+// route_id 换绑线路（正整数；省略=不变，不可清除）；name / expires_at 可更新（expires_at: null=永不过期）。
 export interface UpdateApiKeyInput {
   id: number;
   disabled?: boolean;
   spendLimit?: string;
   routeId?: number;
+  name?: string;
+  expiresAt?: string | null;
 }
 
 export async function updateApiKey(input: UpdateApiKeyInput): Promise<ApiKey> {
@@ -69,6 +71,8 @@ export async function updateApiKey(input: UpdateApiKeyInput): Promise<ApiKey> {
   if (input.disabled !== undefined) body.disabled = input.disabled;
   if (input.spendLimit !== undefined) body.spend_limit = input.spendLimit;
   if (input.routeId !== undefined) body.route_id = input.routeId;
+  if (input.name !== undefined) body.name = input.name;
+  if (input.expiresAt !== undefined) body.expires_at = input.expiresAt;
   const res = await api.patch<{ data: ApiKey }>(
     `/admin/v1/api-keys/${input.id}`,
     body,

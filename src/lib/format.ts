@@ -43,26 +43,23 @@ export function formatInt(n: number | null | undefined): string {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
-// 紧凑计数：1.2K / 3.4M。
+// 紧凑计数：1.2K / 3.4M（含负数按量级紧凑）。
 export function formatCompact(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return DASH;
-  if (n < 1000) return String(n);
+  if (Math.abs(n) < 1000) return String(n);
   return new Intl.NumberFormat("en-US", {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(n);
 }
 
-/** OpenStatus data-table 底栏计数（纯 number，无空值）。 */
-export function formatCompactNumber(value: number): string {
-  if (value >= 100 && value < 1000) return value.toString();
-  if (value >= 1000 && value < 1_000_000) {
-    return `${(value / 1000).toFixed(1)}k`;
-  }
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  return value.toString();
+// 紧凑 token 规模：99.99K / 1.23M / 4.56B。
+export function formatTokenScale(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return DASH;
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(2)}K`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  return `${(n / 1_000_000_000).toFixed(2)}B`;
 }
 
 // 比例 [0,1] → 百分比文案。
@@ -124,6 +121,12 @@ export function formatRelativeTime(rfc: string | null | undefined): string {
   return new Date(rfc).toLocaleDateString();
 }
 
+// 图表刻度 / 错误明细时间轴：M/D HH:mm（本地时区）。
+export function formatChartTs(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 // 时分秒，用于「最后刷新」。
 export function formatClock(d: number | Date): string {
   return new Date(d).toLocaleTimeString([], {
@@ -131,21 +134,6 @@ export function formatClock(d: number | Date): string {
     minute: "2-digit",
     second: "2-digit",
   });
-}
-
-// OpenStatus data-table 日期列（保留兼容）。
-export function formatDate(value: Date | string) {
-  return formatDateTime(String(value));
-}
-
-export function formatLatency(ms: number): string {
-  return formatLatencyMs(ms) === DASH ? `${ms}ms` : formatLatencyMs(ms)!;
-}
-
-export function formatMilliseconds(value: number) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(
-    value,
-  );
 }
 
 // maskSecret 脱敏展示密钥：保留前缀与后缀，中间以 *** 替代。

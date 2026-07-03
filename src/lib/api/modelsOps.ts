@@ -1,7 +1,7 @@
 import { api } from "@/lib/api/client";
 import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
-import type { LatencyStats, RangeQuery } from "@/lib/api/dashboard";
+import type { RangeQuery } from "@/lib/api/dashboard";
 
 // §3.4 模型商品控制台只读运维聚合（与后端 models_ops DTO 对齐）。
 
@@ -29,17 +29,13 @@ export interface ModelOpsRow {
   owned_by: string;
   status: string;
   created_at: string;
+  max_output_tokens: number | null;
+  context_window_tokens: number | null;
   bindings_total: number;
   bindings_available: number;
+  capabilities_declared_count: number;
   has_price: boolean;
   sellable: boolean;
-  request_total: number;
-  request_succeeded: number;
-  success_rate: number;
-  latency: LatencyStats;
-  revenue_usd: string;
-  margin_usd: string;
-  margin_rate: number;
   // 基准售价（DEC-026 model_prices，每 1M tokens）；无基准价时为 null。
   base_currency: string | null;
   base_uncached_input_price: string | null;
@@ -54,12 +50,20 @@ export interface ModelOpsDetail {
   request_total: number;
   request_succeeded: number;
   success_rate: number;
+  latency_avg: number;
   latency_p50: number;
   latency_p95: number;
   output_tokens: number;
   input_tokens: number;
   cache_read_rate: number;
   tps: number;
+  revenue_usd: string;
+  margin_usd: string;
+  margin_rate: number;
+  sellable: boolean;
+  bindings_total: number;
+  bindings_available: number;
+  model_status: string;
 }
 
 export interface ModelOpsChannel {

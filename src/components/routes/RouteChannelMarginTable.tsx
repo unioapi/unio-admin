@@ -111,12 +111,17 @@ export function RouteChannelMarginTable({
   onToggleChannel,
   priceRatio,
   fixedSingle,
+  readOnly = false,
+  tableMaxHeight = "max-h-56",
 }: {
   channels: ChannelOption[];
   channelIds: number[];
-  onToggleChannel: (id: number) => void;
+  onToggleChannel?: (id: number) => void;
   priceRatio: string;
   fixedSingle?: boolean;
+  /** 详情页只读：隐藏渠道勾选，固定展示 channelIds。 */
+  readOnly?: boolean;
+  tableMaxHeight?: string;
 }) {
   const ratio = parseRouteRatio(priceRatio);
 
@@ -149,34 +154,36 @@ export function RouteChannelMarginTable({
 
   return (
     <div className="overflow-hidden rounded-md border">
-      <div className="bg-muted/20 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto border-b p-2">
-        {channels.length === 0 ? (
-          <p className="text-muted-foreground p-1 text-xs">暂无渠道</p>
-        ) : (
-          channels.map((c) => {
-            const checked = channelIds.includes(c.id);
-            return (
-              <label
-                key={c.id}
-                className={cn(
-                  "hover:bg-muted/60 flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-                  checked && "border-primary/40 bg-primary/5",
-                )}
-              >
-                <input
-                  type="checkbox"
-                  className="size-3.5"
-                  checked={checked}
-                  onChange={() => onToggleChannel(c.id)}
-                />
-                <span className="max-w-[140px] truncate font-medium">{c.name}</span>
-              </label>
-            );
-          })
-        )}
-      </div>
+      {!readOnly ? (
+        <div className="bg-muted/20 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto border-b p-2">
+          {channels.length === 0 ? (
+            <p className="text-muted-foreground p-1 text-xs">暂无渠道</p>
+          ) : (
+            channels.map((c) => {
+              const checked = channelIds.includes(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className={cn(
+                    "hover:bg-muted/60 flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                    checked && "border-primary/40 bg-primary/5",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-3.5"
+                    checked={checked}
+                    onChange={() => onToggleChannel?.(c.id)}
+                  />
+                  <span className="max-w-[140px] truncate font-medium">{c.name}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      ) : null}
 
-      <div className="max-h-56 overflow-auto">
+      <div className={cn("overflow-auto", tableMaxHeight)}>
         {loading ? (
           <Skeleton className="m-2 h-32 w-[calc(100%-1rem)] rounded-md" />
         ) : channelIds.length === 0 ? (

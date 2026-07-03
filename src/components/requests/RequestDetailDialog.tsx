@@ -6,7 +6,7 @@ import {
   type RequestDetail,
 } from "@/lib/api/requests";
 import type { BillingException, LedgerEntry } from "@/lib/api/ledger";
-import { billingExceptionEventLabel } from "@/components/ops-tables/ledger-columns";
+import { billingExceptionEventLabel } from "@/components/detail-tables/ledger-columns";
 import { formatDateTime, trimDecimal } from "@/lib/format";
 import {
   Dialog,
@@ -191,6 +191,21 @@ function DetailContent({ detail }: { detail: RequestDetail }) {
   );
 }
 
+const FAULT_PARTY_META: Record<
+  string,
+  { label: string; variant: "outline" | "destructive" | "secondary" }
+> = {
+  upstream: { label: "上游故障", variant: "destructive" },
+  client: { label: "客户端", variant: "secondary" },
+  platform: { label: "平台", variant: "destructive" },
+};
+
+function FaultPartyBadge({ party }: { party: string }) {
+  const meta = FAULT_PARTY_META[party];
+  if (!meta) return null;
+  return <Badge variant={meta.variant}>{meta.label}</Badge>;
+}
+
 function AttemptRow({ attempt }: { attempt: Attempt }) {
   return (
     <li className="flex flex-col gap-1 p-3 text-sm">
@@ -199,6 +214,7 @@ function AttemptRow({ attempt }: { attempt: Attempt }) {
           #{attempt.attempt_index}
         </Badge>
         <RequestStatusBadge status={attempt.status} />
+        {attempt.fault_party ? <FaultPartyBadge party={attempt.fault_party} /> : null}
         <span className="text-muted-foreground">
           provider {attempt.provider_id} · channel {attempt.channel_id} ·{" "}
           {attempt.adapter_key}

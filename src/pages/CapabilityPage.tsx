@@ -9,13 +9,6 @@ import { listAllModels, type Model } from "@/lib/api/models";
 import { apiErrorMessage } from "@/lib/api/client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -56,33 +49,25 @@ export function CapabilityPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle>能力</CardTitle>
-        <CardDescription>
-          维护 capability_keys 字典（合法 key 唯一真源），以及 adapter 能力画像物化。
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs
-          value={pageTab}
-          onValueChange={(v) => setPageTab(v as CapabilityPageTab)}
-        >
-          <TabsList>
-            <TabsTrigger value="dictionary">能力字典</TabsTrigger>
-            <TabsTrigger value="adapter">Adapter 画像</TabsTrigger>
-          </TabsList>
+    <div className="flex flex-col gap-4">
+      <Tabs
+        value={pageTab}
+        onValueChange={(v) => setPageTab(v as CapabilityPageTab)}
+      >
+        <TabsList>
+          <TabsTrigger value="dictionary">能力字典</TabsTrigger>
+          <TabsTrigger value="adapter">Adapter 画像</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="dictionary" className="pt-4">
-            <CapabilityDictionaryTab />
-          </TabsContent>
+        <TabsContent value="dictionary" className="pt-4">
+          <CapabilityDictionaryTab />
+        </TabsContent>
 
-          <TabsContent value="adapter" className="pt-4">
-            <AdapterTab />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+        <TabsContent value="adapter" className="pt-4">
+          <AdapterTab />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
 

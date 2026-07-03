@@ -50,11 +50,16 @@ interface FieldErrors {
 export function UserBalanceDialog({
   user,
   children,
+  open: openControlled,
+  onOpenChange: onOpenChangeControlled,
 }: {
   user: User;
-  children: ReactNode;
+  children?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openControlled ?? openInternal;
   const [direction, setDirection] = useState<AdjustDirection>("credit");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("USD");
@@ -81,6 +86,7 @@ export function UserBalanceDialog({
       }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["user", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["ledger-entries"] });
       toast.success(
         `${direction === "credit" ? "已充值" : "已扣款"} ${trimDecimal(result.amount)} ${result.currency}，余额 ${trimDecimal(result.balance_after)}`,
@@ -95,7 +101,11 @@ export function UserBalanceDialog({
   });
 
   function handleOpenChange(next: boolean) {
-    setOpen(next);
+    if (onOpenChangeControlled) {
+      onOpenChangeControlled(next);
+    } else {
+      setOpenInternal(next);
+    }
     if (next) {
       setDirection("credit");
       setAmount("");
@@ -129,7 +139,7 @@ export function UserBalanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>余额管理</DialogTitle>

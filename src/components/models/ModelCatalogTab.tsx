@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CloudDownloadIcon, LibraryIcon } from "lucide-react";
 import { listCatalog } from "@/lib/api/modelCatalog";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { ServerDataTable } from "@/components/data-table";
+import { ServerDataTable } from "@/components/openstatus-table";
 import {
   MODEL_CATALOG_COLUMN_LABELS,
   modelCatalogColumns,

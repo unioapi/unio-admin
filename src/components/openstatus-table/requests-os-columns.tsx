@@ -21,7 +21,7 @@ export const REQUEST_OS_COLUMN_LABELS: Record<string, string> = {
   model: "模型",
   status: "状态",
   stream: "流式",
-  user: "用户",
+  user_id: "用户",
   created_at: "创建时间",
   action: "操作",
 };
@@ -35,6 +35,7 @@ export function requestOsColumns(
       accessorKey: "request_id",
       header: ({ column }) => <ColumnHeader column={column} title="请求 ID" />,
       enableHiding: false,
+      enableSorting: false,
       cell: ({ row }) => (
         <TruncateCell className="font-mono text-xs" text={row.original.request_id} />
       ),
@@ -62,7 +63,7 @@ export function requestOsColumns(
       ),
     },
     {
-      id: "user",
+      id: "user_id",
       accessorKey: "user_id",
       header: ({ column }) => <ColumnHeader column={column} title="用户" />,
       cell: ({ row }) => (

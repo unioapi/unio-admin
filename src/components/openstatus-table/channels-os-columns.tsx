@@ -2,24 +2,25 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CopyIcon } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { listChannelModels } from "@/lib/api/channelModels";
 import { listChannelPrices, pickCurrentChannelPrice } from "@/lib/api/channelPrices";
 import type { ChannelOpsRow } from "@/lib/api/channelsOps";
-import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
-import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
+import {
+  ChannelLastTestCell,
+  channelLastTestAutoSizeLabel,
+} from "@/components/channels/ChannelLastTest";
+import { RateLimitSummaryCell } from "@/components/rate-limit/RateLimitSummaryCell";
 import { ChannelRowActions } from "@/components/channels/ChannelRowActions";
+import { SecretCopyCell } from "@/components/common/SecretCopyCell";
 import {
   formatDateTime,
   formatInt,
   formatLatencyMs,
-  maskSecret,
   trimDecimal,
 } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
   HoverCard,
   HoverCardContent,
@@ -36,8 +37,7 @@ export const CHANNEL_OS_COLUMN_LABELS: Record<string, string> = {
   rate_limit: "限流",
   bound_models: "模型",
   timeout: "超时",
-  success_rate: "成功率",
-  latency: "平均延迟",
+  last_test: "检测",
   created_at: "创建时间",
   action: "操作",
 };
@@ -128,55 +128,6 @@ function BoundModelsCell({
   );
 }
 
-function ChannelCredentialCell({ credential }: { credential: string }) {
-  async function copy() {
-    if (!credential) return;
-    try {
-      await navigator.clipboard.writeText(credential);
-      toast.success("已复制 API 密钥");
-    } catch {
-      toast.error("复制失败，请手动选择复制");
-    }
-  }
-
-  if (!credential) {
-    return <span className="text-muted-foreground text-xs">—</span>;
-  }
-
-  return (
-    <div
-      className="flex min-w-0 items-center gap-0.5"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <HoverCard openDelay={120} closeDelay={80}>
-        <HoverCardTrigger asChild>
-          <span
-            className={cn(
-              "min-w-0 truncate font-mono text-xs",
-              "cursor-default underline decoration-dotted decoration-muted-foreground/40 underline-offset-2",
-            )}
-          >
-            {maskSecret(credential)}
-          </span>
-        </HoverCardTrigger>
-        <HoverCardContent align="start" className="w-auto max-w-sm">
-          <p className="text-muted-foreground mb-1.5 text-xs font-medium">完整 API 密钥</p>
-          <code className="break-all font-mono text-xs">{credential}</code>
-        </HoverCardContent>
-      </HoverCard>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="复制 API 密钥"
-        onClick={copy}
-      >
-        <CopyIcon />
-      </Button>
-    </div>
-  );
-}
-
 function ChannelProtocolAdapterCell({
   protocol,
   adapterKey,
@@ -195,18 +146,6 @@ function ChannelProtocolAdapterCell({
   );
 }
 
-function formatRpmLimit(v: number | null): string {
-  if (v == null) return "默认";
-  if (v === 0) return "不限";
-  return formatInt(v);
-}
-
-function rateLimitDetail(v: number | null): string {
-  if (v == null) return "继承全局默认";
-  if (v === 0) return "不限";
-  return formatInt(v);
-}
-
 function ChannelRateLimitCell({
   rpm,
   tpm,
@@ -216,37 +155,13 @@ function ChannelRateLimitCell({
   tpm: number | null;
   rpd: number | null;
 }) {
-  if (rpm == null && tpm == null && rpd == null) {
-    return <span className="text-muted-foreground text-xs">默认</span>;
-  }
   return (
-    <HoverCard openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>
-        <span className="cursor-default text-xs tabular-nums underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
-          {formatRpmLimit(rpm)}
-        </span>
-      </HoverCardTrigger>
-      <HoverCardContent align="start" className="w-64">
-        <p className="text-muted-foreground mb-1.5 text-xs font-medium">渠道级限流</p>
-        <ul className="flex flex-col gap-1 text-xs">
-          <li className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">每分钟请求 RPM</span>
-            <span className="tabular-nums">{rateLimitDetail(rpm)}</span>
-          </li>
-          <li className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">每分钟 Token TPM</span>
-            <span className="tabular-nums">{rateLimitDetail(tpm)}</span>
-          </li>
-          <li className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">每日请求 RPD</span>
-            <span className="tabular-nums">{rateLimitDetail(rpd)}</span>
-          </li>
-        </ul>
-        <p className="text-muted-foreground mt-1.5 text-[11px]">
-          留空继承全局默认，0 表示不限。
-        </p>
-      </HoverCardContent>
-    </HoverCard>
+    <RateLimitSummaryCell
+      rpm={rpm}
+      tpm={tpm}
+      rpd={rpd}
+      scopeLabel="渠道级限流"
+    />
   );
 }
 
@@ -273,11 +188,9 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       accessorKey: "status",
       header: ({ column }) => <ColumnHeader column={column} title="状态" />,
       enableHiding: false,
-      meta: { label: "状态", fixedWidth: true },
+      meta: { label: "状态" },
       cell: ({ row }) => (
-        <Badge variant={row.original.status === "enabled" ? "default" : "outline"}>
-          {row.original.status === "enabled" ? "启用" : "停用"}
-        </Badge>
+        <StatusBadge status={row.original.status} />
       ),
     },
     {
@@ -285,6 +198,12 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       accessorFn: (r) => `${r.protocol}/${r.adapter_key}`,
       header: ({ column }) => <ColumnHeader column={column} title="协议/Adapter" />,
       enableSorting: false,
+      meta: {
+        autoSizeValue: (row: ChannelOpsRow) => {
+          const showAdapter = row.adapter_key && row.adapter_key !== row.protocol;
+          return showAdapter ? `${row.protocol} ${row.adapter_key}` : row.protocol;
+        },
+      },
       cell: ({ row }) => (
         <ChannelProtocolAdapterCell
           protocol={row.original.protocol}
@@ -297,12 +216,32 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       accessorKey: "credential",
       header: ({ column }) => <ColumnHeader column={column} title="凭证" />,
       enableSorting: false,
-      cell: ({ row }) => <ChannelCredentialCell credential={row.original.credential} />,
+      cell: ({ row }) => (
+        <SecretCopyCell
+          value={row.original.credential}
+          tooltipTitle="完整 API 密钥"
+          copyAriaLabel="复制 API 密钥"
+          copyMessages={{
+            success: "已复制 API 密钥",
+            empty: "无可复制内容",
+            failed: "复制失败，请手动选择复制",
+          }}
+        />
+      ),
     },
     {
       id: "rate_limit",
       header: ({ column }) => <ColumnHeader column={column} title="限流" />,
       enableSorting: false,
+      meta: {
+        autoSizeValue: (row: ChannelOpsRow) => {
+          if (row.rpm_limit == null && row.tpm_limit == null && row.rpd_limit == null) {
+            return "默认";
+          }
+          if (row.rpm_limit === 0) return "不限";
+          return formatInt(row.rpm_limit ?? 0);
+        },
+      },
       cell: ({ row }) => (
         <ChannelRateLimitCell
           rpm={row.original.rpm_limit}
@@ -330,22 +269,23 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       cell: ({ row }) => <ChannelTimeoutCell timeoutMs={row.original.timeout_ms} />,
     },
     {
-      id: "success_rate",
-      accessorKey: "success_rate",
-      header: ({ column }) => <ColumnHeader column={column} title="成功率" />,
+      id: "last_test",
+      accessorFn: (r) => (r.last_test_ok === null ? -1 : r.last_test_ok ? 1 : 0),
+      header: () => <span className="text-muted-foreground">检测</span>,
+      enableSorting: false,
+      meta: {
+        autoSizeValue: (row: ChannelOpsRow) => channelLastTestAutoSizeLabel(row),
+      },
       cell: ({ row }) => (
-        <AttemptSuccessRateCell
-          attemptTotal={row.original.attempt_total}
-          attemptSucceeded={row.original.attempt_succeeded}
-          successRate={row.original.success_rate}
+        <ChannelLastTestCell
+          info={{
+            last_tested_at: row.original.last_tested_at,
+            last_test_ok: row.original.last_test_ok,
+            last_test_latency_ms: row.original.last_test_latency_ms,
+            last_test_error: row.original.last_test_error,
+          }}
         />
       ),
-    },
-    {
-      id: "latency",
-      accessorFn: (r) => r.latency.avg,
-      header: ({ column }) => <ColumnHeader column={column} title="平均延迟" />,
-      cell: ({ row }) => <AttemptLatencyCell latency={row.original.latency} />,
     },
     {
       id: "created_at",

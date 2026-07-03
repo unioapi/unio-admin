@@ -1,9 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontalIcon } from "lucide-react";
-import { toast } from "sonner";
 import type { ApiKeyOpsRow } from "@/lib/api/customerOps";
 import type { ApiKey } from "@/lib/api/apiKeys";
-import { formatCompact, formatRelativeTime, formatUSD } from "@/lib/format";
+import { formatCompact, formatDateTime, formatRelativeTime, formatUSD } from "@/lib/format";
+import { formatRouteRatioInput } from "@/components/routes/route-pricing";
+import { copySecretToClipboard, SecretCopyCell } from "@/components/common/SecretCopyCell";
+import { ApiKeyFormDialog } from "@/components/customer/ApiKeyFormDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,23 +14,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ApiKeyRouteDialog } from "@/components/customer/ApiKeyRouteDialog";
-import { ApiKeySpendLimitDialog } from "@/components/customer/ApiKeySpendLimitDialog";
 import { ColumnHeader } from "./column-header";
 
 export const API_KEY_OS_COLUMN_LABELS: Record<string, string> = {
-  name: "Key",
+  name: "名称",
+  key: "API Key",
   status: "状态",
   route_name: "线路",
   spend_limit: "限额",
   spent: "已用",
+  expires_at: "过期时间",
   requests: "请求",
   consumption: "消费",
   last_used: "最近",
   action: "操作",
 };
 
-// budgetUsagePercent 计算费用上限使用率（向下取整百分比）；未设上限返回 null（不展示比例）。
 function budgetUsagePercent(
   spendLimit: string | null,
   spentTotal: string,
@@ -40,18 +41,14 @@ function budgetUsagePercent(
   return Math.floor((spent / limit) * 100);
 }
 
-// copyPlaintextKey 复制完整明文 key（产品决策：明文留存，可多次复制）。
-async function copyPlaintextKey(row: ApiKeyOpsRow) {
-  if (!row.key_plaintext) {
-    toast.error("该 Key 无可复制明文（历史 Key）");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(row.key_plaintext);
-    toast.success("已复制完整 Key 到剪贴板");
-  } catch {
-    toast.error("复制失败，请手动选择复制");
-  }
+const API_KEY_COPY_MESSAGES = {
+  success: "已复制完整 Key 到剪贴板",
+  empty: "该 Key 无可复制明文（历史 Key）",
+  failed: "复制失败，请手动选择复制",
+} as const;
+
+function copyPlaintextKey(row: ApiKeyOpsRow) {
+  return copySecretToClipboard(row.key_plaintext, API_KEY_COPY_MESSAGES);
 }
 
 function toApiKey(row: ApiKeyOpsRow): ApiKey {
@@ -76,6 +73,38 @@ function toApiKey(row: ApiKeyOpsRow): ApiKey {
   };
 }
 
+function ApiKeyRouteCell({ row }: { row: ApiKeyOpsRow }) {
+  const ratio = formatRouteRatioInput(row.route_price_ratio) || "1";
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-xs">{row.route_name || "—"}</span>
+      {row.route_name ? (
+        <Badge variant="outline" className="shrink-0 px-1.5 py-0 tabular-nums text-[10px] font-normal">
+          ×{ratio}
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
+function ApiKeyExpiresCell({ row }: { row: ApiKeyOpsRow }) {
+  if (!row.expires_at) {
+    return <span className="text-muted-foreground text-xs">永不过期</span>;
+  }
+  const expired = row.status === "expired";
+  return (
+    <span
+      className={
+        expired
+          ? "text-destructive text-xs tabular-nums"
+          : "text-muted-foreground text-xs tabular-nums"
+      }
+    >
+      {formatDateTime(row.expires_at)}
+    </span>
+  );
+}
+
 export function apiKeyOsColumns(handlers: {
   onToggle: (row: ApiKeyOpsRow) => void;
   onRevoke: (row: ApiKeyOpsRow) => void;
@@ -85,15 +114,30 @@ export function apiKeyOsColumns(handlers: {
     {
       id: "name",
       accessorKey: "name",
-      header: ({ column }) => <ColumnHeader column={column} title="Key" />,
+      header: ({ column }) => <ColumnHeader column={column} title="名称" />,
       enableHiding: false,
       cell: ({ row }) => (
-        <>
-          <div className="truncate font-medium">{row.original.name}</div>
-          <div className="text-muted-foreground truncate font-mono text-xs">
-            {row.original.key_prefix}…
-          </div>
-        </>
+        <span className="truncate font-medium">{row.original.name}</span>
+      ),
+    },
+    {
+      id: "key",
+      accessorKey: "key_prefix",
+      header: ({ column }) => <ColumnHeader column={column} title="API Key" />,
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <SecretCopyCell
+          value={row.original.key_plaintext}
+          display={
+            row.original.key_plaintext
+              ? undefined
+              : `${row.original.key_prefix}…`
+          }
+          tooltipTitle="完整 Key"
+          copyAriaLabel="复制 Key"
+          copyMessages={API_KEY_COPY_MESSAGES}
+        />
       ),
     },
     {
@@ -102,7 +146,7 @@ export function apiKeyOsColumns(handlers: {
       header: ({ column }) => <ColumnHeader column={column} title="状态" />,
       enableSorting: false,
       enableHiding: false,
-      meta: { label: "状态", fixedWidth: true },
+      meta: { label: "状态" },
       cell: ({ row }) => (
         <Badge variant={row.original.status === "active" ? "default" : "outline"}>
           {row.original.status}
@@ -114,7 +158,7 @@ export function apiKeyOsColumns(handlers: {
       accessorKey: "route_name",
       header: ({ column }) => <ColumnHeader column={column} title="线路" />,
       enableSorting: false,
-      cell: ({ row }) => <span className="text-xs">{row.original.route_name}</span>,
+      cell: ({ row }) => <ApiKeyRouteCell row={row.original} />,
     },
     {
       id: "spend_limit",
@@ -137,7 +181,6 @@ export function apiKeyOsColumns(handlers: {
         if (pct === null) {
           return <span className="text-xs tabular-nums">{used}</span>;
         }
-        // P2-1：软上限可视化——接近/达到上限即高亮告警（不加硬闸门，spend_limit 命中由后端自动停用）。
         const tone =
           pct >= 100
             ? "text-destructive font-medium"
@@ -150,6 +193,13 @@ export function apiKeyOsColumns(handlers: {
           </span>
         );
       },
+    },
+    {
+      id: "expires_at",
+      accessorFn: (r) => r.expires_at ?? "",
+      header: ({ column }) => <ColumnHeader column={column} title="过期时间" />,
+      enableSorting: false,
+      cell: ({ row }) => <ApiKeyExpiresCell row={row.original} />,
     },
     {
       id: "requests",
@@ -182,47 +232,50 @@ export function apiKeyOsColumns(handlers: {
       header: () => <span className="text-muted-foreground">操作</span>,
       enableHiding: false,
       enableSorting: false,
-      cell: ({ row }) => (
-        <div onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="更多">
-                <MoreHorizontalIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => copyPlaintextKey(row.original)}>
-                复制完整 Key
-              </DropdownMenuItem>
-              <ApiKeySpendLimitDialog apiKey={toApiKey(row.original)}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>调整限额</DropdownMenuItem>
-              </ApiKeySpendLimitDialog>
-              <ApiKeyRouteDialog apiKey={toApiKey(row.original)}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>换绑线路</DropdownMenuItem>
-              </ApiKeyRouteDialog>
-              {row.original.status !== "revoked" ? (
-                <DropdownMenuItem onSelect={() => handlers.onToggle(row.original)}>
-                  {row.original.status === "disabled" ? "启用" : "停用"}
+      cell: ({ row }) => {
+        const apiKey = toApiKey(row.original);
+        const revoked = row.original.status === "revoked";
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="更多">
+                  <MoreHorizontalIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => { void copyPlaintextKey(row.original); }}>
+                  复制完整 Key
                 </DropdownMenuItem>
-              ) : null}
-              {row.original.status !== "revoked" ? (
+                {!revoked ? (
+                  <ApiKeyFormDialog apiKey={apiKey}>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>编辑</DropdownMenuItem>
+                  </ApiKeyFormDialog>
+                ) : null}
+                {!revoked ? (
+                  <DropdownMenuItem onSelect={() => handlers.onToggle(row.original)}>
+                    {row.original.status === "disabled" ? "启用" : "停用"}
+                  </DropdownMenuItem>
+                ) : null}
+                {!revoked ? (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => handlers.onRevoke(row.original)}
+                  >
+                    吊销
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() => handlers.onRevoke(row.original)}
+                  onSelect={() => handlers.onDelete(row.original)}
                 >
-                  吊销
+                  删除
                 </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => handlers.onDelete(row.original)}
-              >
-                删除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
     },
   ];
 }

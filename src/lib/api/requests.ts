@@ -44,6 +44,8 @@ export interface Attempt {
   upstream_finish_reason: string | null;
   finish_class: string | null;
   status: string;
+  // 归因：upstream（上游/渠道）/ client（客户端）/ platform（平台）；成功或进行中为 null。
+  fault_party: string | null;
   upstream_status_code: number | null;
   upstream_request_id: string | null;
   error_code: string | null;

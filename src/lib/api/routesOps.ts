@@ -25,20 +25,14 @@ export interface RouteOpsRow {
   pool_kind: string;
   status: string;
   description: string;
-  // 客户售价倍率（DEC-026：客户售价 = 模型基准价 × 倍率）。
   price_ratio: string;
-  request_total: number;
-  request_succeeded: number;
-  success_rate: number;
-  fallback_total: number;
-  fallback_rate: number;
-  no_channel_total: number;
-  latency_p95: number;
-  bound_users: number;
+  rpm_limit: number | null;
+  tpm_limit: number | null;
+  rpd_limit: number | null;
+  created_at: string;
   bound_keys: number;
   pool_channels: number;
-  serviceable: boolean;
-  abnormal: boolean;
+  models_count: number;
 }
 
 export interface RouteOpsDetail {
@@ -50,6 +44,14 @@ export interface RouteOpsDetail {
   no_channel_total: number;
   latency_p50: number;
   latency_p95: number;
+  serviceable: boolean;
+  abnormal: boolean;
+  route_status: string;
+}
+
+export interface RouteOpsReachableModel {
+  model_id: string;
+  display_name: string;
 }
 
 export interface RouteOpsChannelPoolItem {
@@ -123,6 +125,13 @@ export async function getRoutesOpsTable(params: RoutesOpsTableParams): Promise<P
 
 export async function getRouteOpsDetail(id: number, params: RangeQuery): Promise<RouteOpsDetail> {
   const res = await api.get<{ data: RouteOpsDetail }>(`/admin/v1/routes/${id}/ops/detail`, { params });
+  return res.data.data;
+}
+
+export async function getRouteOpsReachableModels(id: number): Promise<RouteOpsReachableModel[]> {
+  const res = await api.get<{ data: RouteOpsReachableModel[] }>(
+    `/admin/v1/routes/${id}/ops/reachable-models`,
+  );
   return res.data.data;
 }
 

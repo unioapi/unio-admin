@@ -1,17 +1,15 @@
 import type { ColumnDef, FilterFn } from "@tanstack/react-table";
 import type { RouteOpsRow } from "@/lib/api/routesOps";
-import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
+import { RateLimitSummaryCell } from "@/components/rate-limit/RateLimitSummaryCell";
+import { RouteChannelsCell } from "@/components/routes/RouteChannelsCell";
+import { RouteModelsCountCell } from "@/components/routes/RouteModelsCountCell";
 import { RouteRowActions } from "@/components/routes/RouteRowActions";
-import { formatCompact, formatLatencyMs, formatPercent } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
+import { formatRouteRatioInput } from "@/components/routes/route-pricing";
+import { ROUTE_MODE_LABEL, routePoolKindLabel } from "@/lib/routes/display";
+import { formatDateTime } from "@/lib/format";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
-
-const MODE_LABEL: Record<string, string> = {
-  cheapest: "经济",
-  stable: "稳定",
-  fixed: "固定",
-};
 
 const facetedFilter: FilterFn<RouteOpsRow> = (row, columnId, filterValue) => {
   const selected = filterValue as string[] | undefined;
@@ -22,14 +20,14 @@ const facetedFilter: FilterFn<RouteOpsRow> = (row, columnId, filterValue) => {
 export const ROUTE_OS_COLUMN_LABELS: Record<string, string> = {
   name: "线路",
   status: "状态",
-  serviceable: "可服务",
   mode: "策略",
-  requests: "请求",
-  success_rate: "成功率",
-  latency: "P95 延迟",
-  fallback: "Fallback",
-  no_channel: "无可用渠道",
-  bindings: "绑定",
+  rate_limit: "限流",
+  pool_kind: "候选池",
+  channels: "渠道",
+  price_ratio: "倍率",
+  models: "模型",
+  bindings: "绑定数",
+  created_at: "创建时间",
   action: "操作",
 };
 
@@ -40,13 +38,15 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
       accessorKey: "name",
       header: ({ column }) => <ColumnHeader column={column} title="线路" />,
       enableHiding: false,
+      meta: {
+        autoSizeValue: (row: RouteOpsRow) =>
+          row.description ? `${row.name} ${row.description}` : row.name,
+      },
       cell: ({ row }) => (
         <TruncateCell
           text={row.original.name}
           className="font-medium"
-          subtext={`${row.original.pool_kind === "all" ? "全量动态" : "手挑渠道"}${
-            row.original.pool_channels > 0 ? ` · ${row.original.pool_channels} 渠道` : ""
-          }`}
+          subtext={row.original.description || undefined}
         />
       ),
     },
@@ -56,27 +56,10 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
       header: ({ column }) => <ColumnHeader column={column} title="状态" />,
       filterFn: facetedFilter,
       enableHiding: false,
-      meta: { label: "状态", fixedWidth: true },
+      meta: { label: "状态" },
       cell: ({ row }) => (
-        <Badge variant={row.original.status === "enabled" ? "default" : "outline"}>
-          {row.original.status === "enabled" ? "启用" : "停用"}
-        </Badge>
+        <StatusBadge status={row.original.status} />
       ),
-    },
-    {
-      id: "serviceable",
-      accessorFn: (r) => (r.status !== "enabled" ? "disabled" : r.serviceable ? "ok" : "bad"),
-      header: ({ column }) => <ColumnHeader column={column} title="可服务" />,
-      enableSorting: false,
-      meta: { label: "可服务", fixedWidth: true },
-      cell: ({ row }) => {
-        if (row.original.status !== "enabled") return <Badge variant="outline">停用</Badge>;
-        return row.original.serviceable ? (
-          <Badge variant="default">可服务</Badge>
-        ) : (
-          <Badge variant="destructive">异常</Badge>
-        );
-      },
     },
     {
       id: "mode",
@@ -84,66 +67,81 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
       header: ({ column }) => <ColumnHeader column={column} title="策略" />,
       filterFn: facetedFilter,
       cell: ({ row }) => (
-        <span className="text-xs">{MODE_LABEL[row.original.mode] ?? row.original.mode}</span>
+        <span className="text-xs">{ROUTE_MODE_LABEL[row.original.mode] ?? row.original.mode}</span>
       ),
     },
     {
-      id: "requests",
-      accessorKey: "request_total",
-      header: ({ column }) => <ColumnHeader column={column} title="请求" />,
+      id: "rate_limit",
+      header: () => <span className="text-muted-foreground">限流</span>,
+      enableSorting: false,
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatCompact(row.original.request_total)}</span>
-      ),
-    },
-    {
-      id: "success_rate",
-      accessorKey: "success_rate",
-      header: ({ column }) => <ColumnHeader column={column} title="成功率" />,
-      cell: ({ row }) => (
-        <AttemptSuccessRateCell
-          attemptTotal={row.original.request_total}
-          attemptSucceeded={row.original.request_succeeded}
-          successRate={row.original.success_rate}
+        <RateLimitSummaryCell
+          rpm={row.original.rpm_limit}
+          tpm={row.original.tpm_limit}
+          rpd={row.original.rpd_limit}
+          scopeLabel="线路级限流"
         />
       ),
     },
     {
-      id: "latency",
-      accessorKey: "latency_p95",
-      header: ({ column }) => <ColumnHeader column={column} title="P95 延迟" />,
+      id: "pool_kind",
+      accessorFn: (r) => routePoolKindLabel(r.pool_kind, r.mode),
+      header: () => <span className="text-muted-foreground">候选池</span>,
+      enableSorting: false,
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatLatencyMs(row.original.latency_p95)}</span>
+        <span className="text-xs">
+          {routePoolKindLabel(row.original.pool_kind, row.original.mode)}
+        </span>
       ),
     },
     {
-      id: "fallback",
-      accessorKey: "fallback_rate",
-      header: ({ column }) => <ColumnHeader column={column} title="Fallback" />,
+      id: "channels",
+      accessorFn: (r) => r.pool_channels,
+      header: () => <span className="text-muted-foreground">渠道</span>,
+      enableSorting: false,
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatPercent(row.original.fallback_rate)}</span>
+        <RouteChannelsCell
+          routeId={row.original.id}
+          poolKind={row.original.pool_kind}
+          count={row.original.pool_channels}
+        />
       ),
     },
     {
-      id: "no_channel",
-      accessorKey: "no_channel_total",
-      header: ({ column }) => <ColumnHeader column={column} title="无可用渠道" />,
-      cell: ({ row }) =>
-        row.original.no_channel_total > 0 ? (
-          <span className="text-destructive font-medium tabular-nums">
-            {row.original.no_channel_total}
-          </span>
-        ) : (
-          <span className="tabular-nums">0</span>
-        ),
+      id: "price_ratio",
+      accessorKey: "price_ratio",
+      header: () => <span className="text-muted-foreground">倍率</span>,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums text-xs">
+          {formatRouteRatioInput(row.original.price_ratio) || "1"}
+        </span>
+      ),
+    },
+    {
+      id: "models",
+      accessorFn: (r) => r.models_count,
+      header: () => <span className="text-muted-foreground">模型</span>,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <RouteModelsCountCell routeId={row.original.id} count={row.original.models_count} />
+      ),
     },
     {
       id: "bindings",
-      accessorFn: (r) => r.bound_users,
-      header: ({ column }) => <ColumnHeader column={column} title="绑定" />,
-      enableSorting: false,
+      accessorFn: (r) => r.bound_keys,
+      header: ({ column }) => <ColumnHeader column={column} title="绑定数" />,
       cell: ({ row }) => (
-        <span className="tabular-nums">
-          {row.original.bound_users}/{row.original.bound_keys}
+        <span className="text-muted-foreground tabular-nums">{row.original.bound_keys}</span>
+      ),
+    },
+    {
+      id: "created_at",
+      accessorKey: "created_at",
+      header: ({ column }) => <ColumnHeader column={column} title="创建时间" />,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {formatDateTime(row.original.created_at)}
         </span>
       ),
     },

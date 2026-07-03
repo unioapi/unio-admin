@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -7,11 +7,9 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceLine,
   XAxis,
   YAxis,
 } from "recharts";
-import { cn } from "@/lib/utils";
 import {
   ActivityIcon,
   CircleDollarSignIcon,
@@ -40,9 +38,7 @@ import {
   formatRatePointChange,
   formatRelativeChange,
   relativeChange,
-  type CompareIntent,
 } from "@/lib/compare";
-import { previousPeriodParams } from "@/lib/range";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
@@ -62,7 +58,7 @@ import { TokenHint, TokenTip } from "@/components/dashboard/TokenTip";
 import { TpsHint, TpsTip } from "@/components/dashboard/TpsTip";
 import { BreakdownSection } from "@/components/dashboard/breakdown-table/BreakdownSection";
 import { ConfigurableDataTable } from "@/components/data-table";
-import { topErrorsColumns } from "@/components/ops-tables/dashboard-errors-columns";
+import { topErrorsColumns } from "@/components/detail-tables/dashboard-errors-columns";
 import {
   BAD_CHANNELS_COLUMN_LABELS,
   badChannelsColumns,
@@ -100,25 +96,16 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-
-const CHART_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
-
-function fmtBucket(iso: string, interval: TimeseriesInterval): string {
-  const d = new Date(iso);
-  if (interval === "minute") {
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  }
-  if (interval === "hour") {
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:00`;
-  }
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
+import {
+  CHART_COLORS,
+  ChartState,
+  SloReferenceLine,
+  StatStrip,
+  TipRow,
+  fmtBucket,
+  usePreviousRange,
+  type StatIntent,
+} from "@/components/dashboard/chart-common";
 
 export function DashboardPage() {
   const { value, setRange, params, bucket, refresh, refreshedAt } =
@@ -239,7 +226,7 @@ function RadarCards({
         label="营收"
         loading={loading}
         value={r ? formatUSD(r.margin_usd) : "—"}
-        intent={r ? profitIntent(Number(r.margin_usd)) : "default"}
+        intent={r ? profitIntent(Number(r.margin_usd), Number(r.revenue_usd)) : "default"}
         icon={<CircleDollarSignIcon className="size-3.5" />}
         hint={r ? <RevenueHint revenue={r} /> : undefined}
         tooltip={r ? <RevenueTip revenue={r} /> : undefined}
@@ -393,148 +380,6 @@ function TrendsSection({
       </CardContent>
     </Card>
   );
-}
-
-// 趋势图上方「人话摘要」：一眼给出关键读数，不依赖看图能力。
-type StatIntent = "default" | "success" | "warning" | "danger";
-
-function statIntentClass(intent: StatIntent | undefined): string {
-  switch (intent) {
-    case "success":
-      return "text-emerald-600 dark:text-emerald-400";
-    case "warning":
-      return "text-amber-600 dark:text-amber-400";
-    case "danger":
-      return "text-destructive";
-    default:
-      return "text-foreground";
-  }
-}
-
-function StatStrip({
-  items,
-}: {
-  items: {
-    label: string;
-    value: string;
-    intent?: StatIntent;
-    compare?: string;
-    compareIntent?: CompareIntent;
-  }[];
-}) {
-  return (
-    <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1.5">
-      {items.map((it) => (
-        <div key={it.label} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs">
-          <span className="text-muted-foreground">{it.label}</span>
-          <span
-            className={cn(
-              "font-medium tabular-nums",
-              statIntentClass(it.intent),
-            )}
-          >
-            {it.value}
-          </span>
-          {it.compare != null && (
-            <span
-              className={cn(
-                "text-[10px] tabular-nums",
-                statIntentClass(it.compareIntent),
-              )}
-            >
-              环比 {it.compare}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function usePreviousRange(range: RangeQuery): RangeQuery | null {
-  const { from, to, interval, range: rangePreset } = range;
-  return useMemo(() => {
-    const prev = previousPeriodParams({ from, to });
-    if (!prev) return null;
-    return { from: prev.from, to: prev.to, interval, range: rangePreset };
-  }, [from, to, interval, rangePreset]);
-}
-
-function SloReferenceLine({
-  yAxisId,
-  y,
-  label,
-}: {
-  yAxisId?: string;
-  y: number;
-  label: string;
-}) {
-  return (
-    <ReferenceLine
-      yAxisId={yAxisId}
-      y={y}
-      stroke="hsl(var(--muted-foreground))"
-      strokeDasharray="5 4"
-      strokeOpacity={0.55}
-      ifOverflow="extendDomain"
-      label={{
-        value: label,
-        position: "insideTopRight",
-        fill: "hsl(var(--muted-foreground))",
-        fontSize: 10,
-      }}
-    />
-  );
-}
-
-// 趋势图 tooltip 单行：色块 + 名称 + 按该系列单位格式化的数值。
-function TipRow({
-  color,
-  label,
-  value,
-}: {
-  color?: string;
-  label: ReactNode;
-  value: string;
-}) {
-  return (
-    <div className="flex w-full items-center gap-2">
-      <span
-        className="h-2 w-2 shrink-0 rounded-[2px]"
-        style={{ backgroundColor: color }}
-      />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground ml-auto font-mono tabular-nums">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function ChartState({
-  pending,
-  error,
-  empty,
-}: {
-  pending: boolean;
-  error?: Error | null;
-  empty?: boolean;
-}) {
-  if (pending) return <Skeleton className="h-[260px] w-full" />;
-  if (error)
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>加载失败</AlertTitle>
-        <AlertDescription>{error.message}</AlertDescription>
-      </Alert>
-    );
-  if (empty)
-    return (
-      <p className="text-muted-foreground py-16 text-center text-sm">
-        区间内暂无数据
-      </p>
-    );
-  return null;
 }
 
 // 稳定性：请求量（面积，左轴）+ 成功率（折线，右轴 0–100%）。回答「稳不稳 / 几点掉的」。
@@ -1038,7 +883,7 @@ function ProfitChart({
               marginRate != null
                 ? `${formatUSD(marginTotal)}（${formatPercent(marginRate)}）`
                 : formatUSD(marginTotal),
-            intent: profitIntent(marginTotal) as StatIntent,
+            intent: profitIntent(marginTotal, revTotal) as StatIntent,
             compare: prevReady
               ? formatRelativeChange(
                   relativeChange(marginTotal, prevMarginTotal),

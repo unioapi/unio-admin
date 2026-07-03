@@ -1,10 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ActivityIcon, RefreshCwIcon } from "lucide-react";
+import { ActivityIcon } from "lucide-react";
 import { listRequests } from "@/lib/api/requests";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
+import { useRangeQuery } from "@/hooks/useRangeQuery";
+import { RangeFilter } from "@/components/common/RangeFilter";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import type { FilterChip } from "@/components/openstatus-table";
 import {
@@ -12,7 +14,6 @@ import {
   REQUEST_OS_COLUMN_LABELS,
   REQUEST_STATUS_OPTIONS,
 } from "@/components/openstatus-table/requests-os-columns";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Empty,
@@ -50,6 +51,8 @@ export function RequestsPage() {
   const [modelInput, setModelInput] = useState("");
   const [userIdInput, setUserIdInput] = useState("");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const { value: range, setRange, params: rangeParams, refresh, refreshedAt } =
+    useRangeQuery("24h");
   const { page, setPage, sorting, setSorting, sort } = useServerList({
     defaultSort: { id: "created_at", desc: true },
   });
@@ -59,7 +62,7 @@ export function RequestsPage() {
   const columns = useMemo(() => requestOsColumns(setSelectedRequestId), []);
 
   const query = useQuery({
-    queryKey: ["requests", { status, model, userId, page, sort }],
+    queryKey: ["requests", { status, model, userId, page, sort, range: rangeParams }],
     queryFn: () =>
       listRequests({
         page,
@@ -68,6 +71,8 @@ export function RequestsPage() {
         status: status || undefined,
         model,
         userId,
+        from: rangeParams.from,
+        to: rangeParams.to,
       }),
     placeholderData: keepPreviousData,
     refetchInterval: (q) =>
@@ -176,15 +181,15 @@ export function RequestsPage() {
             </>
           }
           toolbarActions={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => query.refetch()}
-              disabled={query.isFetching}
-              aria-label="刷新"
-            >
-              <RefreshCwIcon className={query.isFetching ? "animate-spin" : undefined} />
-            </Button>
+            <RangeFilter
+              value={range}
+              onChange={(v) => {
+                setRange(v);
+                setPage(1);
+              }}
+              refreshedAt={refreshedAt}
+              onRefresh={refresh}
+            />
           }
         />
       )}

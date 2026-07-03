@@ -21,7 +21,7 @@ import {
 import { RevenueTip } from "@/components/dashboard/RevenueTip";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { ChannelSuccessRateCell } from "@/components/common/ChannelSuccessRateCell";
-import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
+import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
@@ -30,6 +30,7 @@ import {
   BREAKDOWN_COLUMNS,
   STATUS_LABEL,
   errorCodeLabel,
+  requestsCountLabel,
   type BreakdownColumnId,
 } from "./constants";
 
@@ -131,7 +132,7 @@ export function createBreakdownColumns(
     requests: {
       ...columnMeta("requests"),
       accessorKey: "terminal",
-      header: "请求",
+      header: requestsCountLabel(dimension),
       cell: ({ row }) => (
         <span className="tabular-nums">{formatCompact(row.original.terminal)}</span>
       ),
@@ -204,7 +205,9 @@ export function createBreakdownColumns(
               type="button"
               className={cn(
                 "cursor-default tabular-nums underline decoration-dotted underline-offset-2",
-                statIntentClass(profitIntent(Number(row.original.margin_usd))),
+                statIntentClass(
+                  profitIntent(Number(row.original.margin_usd), Number(row.original.revenue_usd)),
+                ),
               )}
             >
               {formatUSD(row.original.margin_usd)}

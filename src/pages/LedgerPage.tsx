@@ -14,7 +14,7 @@ import {
   ledgerEntryColumns,
   EVENT_TYPE_FILTER_OPTIONS,
   REASON_CODE_FILTER_OPTIONS,
-} from "@/components/ops-tables/ledger-columns";
+} from "@/components/detail-tables/ledger-columns";
 import { Input } from "@/components/ui/input";
 import {
   Empty,
@@ -95,7 +95,10 @@ function userChip(userId: number | undefined, onRemove: () => void): FilterChip[
 }
 
 function EntriesPanel() {
-  const [userIdInput, setUserIdInput] = useState("");
+  const [searchParams] = useSearchParams();
+  const [userIdInput, setUserIdInput] = useState(
+    () => searchParams.get("userId") ?? "",
+  );
   const { page, setPage, sorting, setSorting, sort } = useServerList({
     defaultSort: { id: "created_at", desc: true },
   });

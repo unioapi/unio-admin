@@ -8,12 +8,14 @@ import {
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useOpsServerTable } from "@/hooks/useOpsServerTable";
+import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
 
 export function ProvidersPage() {
-  const table = useOpsServerTable({
+  const table = useServerTable({
     queryKey: "providers",
-    fetch: getProvidersOpsTable,
+    fetch: (p) => getProvidersOpsTable({ range: "all", ...p }),
+    defaultSort: { id: "name", desc: false },
+    statusOptions: ENTITY_STATUS_OPTIONS,
   });
 
   return (

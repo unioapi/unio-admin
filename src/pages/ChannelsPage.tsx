@@ -9,13 +9,14 @@ import {
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useOpsServerTable } from "@/hooks/useOpsServerTable";
+import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
 
 export function ChannelsPage() {
   const [createOpen, setCreateOpen] = useState(false);
-  const table = useOpsServerTable({
+  const table = useServerTable({
     queryKey: "channels",
-    fetch: getChannelsOpsTable,
+    fetch: (p) => getChannelsOpsTable({ range: "all", ...p }),
+    statusOptions: ENTITY_STATUS_OPTIONS,
   });
 
   return (

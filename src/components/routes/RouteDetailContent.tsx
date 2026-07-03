@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
-  BoxIcon,
   CableIcon,
   KeyRoundIcon,
   LayersIcon,
   ScrollTextIcon,
 } from "lucide-react";
+import { listChannels } from "@/lib/api/channels";
 import { getRoute } from "@/lib/api/routes";
 import {
   getRouteOpsBindings,
@@ -17,8 +17,8 @@ import {
   getRouteOpsRequests,
 } from "@/lib/api/routesOps";
 import type { RangeQuery } from "@/lib/api/dashboard";
-import { formatCompact, formatLatencyMs } from "@/lib/format";
-import { ConfigurableDataTable, ServerDataTable } from "@/components/data-table";
+import { ConfigurableDataTable } from "@/components/data-table";
+import { ServerDataTable } from "@/components/openstatus-table";
 import {
   ROUTE_OPS_KEY_COLUMN_LABELS,
   ROUTE_OPS_MODEL_COLUMN_LABELS,
@@ -29,107 +29,20 @@ import {
   routeOpsPoolColumns,
   routeOpsRequestColumns,
 } from "@/components/detail-tables/route-detail-columns";
-import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
+import { RouteChannelMarginTable } from "@/components/routes/RouteChannelMarginTable";
+import { formatRouteRatioInput } from "@/components/routes/route-pricing";
 import { DetailSideNav } from "@/components/common/DetailSideNav";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { cn } from "@/lib/utils";
+  ChartSkeleton,
+  ErrorBox,
+  SectionEmpty,
+  SectionFrame,
+  TableSkeleton,
+} from "@/components/common/detail-section";
+import { PerformanceCharts, type PerfPoint } from "@/components/common/PerformanceCharts";
 
 const PAGE_SIZE = 10;
 
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function SectionFrame({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("overflow-hidden rounded-xl ring-1 ring-foreground/10", className)}>
-      {children}
-    </div>
-  );
-}
-
-function SectionEmpty({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: typeof BoxIcon;
-  title: string;
-  description?: string;
-}) {
-  return (
-    <Empty className="border py-14">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Icon />
-        </EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        {description ? <EmptyDescription>{description}</EmptyDescription> : null}
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <Alert variant="destructive">
-      <AlertTitle>加载失败</AlertTitle>
-      <AlertDescription>{message}</AlertDescription>
-    </Alert>
-  );
-}
-
-function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
-  return (
-    <SectionFrame className="p-4">
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: rows }).map((_, row) => (
-          <div key={row} className="flex gap-3">
-            {Array.from({ length: cols }).map((__, col) => (
-              <Skeleton key={col} className="h-4 flex-1" />
-            ))}
-          </div>
-        ))}
-      </div>
-    </SectionFrame>
-  );
-}
-
-function ChartSkeleton() {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-14 rounded-lg" />
-        ))}
-      </div>
-      <Skeleton className="h-[200px] w-full rounded-xl" />
-      <Skeleton className="h-[200px] w-full rounded-xl" />
-    </div>
-  );
-}
 
 export function RouteDetailContent({
   routeId,
@@ -185,31 +98,6 @@ function PerformanceSection({
     placeholderData: keepPreviousData,
   });
 
-  const summary = useMemo(() => {
-    if (!q.data?.length) return null;
-    const request_total = q.data.reduce((sum, point) => sum + point.request_total, 0);
-    const request_succeeded = q.data.reduce((sum, point) => sum + point.request_succeeded, 0);
-    const latencyPoints = q.data.filter((point) => point.latency_p95 > 0);
-    const latency_p95 = latencyPoints.length
-      ? latencyPoints.reduce((sum, point) => sum + point.latency_p95, 0) / latencyPoints.length
-      : 0;
-    return {
-      request_total,
-      request_succeeded,
-      success_rate: request_total ? request_succeeded / request_total : 0,
-      latency_p95,
-    };
-  }, [q.data]);
-
-  const latencyChartData = useMemo(
-    () =>
-      (q.data ?? []).map((point) => ({
-        bucket: point.bucket,
-        latency_p95: point.latency_p95 / 1000,
-      })),
-    [q.data],
-  );
-
   if (q.isPending && !q.data) return <ChartSkeleton />;
   if (q.isError) return <ErrorBox message={(q.error as Error).message} />;
   if (!q.data?.length) {
@@ -222,111 +110,20 @@ function PerformanceSection({
     );
   }
 
-  const reqConfig: ChartConfig = {
-    request_total: { label: "请求", color: "var(--chart-1)" },
-    request_succeeded: { label: "成功", color: "var(--chart-2)" },
-  };
-  const latConfig: ChartConfig = {
-    latency_p95: { label: "P95 (s)", color: "var(--chart-3)" },
-  };
+  const points: PerfPoint[] = q.data.map((p) => ({
+    bucket: p.bucket,
+    total: p.request_total,
+    succeeded: p.request_succeeded,
+    latencyMs: p.latency_p95,
+  }));
 
   return (
-    <div className="flex flex-col gap-4">
-      {summary ? (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-lg bg-muted/40 px-3 py-2.5">
-            <div className="text-muted-foreground text-xs">总请求</div>
-            <div className="font-heading mt-0.5 text-sm font-semibold tabular-nums">
-              {formatCompact(summary.request_total)}
-            </div>
-          </div>
-          <div className="rounded-lg bg-muted/40 px-3 py-2.5">
-            <div className="text-muted-foreground text-xs">成功率</div>
-            <div className="mt-0.5">
-              <AttemptSuccessRateCell
-                attemptTotal={summary.request_total}
-                attemptSucceeded={summary.request_succeeded}
-                successRate={summary.success_rate}
-                className="text-sm"
-              />
-            </div>
-          </div>
-          <div className="rounded-lg bg-muted/40 px-3 py-2.5">
-            <div className="text-muted-foreground text-xs">平均 P95</div>
-            <div className="font-heading mt-0.5 text-sm font-semibold tabular-nums">
-              {summary.latency_p95 > 0 ? formatLatencyMs(summary.latency_p95) : "—"}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <SectionFrame className="p-4">
-        <div className="text-muted-foreground mb-2 text-xs font-medium">请求量</div>
-        <ChartContainer config={reqConfig} className="h-[200px] w-full">
-          <AreaChart data={q.data} margin={{ left: 4, right: 8, top: 4 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="bucket"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={24}
-              tickFormatter={fmtTs}
-            />
-            <YAxis tickLine={false} axisLine={false} width={36} allowDecimals={false} />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent labelFormatter={(_, p) => fmtTs(String(p?.[0]?.payload.bucket))} />
-              }
-            />
-            <Area
-              dataKey="request_total"
-              type="monotone"
-              stroke="var(--color-request_total)"
-              fill="var(--color-request_total)"
-              fillOpacity={0.15}
-            />
-            <Area
-              dataKey="request_succeeded"
-              type="monotone"
-              stroke="var(--color-request_succeeded)"
-              fill="var(--color-request_succeeded)"
-              fillOpacity={0.15}
-            />
-          </AreaChart>
-        </ChartContainer>
-      </SectionFrame>
-
-      <SectionFrame className="p-4">
-        <div className="text-muted-foreground mb-2 text-xs font-medium">P95 延迟</div>
-        <ChartContainer config={latConfig} className="h-[200px] w-full">
-          <LineChart data={latencyChartData} margin={{ left: 4, right: 8, top: 4 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="bucket"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={24}
-              tickFormatter={fmtTs}
-            />
-            <YAxis tickLine={false} axisLine={false} width={44} />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent labelFormatter={(_, p) => fmtTs(String(p?.[0]?.payload.bucket))} />
-              }
-            />
-            <Line
-              dataKey="latency_p95"
-              type="monotone"
-              stroke="var(--color-latency_p95)"
-              dot={false}
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ChartContainer>
-      </SectionFrame>
-    </div>
+    <PerformanceCharts
+      points={points}
+      totalLabel="请求"
+      totalStatLabel="总请求"
+      latencyLabel="P95 延迟"
+    />
   );
 }
 
@@ -335,52 +132,104 @@ function PoolSection({ routeId }: { routeId: number }) {
     queryKey: ["route", routeId],
     queryFn: () => getRoute(routeId),
   });
+  const allChannelsQ = useQuery({
+    queryKey: ["channels", "all-for-route-pool-detail"],
+    queryFn: () => listChannels({ page: 1, pageSize: 200 }),
+    enabled: routeQ.data?.pool_kind === "all",
+  });
   const poolQ = useQuery({
     queryKey: ["route", routeId, "ops-pool"],
     queryFn: () => getRouteOpsChannelPool(routeId),
     enabled: routeQ.data?.pool_kind === "explicit",
   });
 
-  if (routeQ.isPending) return <TableSkeleton rows={4} cols={4} />;
+  const route = routeQ.data;
+  const isAllPool = route?.pool_kind === "all";
+
+  const marginChannels = useMemo(() => {
+    if (!route) return [];
+    if (isAllPool) {
+      return (allChannelsQ.data?.items ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        provider_name: c.provider_name ?? "",
+        protocol: c.protocol,
+      }));
+    }
+    return route.channels.map((c) => ({
+      id: c.channel_id,
+      name: c.channel_name,
+      provider_name: c.provider_slug,
+      protocol: "",
+    }));
+  }, [route, isAllPool, allChannelsQ.data?.items]);
+
+  const marginChannelIds = useMemo(
+    () => marginChannels.map((c) => c.id),
+    [marginChannels],
+  );
+
+  if (routeQ.isPending) return <TableSkeleton rows={6} cols={7} />;
   if (routeQ.isError) return <ErrorBox message={(routeQ.error as Error).message} />;
+  if (!route) return null;
 
-  if (routeQ.data?.pool_kind === "all") {
-    return (
-      <SectionEmpty
-        icon={CableIcon}
-        title="全量动态线路"
-        description="自动使用每个模型的全部可用渠道，无固定渠道池"
-      />
-    );
-  }
-
-  if (poolQ.isPending) return <TableSkeleton rows={5} cols={5} />;
-  if (poolQ.isError) return <ErrorBox message={(poolQ.error as Error).message} />;
-  if (poolQ.data.length === 0) {
+  if (!isAllPool && route.channels.length === 0) {
     return (
       <SectionEmpty
         icon={CableIcon}
         title="渠道池为空"
-        description="为该线路添加渠道后即可在此查看"
+        description="为该线路添加渠道后即可在此查看成本与售价对比"
       />
     );
   }
 
+  if (isAllPool && allChannelsQ.isPending) {
+    return <TableSkeleton rows={6} cols={7} />;
+  }
+  if (isAllPool && allChannelsQ.isError) {
+    return <ErrorBox message={(allChannelsQ.error as Error).message} />;
+  }
+
   return (
-    <ConfigurableDataTable
-      storageKey={`route:${routeId}:pool`}
-      data={poolQ.data}
-      columns={routeOpsPoolColumns()}
-      columnLabels={ROUTE_OPS_POOL_COLUMN_LABELS}
-      layoutMode="content"
-      bordered={false}
-      getRowId={(row) => String(row.channel_id)}
-      toolbarStart={
-        <span className="text-muted-foreground text-sm tabular-nums">
-          共 {poolQ.data.length} 个渠道
-        </span>
-      }
-    />
+    <div className="flex flex-col gap-4">
+      <SectionFrame className="p-4">
+        <div className="mb-3 flex flex-col gap-1">
+          <div className="text-sm font-medium">
+            {isAllPool ? "全量动态 · 成本与售价" : "渠道池 · 成本与售价"}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            {isAllPool
+              ? "展示全部渠道的模型成本与客户售价（倍率 × 模型基准价）对比。"
+              : `共 ${marginChannelIds.length} 个渠道 · 客户售价 = 模型基准 × ${formatRouteRatioInput(route.price_ratio)} 倍率`}
+          </p>
+        </div>
+        <RouteChannelMarginTable
+          readOnly
+          channels={marginChannels}
+          channelIds={marginChannelIds}
+          priceRatio={route.price_ratio}
+          fixedSingle={route.mode === "fixed"}
+          tableMaxHeight="max-h-[min(480px,60vh)]"
+        />
+      </SectionFrame>
+
+      {!isAllPool && poolQ.data && poolQ.data.length > 0 ? (
+        <ConfigurableDataTable
+          storageKey={`route:${routeId}:pool-meta`}
+          data={poolQ.data}
+          columns={routeOpsPoolColumns()}
+          columnLabels={ROUTE_OPS_POOL_COLUMN_LABELS}
+          layoutMode="content"
+          bordered={false}
+          getRowId={(row) => String(row.channel_id)}
+          toolbarStart={
+            <span className="text-muted-foreground text-sm tabular-nums">
+              渠道状态与优先级
+            </span>
+          }
+        />
+      ) : null}
+    </div>
   );
 }
 

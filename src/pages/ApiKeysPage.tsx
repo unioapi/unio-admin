@@ -1,35 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronLeftIcon, PlusIcon } from "lucide-react";
-import {
-  getApiKeysOpsSummary,
-  getApiKeysOpsTable,
-  type ApiKeyOpsRow,
-} from "@/lib/api/customerOps";
+import { PlusIcon } from "lucide-react";
+import { getApiKeysOpsSummary, getApiKeysOpsTable, type ApiKeyOpsRow } from "@/lib/api/customerOps";
 import { getUser } from "@/lib/api/users";
 import { deleteApiKey, revokeApiKey, updateApiKey } from "@/lib/api/apiKeys";
 import { apiErrorMessage, apiErrorStatus } from "@/lib/api/client";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
-import { useServerList } from "@/hooks/useServerList";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useServerTable } from "@/hooks/useServerTable";
 import { RangeFilter } from "@/components/common/RangeFilter";
-import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
+import { DetailPageHeader } from "@/components/common/DetailPageHeader";
+import {
+  ApiKeysOverviewStats,
+  ApiKeysOverviewStatsSkeleton,
+} from "@/components/customer/ApiKeysOverviewStats";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { ServerDataTable } from "@/components/openstatus-table";
-import type { FilterChip } from "@/components/openstatus-table";
 import {
   apiKeyOsColumns,
   API_KEY_OS_COLUMN_LABELS,
 } from "@/components/openstatus-table/api-keys-os-columns";
-import { CreateApiKeyDialog } from "@/components/customer/CreateApiKeyDialog";
-import { formatInt } from "@/lib/format";
+import { ApiKeyFormDialog } from "@/components/customer/ApiKeyFormDialog";
+import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-
-const PAGE_SIZE = 20;
 
 type PendingKeyAction =
   | { type: "toggle"; key: ApiKeyOpsRow }
@@ -41,14 +36,8 @@ export function ApiKeysPage() {
   const userId = Number(userIdParam);
   const validUser = Number.isFinite(userId) && userId > 0;
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
+  const rangeQuery = { ...params, range: value.preset };
   const queryClient = useQueryClient();
-
-  const { page, setPage, sorting, setSorting, sort } = useServerList({
-    pageSize: PAGE_SIZE,
-    defaultSort: { id: "requests", desc: true },
-  });
-  const [searchInput, setSearchInput] = useState("");
-  const search = useDebouncedValue(searchInput.trim(), 300);
   const [pendingAction, setPendingAction] = useState<PendingKeyAction | null>(null);
 
   const user = useQuery({
@@ -64,28 +53,13 @@ export function ApiKeysPage() {
     enabled: validUser,
   });
 
-  const query = useQuery({
-    queryKey: ["api-keys", userId, "ops-table", { ...params, range: value.preset, page, sort, search }],
-    queryFn: () =>
-      getApiKeysOpsTable(userId, {
-        ...params,
-        range: value.preset,
-        page,
-        page_size: PAGE_SIZE,
-        sort,
-        search: search || undefined,
-      }),
-    placeholderData: keepPreviousData,
+  const table = useServerTable({
+    queryKey: "api-keys",
+    extraKey: [userId, rangeQuery],
     enabled: validUser,
+    defaultSort: { id: "requests", desc: true },
+    fetch: (p) => getApiKeysOpsTable(userId, { ...rangeQuery, ...p }),
   });
-
-  const items = query.data?.items ?? [];
-  const total = query.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount, setPage]);
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["api-keys", userId] });
 
@@ -129,20 +103,17 @@ export function ApiKeysPage() {
     [],
   );
 
-  const chips: FilterChip[] = [];
-  if (search) {
-    chips.push({
-      id: "search",
-      label: `搜索 · ${search}`,
-      onRemove: () => {
-        setSearchInput("");
-        setPage(1);
-      },
-    });
-  }
-
   const disabling = pendingAction?.type === "toggle" && pendingAction.key.status !== "disabled";
-  const s = summary.data;
+  const userEntity = user.data ?? null;
+  const entityLoading = user.isPending;
+  const notFound = user.isSuccess && userEntity == null;
+
+  const overviewSummary =
+    summary.isPending && !summary.data ? (
+      <ApiKeysOverviewStatsSkeleton />
+    ) : summary.data ? (
+      <ApiKeysOverviewStats summary={summary.data} />
+    ) : null;
 
   if (!validUser) {
     return <Navigate to="/users" replace />;
@@ -150,74 +121,75 @@ export function ApiKeysPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="mb-1 -ml-2">
-            <Link to={`/users/${userId}`}><ChevronLeftIcon data-icon="inline-start" />返回用户</Link>
-          </Button>
-          <h2 className="font-heading text-lg font-semibold tracking-tight">API Key</h2>
-          {user.isPending ? (
-            <Skeleton className="mt-1 h-4 w-48" />
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              {user.data?.email ?? "—"} · 真实调用入口：线路、限额与用量
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <RangeFilter
-            value={value}
-            onChange={(v) => {
-              setRange(v);
-              setPage(1);
-            }}
-            refreshedAt={refreshedAt}
-            onRefresh={refresh}
-          />
-          <CreateApiKeyDialog userId={userId}>
-            <Button size="sm"><PlusIcon data-icon="inline-start" />新建 Key</Button>
-          </CreateApiKeyDialog>
-        </div>
-      </div>
+      <DetailPageHeader
+        back={{ href: "/users", label: "返回用户列表" }}
+        title="API Key"
+        titleLoading={entityLoading}
+        subtitle={
+          userEntity ? (
+            <>
+              {userEntity.email} · {userEntity.display_name || "—"} · ID {userEntity.id}
+              {userEntity.created_at ? ` · 注册 ${formatDateTime(userEntity.created_at)}` : ""}
+            </>
+          ) : null
+        }
+        actions={
+          <>
+            <RangeFilter
+              value={value}
+              onChange={(v) => {
+                setRange(v);
+                table.setPage(1);
+              }}
+              refreshedAt={refreshedAt}
+              onRefresh={refresh}
+            />
+            <ApiKeyFormDialog userId={userId}>
+              <Button size="sm">
+                <PlusIcon data-icon="inline-start" />
+                新建 Key
+              </Button>
+            </ApiKeyFormDialog>
+          </>
+        }
+        summary={userEntity ? overviewSummary : null}
+      />
 
-      <MetricGrid className="lg:grid-cols-3">
-        <MetricCard label="Key 总数" loading={summary.isPending} value={formatInt(s?.key_total ?? 0)} />
-        <MetricCard label="启用 Key" loading={summary.isPending} value={formatInt(s?.key_enabled ?? 0)} />
-        <MetricCard label="已达上限" loading={summary.isPending} value={formatInt(s?.spend_capped ?? 0)} intent={s && s.spend_capped > 0 ? "warning" : "default"} />
-      </MetricGrid>
-
-      {query.isError ? (
+      {user.isError || table.query.isError ? (
         <Alert variant="destructive">
           <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription>{(query.error as Error).message}</AlertDescription>
+          <AlertDescription>{((user.error ?? table.query.error) as Error).message}</AlertDescription>
+        </Alert>
+      ) : notFound ? (
+        <Alert variant="destructive">
+          <AlertTitle>用户不存在</AlertTitle>
+          <AlertDescription>
+            <Link to="/users" className="underline underline-offset-4">
+              返回用户列表
+            </Link>
+          </AlertDescription>
         </Alert>
       ) : (
         <ServerDataTable
           storageKey={`api-keys:${userId}:ops-table`}
           columns={columns}
-          data={items}
+          data={table.items}
           columnLabels={API_KEY_OS_COLUMN_LABELS}
-          total={total}
-          page={page}
-          pageCount={pageCount}
-          onPageChange={setPage}
-          sorting={sorting}
-          onSortingChange={setSorting}
+          total={table.total}
+          page={table.page}
+          pageCount={table.pageCount}
+          onPageChange={table.setPage}
+          sorting={table.sorting}
+          onSortingChange={table.setSorting}
           getRowId={(r) => String(r.id)}
-          loading={query.isPending}
-          refetching={query.isFetching && !query.isPending}
+          loading={table.query.isPending}
+          refetching={table.query.isFetching && !table.query.isPending}
           emptyMessage="暂无 API Key"
-          searchValue={searchInput}
-          onSearchChange={(v) => {
-            setSearchInput(v);
-            setPage(1);
-          }}
+          searchValue={table.searchInput}
+          onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索 Key 名称 / 前缀"
-          chips={chips}
-          onClearChips={() => {
-            setSearchInput("");
-            setPage(1);
-          }}
+          chips={table.chips}
+          onClearChips={table.resetFilters}
         />
       )}
 

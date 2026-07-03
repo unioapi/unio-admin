@@ -7,36 +7,58 @@ import type { Page } from "@/lib/api/types";
 
 const PAGE_SIZE = 20;
 
-const STATUS_OPTIONS = [
+/** 启停状态过滤选项（服务商/渠道/模型/线路列表通用）。 */
+export const ENTITY_STATUS_OPTIONS = [
   { value: "enabled", label: "启用" },
   { value: "disabled", label: "停用" },
 ] as const;
 
-interface UseOpsServerTableOptions<T> {
-  // queryKey 为实体前缀（如 "providers" / "channels" / "models" / "routes"）。
-  // 列表查询键统一组成 [entity, "ops-list", ...]，使各实体写操作 invalidateQueries({queryKey:[entity]})
-  // 能前缀命中本列表并自动刷新（修复「创建后需手动刷新」）。
-  queryKey: string;
-  fetch: (params: {
-    range: "all";
-    page: number;
-    page_size: number;
-    sort?: string;
-    status?: string;
-    search?: string;
-  }) => Promise<Page<T>>;
-  /** 缺省不传则列表无默认排序 */
-  defaultSort?: { id: string; desc: boolean };
+export interface StatusOption {
+  value: string;
+  label: string;
 }
 
-/** 运维聚合表通用服务端列表：分页 / 排序 / status / search。 */
-export function useOpsServerTable<T>({
+/** 传给 fetch 的服务端列表参数；range/userId 等固定参数由调用方在 fetch 闭包里合并。 */
+export interface ServerTableFetchParams {
+  page: number;
+  page_size: number;
+  sort?: string;
+  status?: string;
+  search?: string;
+}
+
+interface UseServerTableOptions<T> {
+  /**
+   * react-query key 前缀（实体名，如 "channels" / "users" / "api-keys"）。
+   * 列表键统一组成 [queryKey, ...extraKey, "ops-list", ...]，使写操作
+   * invalidateQueries({queryKey:[queryKey, ...extraKey?]}) 能前缀命中本列表并自动刷新。
+   */
+  queryKey: string;
+  fetch: (params: ServerTableFetchParams) => Promise<Page<T>>;
+  defaultSort?: { id: string; desc: boolean };
+  /** 提供后暴露 status / onStatusChange / statusOptions 与状态 chip。 */
+  statusOptions?: readonly StatusOption[];
+  /** 额外 query key 片段（如 userId、range），排在实体名之后以保证前缀失效可命中。 */
+  extraKey?: readonly unknown[];
+  enabled?: boolean;
+  pageSize?: number;
+  /** 搜索 chip 文案前缀，默认「搜索」。 */
+  searchChipLabel?: string;
+}
+
+/** 服务端聚合列表通用 hook：分页 / 排序 / 可选 status / search（含 chips）。 */
+export function useServerTable<T>({
   queryKey,
   fetch,
   defaultSort,
-}: UseOpsServerTableOptions<T>) {
+  statusOptions,
+  extraKey = [],
+  enabled = true,
+  pageSize = PAGE_SIZE,
+  searchChipLabel = "搜索",
+}: UseServerTableOptions<T>) {
   const { page, setPage, sorting, setSorting, sort } = useServerList({
-    pageSize: PAGE_SIZE,
+    pageSize,
     defaultSort,
   });
 
@@ -45,21 +67,21 @@ export function useOpsServerTable<T>({
   const search = useDebouncedValue(searchInput.trim(), 300);
 
   const query = useQuery({
-    queryKey: [queryKey, "ops-list", page, sort, status, search],
+    queryKey: [queryKey, ...extraKey, "ops-list", page, sort, status, search],
     queryFn: () =>
       fetch({
-        range: "all",
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
         sort,
         status: status || undefined,
         search: search || undefined,
       }),
     placeholderData: keepPreviousData,
+    enabled,
   });
 
   const total = query.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
@@ -67,8 +89,8 @@ export function useOpsServerTable<T>({
 
   const chips = useMemo((): FilterChip[] => {
     const out: FilterChip[] = [];
-    if (status) {
-      const label = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+    if (status && statusOptions) {
+      const label = statusOptions.find((o) => o.value === status)?.label ?? status;
       out.push({
         id: `status:${status}`,
         label: `状态 · ${label}`,
@@ -81,7 +103,7 @@ export function useOpsServerTable<T>({
     if (search) {
       out.push({
         id: "search",
-        label: `搜索 · ${search}`,
+        label: `${searchChipLabel} · ${search}`,
         onRemove: () => {
           setSearchInput("");
           setPage(1);
@@ -89,7 +111,7 @@ export function useOpsServerTable<T>({
       });
     }
     return out;
-  }, [status, search, setPage]);
+  }, [status, statusOptions, search, searchChipLabel, setPage]);
 
   return {
     items: query.data?.items ?? [],
@@ -104,6 +126,7 @@ export function useOpsServerTable<T>({
       setStatus(v);
       setPage(1);
     },
+    statusOptions: statusOptions ?? [],
     searchInput,
     onSearchChange: (v: string) => {
       setSearchInput(v);
@@ -116,6 +139,5 @@ export function useOpsServerTable<T>({
       setPage(1);
     },
     query,
-    statusOptions: STATUS_OPTIONS,
   };
 }

@@ -1,134 +1,34 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
   CableIcon,
   CircleCheckIcon,
 } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   getProviderOpsChannels,
   getProviderOpsErrors,
   getProviderOpsPerformance,
 } from "@/lib/api/providersOps";
 import type { RangeQuery } from "@/lib/api/dashboard";
-import { formatCompact, formatLatencySec } from "@/lib/format";
-import { ConfigurableDataTable, ServerDataTable } from "@/components/data-table";
+import { ConfigurableDataTable } from "@/components/data-table";
+import { ServerDataTable } from "@/components/openstatus-table";
 import {
   PROVIDER_OPS_CHANNEL_COLUMN_LABELS,
   PROVIDER_OPS_ERROR_COLUMN_LABELS,
   providerOpsChannelColumns,
   providerOpsErrorColumns,
 } from "@/components/detail-tables/provider-detail-columns";
-import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
 import { DetailSideNav } from "@/components/common/DetailSideNav";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import { cn } from "@/lib/utils";
+  ChartSkeleton,
+  ErrorBox,
+  SectionEmpty,
+  TableSkeleton,
+} from "@/components/common/detail-section";
+import { PerformanceCharts, type PerfPoint } from "@/components/common/PerformanceCharts";
 
 const PAGE_SIZE = 10;
-
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function SectionFrame({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("overflow-hidden rounded-xl ring-1 ring-foreground/10", className)}>
-      {children}
-    </div>
-  );
-}
-
-function SectionEmpty({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: typeof CableIcon;
-  title: string;
-  description?: string;
-}) {
-  return (
-    <Empty className="border py-14">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Icon />
-        </EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        {description ? <EmptyDescription>{description}</EmptyDescription> : null}
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="rounded-lg bg-muted/40 px-3 py-2.5">
-      <div className="text-muted-foreground text-xs">{label}</div>
-      <div className="font-heading mt-0.5 text-sm font-semibold tabular-nums">{value}</div>
-    </div>
-  );
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <Alert variant="destructive">
-      <AlertTitle>加载失败</AlertTitle>
-      <AlertDescription>{message}</AlertDescription>
-    </Alert>
-  );
-}
-
-function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
-  return (
-    <SectionFrame className="p-4">
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: rows }).map((_, row) => (
-          <div key={row} className="flex gap-3">
-            {Array.from({ length: cols }).map((__, col) => (
-              <Skeleton key={col} className="h-4 flex-1" />
-            ))}
-          </div>
-        ))}
-      </div>
-    </SectionFrame>
-  );
-}
-
-function ChartSkeleton() {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-14 rounded-lg" />
-        ))}
-      </div>
-      <Skeleton className="h-[200px] w-full rounded-xl" />
-      <Skeleton className="h-[200px] w-full rounded-xl" />
-    </div>
-  );
-}
 
 export function ProviderDetailContent({
   providerId,
@@ -211,31 +111,6 @@ function PerformanceSection({ id, range }: { id: number; range: RangeQuery }) {
     placeholderData: keepPreviousData,
   });
 
-  const summary = useMemo(() => {
-    if (!q.data?.length) return null;
-    const attempt_total = q.data.reduce((sum, point) => sum + point.attempt_total, 0);
-    const attempt_succeeded = q.data.reduce((sum, point) => sum + point.attempt_succeeded, 0);
-    const latencyPoints = q.data.filter((point) => point.latency_avg > 0);
-    const latency_avg = latencyPoints.length
-      ? latencyPoints.reduce((sum, point) => sum + point.latency_avg, 0) / latencyPoints.length
-      : 0;
-    return {
-      attempt_total,
-      attempt_succeeded,
-      success_rate: attempt_total ? attempt_succeeded / attempt_total : 0,
-      latency_avg,
-    };
-  }, [q.data]);
-
-  const latencyChartData = useMemo(
-    () =>
-      (q.data ?? []).map((point) => ({
-        bucket: point.bucket,
-        latency_avg: point.latency_avg / 1000,
-      })),
-    [q.data],
-  );
-
   if (q.isPending && !q.data) return <ChartSkeleton />;
   if (q.isError) return <ErrorBox message={(q.error as Error).message} />;
   if (!q.data?.length) {
@@ -248,110 +123,20 @@ function PerformanceSection({ id, range }: { id: number; range: RangeQuery }) {
     );
   }
 
-  const reqConfig: ChartConfig = {
-    attempt_total: { label: "尝试", color: "var(--chart-1)" },
-    attempt_succeeded: { label: "成功", color: "var(--chart-2)" },
-  };
-  const latConfig: ChartConfig = { latency_avg: { label: "平均延迟 (s)", color: "var(--chart-3)" } };
+  const points: PerfPoint[] = q.data.map((p) => ({
+    bucket: p.bucket,
+    total: p.attempt_total,
+    succeeded: p.attempt_succeeded,
+    latencyMs: p.latency_avg,
+  }));
 
   return (
-    <div className="flex flex-col gap-4">
-      {summary ? (
-        <div className="grid grid-cols-3 gap-2">
-          <MiniStat label="总尝试" value={formatCompact(summary.attempt_total)} />
-          <MiniStat
-            label="成功率"
-            value={
-              <AttemptSuccessRateCell
-                attemptTotal={summary.attempt_total}
-                attemptSucceeded={summary.attempt_succeeded}
-                successRate={summary.success_rate}
-                className="text-sm"
-              />
-            }
-          />
-          <MiniStat
-            label="平均延迟"
-            value={summary.latency_avg > 0 ? formatLatencySec(summary.latency_avg) : "—"}
-          />
-        </div>
-      ) : null}
-
-      <SectionFrame className="p-4">
-        <div className="text-muted-foreground mb-2 text-xs font-medium">请求量</div>
-        <ChartContainer config={reqConfig} className="h-[200px] w-full">
-          <AreaChart data={q.data} margin={{ left: 4, right: 8, top: 4 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="bucket"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={24}
-              tickFormatter={fmtTs}
-            />
-            <YAxis tickLine={false} axisLine={false} width={36} allowDecimals={false} />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent labelFormatter={(_, p) => fmtTs(String(p?.[0]?.payload.bucket))} />
-              }
-            />
-            <Area
-              dataKey="attempt_total"
-              type="monotone"
-              stroke="var(--color-attempt_total)"
-              fill="var(--color-attempt_total)"
-              fillOpacity={0.15}
-            />
-            <Area
-              dataKey="attempt_succeeded"
-              type="monotone"
-              stroke="var(--color-attempt_succeeded)"
-              fill="var(--color-attempt_succeeded)"
-              fillOpacity={0.15}
-            />
-          </AreaChart>
-        </ChartContainer>
-      </SectionFrame>
-
-      <SectionFrame className="p-4">
-        <div className="text-muted-foreground mb-2 text-xs font-medium">平均延迟</div>
-        <ChartContainer config={latConfig} className="h-[200px] w-full">
-          <LineChart data={latencyChartData} margin={{ left: 4, right: 8, top: 4 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="bucket"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={24}
-              tickFormatter={fmtTs}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={44}
-              tickFormatter={(value) => `${Number(value).toFixed(1)}s`}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(_, p) => fmtTs(String(p?.[0]?.payload.bucket))}
-                  formatter={(value) => `${Number(value).toFixed(2)}s`}
-                />
-              }
-            />
-            <Line
-              dataKey="latency_avg"
-              type="monotone"
-              stroke="var(--color-latency_avg)"
-              dot={false}
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ChartContainer>
-      </SectionFrame>
-    </div>
+    <PerformanceCharts
+      points={points}
+      totalLabel="尝试"
+      totalStatLabel="总尝试"
+      latencyLabel="平均延迟"
+    />
   );
 }
 

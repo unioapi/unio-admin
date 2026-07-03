@@ -55,6 +55,10 @@ export interface ChannelOpsRow {
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
+  last_tested_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_latency_ms: number | null;
+  last_test_error: string | null;
 }
 
 export interface ChannelOpsDetail {

@@ -3,16 +3,12 @@ import { Link } from "react-router-dom";
 import { ArrowUpRightIcon } from "lucide-react";
 import type { ModelOpsChannel, ModelOpsRequest } from "@/lib/api/modelsOps";
 import { resizableColumn } from "@/components/data-table";
+import { requestIdLinkColumn } from "./shared-columns";
 import { HEALTH_LABEL, HEALTH_VARIANT, healthBucketOf } from "@/components/channels/health";
-import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
-import { formatCompact, formatLatencyMs } from "@/lib/format";
+import { AttemptSuccessRateCell } from "@/components/table-cells/AttemptSuccessRateCell";
+import { formatChartTs, formatCompact, formatLatencyMs } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 
 export const MODEL_OPS_CHANNEL_COLUMN_LABELS: Record<string, string> = {
   channel: "渠道",
@@ -121,7 +117,7 @@ export function modelOpsRequestColumns(): ColumnDef<ModelOpsRequest, unknown>[] 
       minSize: 88,
       enableHiding: false,
       cell: ({ row }) => (
-        <span className="text-xs tabular-nums">{fmtTs(row.original.at)}</span>
+        <span className="text-xs tabular-nums">{formatChartTs(row.original.at)}</span>
       ),
     }),
     resizableColumn<ModelOpsRequest>("status", {
@@ -140,18 +136,6 @@ export function modelOpsRequestColumns(): ColumnDef<ModelOpsRequest, unknown>[] 
         </span>
       ),
     }),
-    resizableColumn<ModelOpsRequest>("request_id", {
-      header: "请求",
-      size: 120,
-      minSize: 88,
-      cell: ({ row }) => (
-        <Button asChild size="sm" variant="ghost" className="font-mono text-xs">
-          <Link to={`/requests?q=${row.original.request_id}`}>
-            {row.original.request_id.slice(0, 8)}…
-            <ArrowUpRightIcon data-icon="inline-end" />
-          </Link>
-        </Button>
-      ),
-    }),
+    requestIdLinkColumn<ModelOpsRequest>(),
   ];
 }

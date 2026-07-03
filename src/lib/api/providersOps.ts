@@ -12,6 +12,12 @@ export interface ProviderOpsRow {
   status: string;
   created_at: string;
   channel_total: number;
+  models_count: number;
+  routes_count: number;
+}
+
+export interface ProviderOpsDetail {
+  channel_total: number;
   channel_enabled: number;
   attempt_total: number;
   attempt_succeeded: number;
@@ -26,14 +32,22 @@ export interface ProviderOpsRow {
   avg_tps: number;
 }
 
-export interface ProviderOpsDetail {
-  channel_total: number;
-  channel_enabled: number;
-  attempt_total: number;
-  attempt_succeeded: number;
-  success_rate: number;
-  timeout_total: number;
-  latency: LatencyStats;
+export interface ProviderOpsChannelCatalogItem {
+  id: number;
+  name: string;
+  status: string;
+}
+
+export interface ProviderOpsModelCatalogItem {
+  model_id: string;
+  display_name: string;
+}
+
+export interface ProviderOpsRouteCatalogItem {
+  id: number;
+  name: string;
+  status: string;
+  mode: string;
 }
 
 export interface ProviderOpsChannel {
@@ -89,6 +103,33 @@ export async function getProviderOpsDetail(
   const res = await api.get<{ data: ProviderOpsDetail }>(
     `/admin/v1/providers/${id}/ops/detail`,
     { params },
+  );
+  return res.data.data;
+}
+
+export async function getProviderOpsChannelCatalog(
+  id: number,
+): Promise<ProviderOpsChannelCatalogItem[]> {
+  const res = await api.get<{ data: ProviderOpsChannelCatalogItem[] }>(
+    `/admin/v1/providers/${id}/ops/channel-catalog`,
+  );
+  return res.data.data;
+}
+
+export async function getProviderOpsModelCatalog(
+  id: number,
+): Promise<ProviderOpsModelCatalogItem[]> {
+  const res = await api.get<{ data: ProviderOpsModelCatalogItem[] }>(
+    `/admin/v1/providers/${id}/ops/model-catalog`,
+  );
+  return res.data.data;
+}
+
+export async function getProviderOpsRouteCatalog(
+  id: number,
+): Promise<ProviderOpsRouteCatalogItem[]> {
+  const res = await api.get<{ data: ProviderOpsRouteCatalogItem[] }>(
+    `/admin/v1/providers/${id}/ops/route-catalog`,
   );
   return res.data.data;
 }

@@ -1,5 +1,6 @@
 import type { ColumnDef, ColumnSizingState } from "@tanstack/react-table";
 import type { TableColumnAlign } from "@/lib/table-columns";
+import { formatDateTime, formatInt, formatLatencyMs, formatPercent, maskSecret } from "@/lib/format";
 import type { TableLayoutPrefs } from "./use-persisted-table-state";
 
 /** 列定义 meta：列设置菜单用 label；align 控制表头/单元格对齐；fixedWidth 不参与比例拉伸。 */
@@ -8,6 +9,8 @@ export type DataTableColumnMeta = {
   align?: TableColumnAlign;
   /** 固定宽度（如 Badge 列），不参与剩余空间比例分配 */
   fixedWidth?: boolean;
+  /** 按行估算列内容宽度（用于动态 minWidth） */
+  autoSizeValue?: (row: any) => unknown;
 };
 
 const DEFAULT_SIZE = 120;
@@ -15,6 +18,12 @@ const DEFAULT_MIN = 72;
 const DEFAULT_MAX = 480;
 const DEFAULT_AUTOSIZE_PADDING = 44;
 const DEFAULT_AUTOSIZE_SAMPLE_SIZE = 80;
+/** 与 DataTable 表头/单元格 pl-6 拖拽留白一致。 */
+export const TABLE_HEAD_GUTTER_PX = 24;
+const CONTENT_MIN_FLOOR = 48;
+const ACTION_COLUMN_MIN = 88;
+/** 凭证列复制按钮占位（与 icon-sm 按钮 + gap 对齐）。 */
+const CREDENTIAL_COPY_BTN_PX = 32;
 
 /** 运维 / 详情表常用列 id 的默认宽度（px）。 */
 export const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: number }> = {
@@ -53,7 +62,10 @@ export const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: numb
   datetime: { size: 176, minSize: 128 },
   id: { size: 88, minSize: 64 },
   tokens: { size: 96, minSize: 72 },
-  channels: { size: 72, minSize: 56 },
+  channels: { size: 80, minSize: 80 },
+  models: { size: 80, minSize: 80 },
+  routes: { size: 80, minSize: 80 },
+  last_test: { size: 96, minSize: 72 },
   tps: { size: 88, minSize: 72 },
   avg_tps: { size: 88, minSize: 72 },
   margin: { size: 112, minSize: 88 },
@@ -78,18 +90,34 @@ export const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: numb
   key_label: { size: 200, minSize: 140 },
 };
 
-/** 表头列最小宽度（px）。 */
+/** 表头列最小宽度（px，列定义 fallback）。 */
 export function headerMinWidth<TData>(
   header: { column: { columnDef: ColumnDef<TData, unknown> } },
 ): number {
   return header.column.columnDef.minSize ?? DEFAULT_MIN;
 }
 
+/** 解析列 minWidth：优先使用按内容估算的宽度。 */
+export function resolveColumnMinWidth<TData>(
+  header: { column: { id: string; columnDef: ColumnDef<TData, unknown> } },
+  contentMinWidths?: Record<string, number>,
+): number {
+  const id = header.column.id;
+  if (contentMinWidths && id in contentMinWidths) {
+    return contentMinWidths[id];
+  }
+  return headerMinWidth(header);
+}
+
 /** 可见列 minSize 之和，用于表格横向滚动下限。 */
 export function sumHeadersMinWidth<TData>(
-  headers: { column: { columnDef: ColumnDef<TData, unknown> } }[],
+  headers: { column: { id: string; columnDef: ColumnDef<TData, unknown> } }[],
+  contentMinWidths?: Record<string, number>,
 ): number {
-  return headers.reduce((sum, header) => sum + headerMinWidth(header), 0);
+  return headers.reduce(
+    (sum, header) => sum + resolveColumnMinWidth(header, contentMinWidths),
+    0,
+  );
 }
 
 export function isFixedWidthColumn<TData>(
@@ -101,11 +129,12 @@ export function isFixedWidthColumn<TData>(
 
 /** 参与比例分配的列 minSize 之和（排除 fixedWidth / action 列）。 */
 export function sumFlexHeadersMinWidth<TData>(
-  headers: { column: { columnDef: ColumnDef<TData, unknown> } }[],
+  headers: { column: { id: string; columnDef: ColumnDef<TData, unknown> } }[],
+  contentMinWidths?: Record<string, number>,
 ): number {
   return headers.reduce((sum, header) => {
     if (isFixedWidthColumn(header) || isActionColumn(header)) return sum;
-    return sum + headerMinWidth(header);
+    return sum + resolveColumnMinWidth(header, contentMinWidths);
   }, 0);
 }
 
@@ -119,6 +148,31 @@ export function proportionalColumnStyle(
     width: `${(minWidth / totalMin) * 100}%`,
     minWidth,
   };
+}
+
+/** 弹性列等分：占比相同；minWidth 为当前页内容估算下限。 */
+export function equalColumnStyle(
+  minWidth: number,
+  flexColumnCount: number,
+): { width: string; minWidth: number } {
+  if (flexColumnCount <= 0) return { width: "auto", minWidth };
+  return {
+    width: `${100 / flexColumnCount}%`,
+    minWidth,
+  };
+}
+
+export type ColumnFlexMode = "proportional" | "equal";
+
+export function countFlexColumns<TData>(
+  headers: { column: { columnDef: ColumnDef<TData, unknown> } }[],
+  mode: ColumnFlexMode,
+): number {
+  return headers.reduce((count, header) => {
+    if (isFixedWidthColumn(header)) return count;
+    if (mode === "proportional" && isActionColumn(header)) return count;
+    return count + 1;
+  }, 0);
 }
 
 export function isActionColumn<TData>(
@@ -138,15 +192,42 @@ export function isActionColumn<TData>(
   return id === "action";
 }
 
-/** 单列 col 宽度：fixedWidth / action 列锁死 minSize，其余按比例分配。 */
+/** 渲染层是否锁死列宽（equal 模式下 action 也参与等分）。 */
+export function isLayoutFixedColumn<TData>(
+  header: { column: { id?: string; columnDef: ColumnDef<TData, unknown> } },
+  mode: ColumnFlexMode,
+): boolean {
+  if (isFixedWidthColumn(header)) return true;
+  if (mode === "equal") return false;
+  return isActionColumn(header);
+}
+
+/** 单列 col 宽度：fixedWidth 列锁死 minSize；其余按 proportional 或 equal 分配。 */
 export function headerColStyle<TData>(
-  header: { column: { columnDef: ColumnDef<TData, unknown> } },
+  header: { column: { id: string; columnDef: ColumnDef<TData, unknown> } },
   flexMinTotal: number,
+  options?: {
+    mode?: ColumnFlexMode;
+    flexColumnCount?: number;
+    contentMinWidths?: Record<string, number>;
+  },
 ): { width: number | string; minWidth: number; maxWidth?: number } {
-  const minWidth = headerMinWidth(header);
-  if (isFixedWidthColumn(header) || isActionColumn(header)) {
+  const minWidth = resolveColumnMinWidth(header, options?.contentMinWidths);
+  const mode = options?.mode ?? "proportional";
+
+  if (isFixedWidthColumn(header)) {
     return { width: minWidth, minWidth, maxWidth: minWidth };
   }
+
+  if (mode === "equal") {
+    const flexColumnCount = options?.flexColumnCount ?? 1;
+    return equalColumnStyle(minWidth, flexColumnCount);
+  }
+
+  if (isActionColumn(header)) {
+    return { width: minWidth, minWidth, maxWidth: minWidth };
+  }
+
   return proportionalColumnStyle(minWidth, flexMinTotal);
 }
 
@@ -276,6 +357,111 @@ function sizingSignature(sizing: ColumnSizingState): string {
     .join("|");
 }
 
+function isActionColumnId(id: string): boolean {
+  return id === "action";
+}
+
+function columnUsesHeadGutter<TData>(col: ColumnDef<TData, unknown>): boolean {
+  const meta = col.meta as DataTableColumnMeta | undefined;
+  const id = columnId(col);
+  return !isActionColumnId(id) && meta?.fixedWidth !== true;
+}
+
+function formatDisplayAutoSizeValue(columnId: string, raw: unknown): unknown {
+  if (raw == null) return raw;
+  if (columnId === "created_at" && typeof raw === "string") {
+    return formatDateTime(raw);
+  }
+  if (columnId === "success_rate" && typeof raw === "number") {
+    return formatPercent(raw);
+  }
+  if (columnId === "status" && typeof raw === "string") {
+    if (raw === "enabled") return "启用";
+    if (raw === "disabled") return "停用";
+  }
+  if (columnId === "credential" && typeof raw === "string") {
+    return maskSecret(raw);
+  }
+  if (
+    (columnId === "latency" || columnId === "latency_avg") &&
+    typeof raw === "number"
+  ) {
+    return formatLatencyMs(raw);
+  }
+  if (columnId === "timeout" || columnId === "timeout_ms") {
+    if (raw === 0 || raw == null) return "默认";
+    return formatLatencyMs(typeof raw === "number" ? raw : Number(raw));
+  }
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    if (columnId === "bound_models") {
+      return formatInt(raw);
+    }
+  }
+  if (columnId === "rate_limit") {
+    return "默认";
+  }
+  return raw;
+}
+
+function getCellAutoSizeValue<TData>(
+  col: ColumnDef<TData, unknown>,
+  row: TData,
+  columnId: string,
+): unknown {
+  const meta = col.meta as DataTableColumnMeta | undefined;
+  if (meta?.autoSizeValue) return meta.autoSizeValue(row);
+  let raw: unknown;
+  if ("accessorFn" in col && typeof col.accessorFn === "function") {
+    raw = col.accessorFn(row, 0);
+  } else if ("accessorKey" in col && typeof col.accessorKey === "string") {
+    raw = (row as Record<string, unknown>)[col.accessorKey];
+  }
+  return formatDisplayAutoSizeValue(columnId, raw);
+}
+
+/** 按表头 + 当前数据估算各列 minWidth；数据变化时重新计算。 */
+export function computeContentMinWidths<TData>(
+  columns: ColumnDef<TData, unknown>[],
+  data: TData[],
+  labels: Record<string, string>,
+  getAutoSizeValue?: (row: TData, columnId: string) => unknown,
+  sampleSize = DEFAULT_AUTOSIZE_SAMPLE_SIZE,
+): Record<string, number> {
+  const rows = data.slice(0, sampleSize);
+  const result: Record<string, number> = {};
+
+  for (const col of columns) {
+    const id = columnId(col);
+    if (!id) continue;
+
+    const { max, fallback } = columnBounds(col);
+    let width = estimateTextWidth(labels[id] ?? id) + DEFAULT_AUTOSIZE_PADDING;
+
+    if (isActionColumnId(id)) {
+      width = Math.max(width, ACTION_COLUMN_MIN);
+    } else {
+      for (const row of rows) {
+        const raw =
+          getAutoSizeValue?.(row, id) ?? getCellAutoSizeValue(col, row, id);
+        width = Math.max(
+          width,
+          estimateTextWidth(formatAutoSizeValue(raw)) + DEFAULT_AUTOSIZE_PADDING,
+        );
+      }
+      if (columnUsesHeadGutter(col)) {
+        width += TABLE_HEAD_GUTTER_PX;
+      }
+    }
+
+    result[id] = clampSize(width || fallback, CONTENT_MIN_FLOOR, max);
+    if (id === "credential") {
+      result[id] += CREDENTIAL_COPY_BTN_PX;
+    }
+  }
+
+  return result;
+}
+
 /** 根据表头 + 可见数据估算默认列宽；仍保留用户拖拽后的持久化列宽。 */
 export function autoSizeTableLayout<TData>(
   columns: ColumnDef<TData, unknown>[],
@@ -285,27 +471,16 @@ export function autoSizeTableLayout<TData>(
   sampleSize = DEFAULT_AUTOSIZE_SAMPLE_SIZE,
 ): TableLayoutPrefs {
   const layout = defaultTableLayout(columns);
-  const rows = data.slice(0, sampleSize);
-
-  for (const col of columns) {
-    const id = columnId(col);
-    if (!id) continue;
-
-    const { min, max, fallback } = columnBounds(col);
-    let width = estimateTextWidth(labels[id] ?? id) + DEFAULT_AUTOSIZE_PADDING;
-
-    for (const row of rows) {
-      const raw =
-        getAutoSizeValue?.(row, id) ??
-        ("accessorKey" in col && typeof col.accessorKey === "string"
-          ? (row as Record<string, unknown>)[col.accessorKey]
-          : undefined);
-      width = Math.max(width, estimateTextWidth(formatAutoSizeValue(raw)) + DEFAULT_AUTOSIZE_PADDING);
-    }
-
-    layout.columnSizing[id] = clampSize(width || fallback, min, max);
+  const contentMinWidths = computeContentMinWidths(
+    columns,
+    data,
+    labels,
+    getAutoSizeValue,
+    sampleSize,
+  );
+  for (const [id, width] of Object.entries(contentMinWidths)) {
+    layout.columnSizing[id] = width;
   }
-
   layout.columnSizingSignature = sizingSignature(layout.columnSizing);
   return layout;
 }

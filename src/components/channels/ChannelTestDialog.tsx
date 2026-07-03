@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { testChannel, type Channel, type ChannelTestResult } from "@/lib/api/channels";
 import { listChannelModels } from "@/lib/api/channelModels";
+import { ChannelLastTestDetail } from "@/components/channels/ChannelLastTest";
 import { apiErrorMessage } from "@/lib/api/client";
-import { formatRelativeTime } from "@/lib/format";
+import { formatLatencySec } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -84,8 +85,9 @@ function TestPanel({ channel }: { channel: Channel }) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
       queryClient.invalidateQueries({ queryKey: ["channel", channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["channels", "ops"] });
       if (result.success) {
-        toast.success(`检测通过 · ${result.tested_model} · ${result.latency_ms}ms`);
+        toast.success(`检测通过 · ${result.tested_model} · ${formatLatencySec(result.latency_ms)}`);
       } else {
         toast.error(`检测失败 · ${shortReason(result.error_code)}`);
       }
@@ -151,32 +153,7 @@ function TestPanel({ channel }: { channel: Channel }) {
 
 // 展示持久化的「最近一次检测」结果（来自 channel.last_test_*）。
 function LastResult({ channel }: { channel: Channel }) {
-  if (!channel.last_tested_at || channel.last_test_ok === null) {
-    return (
-      <div className="text-muted-foreground rounded-lg bg-muted/40 px-3 py-2 text-xs">
-        该渠道尚未检测过。
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-muted/40 px-3 py-2.5 text-xs">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-muted-foreground">最近检测</span>
-        <Badge variant={channel.last_test_ok ? "default" : "destructive"}>
-          {channel.last_test_ok ? "正常" : "异常"}
-        </Badge>
-        {channel.last_test_latency_ms !== null ? (
-          <span className="tabular-nums">{channel.last_test_latency_ms}ms</span>
-        ) : null}
-        <span className="text-muted-foreground">· {formatRelativeTime(channel.last_tested_at)}</span>
-      </div>
-      {!channel.last_test_ok && channel.last_test_error ? (
-        <p className="text-muted-foreground break-words leading-relaxed">
-          {channel.last_test_error}
-        </p>
-      ) : null}
-    </div>
-  );
+  return <ChannelLastTestDetail info={channel} />;
 }
 
 // 展示本次刚触发的检测结果。
@@ -190,7 +167,9 @@ function CurrentResult({ result }: { result: ChannelTestResult }) {
         <Badge variant={result.success ? "default" : "destructive"}>
           {result.success ? "检测通过" : `检测失败 · ${shortReason(result.error_code)}`}
         </Badge>
-        <span className="text-muted-foreground tabular-nums text-xs">{result.latency_ms}ms</span>
+        <span className="text-muted-foreground tabular-nums text-xs">
+          {formatLatencySec(result.latency_ms)}
+        </span>
         {result.http_status > 0 ? (
           <span className="text-muted-foreground tabular-nums text-xs">
             HTTP {result.http_status}

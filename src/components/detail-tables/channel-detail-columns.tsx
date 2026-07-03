@@ -3,17 +3,14 @@ import { Link } from "react-router-dom";
 import { ArrowUpRightIcon } from "lucide-react";
 import type { ChannelOpsError, ChannelOpsModel, ChannelOpsRoute } from "@/lib/api/channelsOps";
 import { resizableColumn } from "@/components/data-table";
-import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
-import { AttemptSuccessRateCell } from "@/components/ops-tables/AttemptSuccessRateCell";
+import { requestIdLinkColumn } from "./shared-columns";
+import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
+import { AttemptSuccessRateCell } from "@/components/table-cells/AttemptSuccessRateCell";
 import { TruncateCell } from "@/components/openstatus-table/truncate-cell";
-import { formatCompact } from "@/lib/format";
+import { formatChartTs, formatCompact } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
-
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 
 export const CHANNEL_OPS_ERROR_COLUMN_LABELS: Record<string, string> = {
   at: "时间",
@@ -49,7 +46,7 @@ export function channelOpsErrorColumns(): ColumnDef<ChannelOpsError, unknown>[] 
       minSize: 88,
       enableHiding: false,
       cell: ({ row }) => (
-        <span className="text-xs tabular-nums">{fmtTs(row.original.at)}</span>
+        <span className="text-xs tabular-nums">{formatChartTs(row.original.at)}</span>
       ),
     }),
     resizableColumn<ChannelOpsError>("upstream_model", {
@@ -95,19 +92,7 @@ export function channelOpsErrorColumns(): ColumnDef<ChannelOpsError, unknown>[] 
         />
       ),
     }),
-    resizableColumn<ChannelOpsError>("request_id", {
-      header: "请求",
-      size: 120,
-      minSize: 88,
-      cell: ({ row }) => (
-        <Button asChild size="sm" variant="ghost" className="font-mono text-xs">
-          <Link to={`/requests?q=${row.original.request_id}`}>
-            {row.original.request_id.slice(0, 8)}…
-            <ArrowUpRightIcon data-icon="inline-end" />
-          </Link>
-        </Button>
-      ),
-    }),
+    requestIdLinkColumn<ChannelOpsError>(),
   ];
 }
 
@@ -203,9 +188,7 @@ export function channelOpsRouteColumns(): ColumnDef<ChannelOpsRoute, unknown>[] 
       size: 88,
       minSize: 72,
       cell: ({ row }) => (
-        <Badge variant={row.original.status === "enabled" ? "default" : "outline"}>
-          {row.original.status === "enabled" ? "启用" : "停用"}
-        </Badge>
+        <StatusBadge status={row.original.status} />
       ),
     }),
     resizableColumn<ChannelOpsRoute>("action", {

@@ -26,12 +26,15 @@ import { GripVerticalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tableAlignClass } from "@/lib/table-columns";
 import {
+  countFlexColumns,
   headerColStyle,
-  headerMinWidth,
   isActionColumn,
   isFixedWidthColumn,
+  isLayoutFixedColumn,
+  resolveColumnMinWidth,
   sumFlexHeadersMinWidth,
   sumHeadersMinWidth,
+  type ColumnFlexMode,
   type DataTableColumnMeta,
 } from "./helpers";
 import {
@@ -48,9 +51,13 @@ const HEAD_GUTTER = "pl-6";
 function DraggableTableHead<TData>({
   header,
   canReorder,
+  columnFlexMode,
+  contentMinWidths,
 }: {
   header: Header<TData, unknown>;
   canReorder: boolean;
+  columnFlexMode: ColumnFlexMode;
+  contentMinWidths?: Record<string, number>;
 }) {
   const {
     attributes,
@@ -64,8 +71,8 @@ function DraggableTableHead<TData>({
     disabled: !canReorder,
   });
 
-  const minWidth = headerMinWidth(header);
-  const fixed = isFixedWidthColumn(header) || isActionColumn(header);
+  const minWidth = resolveColumnMinWidth(header, contentMinWidths);
+  const fixed = isLayoutFixedColumn(header, columnFlexMode);
   const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined;
   const useGutter = !isActionColumn(header) && !isFixedWidthColumn(header);
 
@@ -75,8 +82,8 @@ function DraggableTableHead<TData>({
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        minWidth,
-        ...(fixed ? { maxWidth: minWidth } : null),
+        ...(minWidth != null ? { minWidth } : null),
+        ...(fixed && minWidth != null ? { maxWidth: minWidth } : null),
       }}
       className={cn(
         "group/head relative select-none pr-2 align-middle",
@@ -118,6 +125,8 @@ export function DataTable<TData>({
   columnOrder,
   onColumnOrderChange,
   pinnedColumnId = "name",
+  columnFlexMode = "equal",
+  contentMinWidths,
   emptyMessage = "暂无数据",
   onRowClick,
 }: {
@@ -125,6 +134,10 @@ export function DataTable<TData>({
   columnOrder: ColumnOrderState;
   onColumnOrderChange: (order: ColumnOrderState) => void;
   pinnedColumnId?: string | null;
+  /** proportional：按 minSize 比例；equal：弹性列等分容器宽度 */
+  columnFlexMode?: ColumnFlexMode;
+  /** 按当前数据估算的列 minWidth；未传则回退列定义 minSize */
+  contentMinWidths?: Record<string, number>;
   emptyMessage?: string;
   onRowClick?: (row: TData) => void;
 }) {
@@ -152,12 +165,20 @@ export function DataTable<TData>({
   const headers = headerGroup?.headers ?? [];
   const sortableIds = headers.map((h) => h.column.id);
   const totalMinWidth = useMemo(
-    () => sumHeadersMinWidth(headers),
-    [headers],
+    () => sumHeadersMinWidth(headers, contentMinWidths),
+    [contentMinWidths, headers],
   );
   const flexMinTotal = useMemo(
-    () => sumFlexHeadersMinWidth(headers),
-    [headers],
+    () => sumFlexHeadersMinWidth(headers, contentMinWidths),
+    [contentMinWidths, headers],
+  );
+  const flexColumnCount = useMemo(
+    () => countFlexColumns(headers, columnFlexMode),
+    [columnFlexMode, headers],
+  );
+  const colStyleOptions = useMemo(
+    () => ({ mode: columnFlexMode, flexColumnCount, contentMinWidths }),
+    [columnFlexMode, contentMinWidths, flexColumnCount],
   );
 
   return (
@@ -173,7 +194,7 @@ export function DataTable<TData>({
             {headers.map((header) => (
               <col
                 key={header.id}
-                style={headerColStyle(header, flexMinTotal)}
+                style={headerColStyle(header, flexMinTotal, colStyleOptions)}
               />
             ))}
           </colgroup>
@@ -188,6 +209,8 @@ export function DataTable<TData>({
                     <DraggableTableHead
                       key={header.id}
                       header={header}
+                      columnFlexMode={columnFlexMode}
+                      contentMinWidths={contentMinWidths}
                     canReorder={
                       pinnedColumnId == null
                         ? header.column.id !== "action" &&
@@ -221,19 +244,24 @@ export function DataTable<TData>({
                     const meta = cell.column.columnDef.meta as
                       | DataTableColumnMeta
                       | undefined;
-                    const minWidth = headerMinWidth({
-                      column: { columnDef: cell.column.columnDef },
-                    });
-                    const fixed =
-                      isFixedWidthColumn({
-                        column: { columnDef: cell.column.columnDef },
-                      }) ||
-                      isActionColumn({
+                    const minWidth = resolveColumnMinWidth(
+                      {
                         column: {
                           id: cell.column.id,
                           columnDef: cell.column.columnDef,
                         },
-                      });
+                      },
+                      contentMinWidths,
+                    );
+                    const fixed = isLayoutFixedColumn(
+                      {
+                        column: {
+                          id: cell.column.id,
+                          columnDef: cell.column.columnDef,
+                        },
+                      },
+                      columnFlexMode,
+                    );
                     const isAction = cell.column.id === "action";
                     const useGutter =
                       !isAction &&
@@ -245,7 +273,7 @@ export function DataTable<TData>({
                         key={cell.id}
                         style={{
                           minWidth,
-                          ...(fixed ? { maxWidth: minWidth } : null),
+                          ...(fixed && minWidth != null ? { maxWidth: minWidth } : null),
                         }}
                         className={cn(
                           !isAction && "overflow-hidden",

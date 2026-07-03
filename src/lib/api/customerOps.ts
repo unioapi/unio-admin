@@ -29,7 +29,10 @@ export interface UserOpsRow {
   succeeded: number;
   success_rate: number;
   consumption_usd: string;
+  total_consumption_usd: string;
+  total_topup_usd: string;
   last_used_at: string | null;
+  created_at: string;
   low_balance: boolean;
 }
 
@@ -41,15 +44,6 @@ export interface UserOpsDetail {
   succeeded: number;
   success_rate: number;
   consumption_usd: string;
-}
-
-export interface CustomerKey {
-  id: number;
-  name: string;
-  status: string;
-  spend_limit: string | null;
-  spent_total: string;
-  last_used_at: string | null;
 }
 
 export interface ApiKeysOpsSummary {
@@ -68,6 +62,7 @@ export interface ApiKeyOpsRow {
   status: string;
   route_id: number;
   route_name: string;
+  route_price_ratio: string;
   spend_limit: string | null;
   spent_total: string;
   request_total: number;
@@ -99,11 +94,6 @@ export async function getUsersOpsTable(params: PageParams): Promise<Page<UserOps
 
 export async function getUserOpsDetail(id: number, params: RangeQuery): Promise<UserOpsDetail> {
   const res = await api.get<{ data: UserOpsDetail }>(`/admin/v1/users/${id}/ops/detail`, { params });
-  return res.data.data;
-}
-
-export async function getUserOpsKeys(id: number): Promise<CustomerKey[]> {
-  const res = await api.get<{ data: CustomerKey[] }>(`/admin/v1/users/${id}/ops/keys`);
   return res.data.data;
 }
 

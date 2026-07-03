@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { ChannelOpsDetail } from "@/lib/api/channelsOps";
 import type { BreakdownRow } from "@/lib/api/dashboard";
-import { formatCompact, formatInt, formatRelativeTime } from "@/lib/format";
-import { AttemptLatencyCell } from "@/components/ops-tables/AttemptLatencyCell";
+import { formatInt, formatRelativeTime } from "@/lib/format";
+import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
 import { ChannelSuccessRateCell } from "@/components/common/ChannelSuccessRateCell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -33,9 +33,7 @@ export function ChannelOverviewStats({
   breakdownRow?: BreakdownRow;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      <Stat label="尝试数" value={formatCompact(detail.attempt_total)} />
-
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       <div className="min-w-0 overflow-hidden rounded-md border bg-card p-2.5">
         <div className="text-muted-foreground text-xs">成功率</div>
         <div className="mt-1.5 min-w-0 overflow-hidden">
@@ -72,8 +70,7 @@ export function ChannelOverviewStats({
 
 export function ChannelOverviewStatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      <Skeleton className="h-[62px] w-full rounded-md" />
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       {Array.from({ length: 5 }).map((_, i) => (
         <Skeleton key={i} className="h-[62px] w-full rounded-md" />
       ))}

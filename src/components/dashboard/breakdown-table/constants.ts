@@ -147,6 +147,14 @@ export function errorCodeLabel(code: string): string {
   return code;
 }
 
+/**
+ * 量级列名随维度切换：服务商/渠道按 attempt（尝试）粒度归因，故称「尝试」；
+ * 模型/线路为请求粒度，称「请求」。避免同名「请求」掩盖不同口径。
+ */
+export function requestsCountLabel(dimension: BreakdownDimension): string {
+  return dimension === "provider" || dimension === "channel" ? "尝试" : "请求";
+}
+
 export function breakdownColumnLabels(
   dimension: BreakdownDimension,
   nameLabel: string,
@@ -154,7 +162,8 @@ export function breakdownColumnLabels(
   const labels: Record<string, string> = { name: nameLabel };
   for (const id of BREAKDOWN_COLUMNS[dimension]) {
     if (id === "name") continue;
-    labels[id] = BREAKDOWN_COLUMN_LABEL[id];
+    labels[id] =
+      id === "requests" ? requestsCountLabel(dimension) : BREAKDOWN_COLUMN_LABEL[id];
   }
   return labels;
 }

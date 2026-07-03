@@ -1,6 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "react-router-dom";
-import { ArrowUpRightIcon } from "lucide-react";
 import type {
   RouteOpsBoundKey,
   RouteOpsChannelPoolItem,
@@ -8,14 +7,11 @@ import type {
   RouteOpsRequest,
 } from "@/lib/api/routesOps";
 import { resizableColumn } from "@/components/data-table";
-import { formatCompact, formatPercent } from "@/lib/format";
+import { requestIdLinkColumn } from "./shared-columns";
+import { formatChartTs, formatCompact, formatPercent } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
-
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 
 export const ROUTE_OPS_POOL_COLUMN_LABELS: Record<string, string> = {
   channel: "渠道",
@@ -65,9 +61,7 @@ export function routeOpsPoolColumns(): ColumnDef<RouteOpsChannelPoolItem, unknow
       size: 88,
       minSize: 72,
       cell: ({ row }) => (
-        <Badge variant={row.original.channel_status === "enabled" ? "default" : "outline"}>
-          {row.original.channel_status === "enabled" ? "启用" : "停用"}
-        </Badge>
+        <StatusBadge status={row.original.channel_status} />
       ),
     }),
     resizableColumn<RouteOpsChannelPoolItem>("priority", {
@@ -152,7 +146,7 @@ export function routeOpsRequestColumns(): ColumnDef<RouteOpsRequest, unknown>[] 
       minSize: 88,
       enableHiding: false,
       cell: ({ row }) => (
-        <span className="text-xs tabular-nums">{fmtTs(row.original.at)}</span>
+        <span className="text-xs tabular-nums">{formatChartTs(row.original.at)}</span>
       ),
     }),
     resizableColumn<RouteOpsRequest>("model_id", {
@@ -167,18 +161,6 @@ export function routeOpsRequestColumns(): ColumnDef<RouteOpsRequest, unknown>[] 
       minSize: 72,
       cell: ({ row }) => <span className="text-xs">{row.original.status}</span>,
     }),
-    resizableColumn<RouteOpsRequest>("request_id", {
-      header: "请求",
-      size: 120,
-      minSize: 88,
-      cell: ({ row }) => (
-        <Button asChild size="sm" variant="ghost">
-          <Link to={`/requests?q=${row.original.request_id}`}>
-            {row.original.request_id.slice(0, 8)}…
-            <ArrowUpRightIcon data-icon="inline-end" />
-          </Link>
-        </Button>
-      ),
-    }),
+    requestIdLinkColumn<RouteOpsRequest>(),
   ];
 }

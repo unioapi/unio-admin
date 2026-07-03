@@ -1,9 +1,7 @@
-import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
-import type { Provider } from "@/lib/api/providers";
 import { listAllProviders } from "@/lib/api/providers";
-import { getProviderOpsDetail, getProvidersOpsTable, type ProviderOpsRow } from "@/lib/api/providersOps";
+import { getProviderOpsDetail } from "@/lib/api/providersOps";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { DetailPageHeader } from "@/components/common/DetailPageHeader";
@@ -12,92 +10,45 @@ import {
   ProviderOverviewStats,
   ProviderOverviewStatsSkeleton,
 } from "@/components/providers/ProviderOverviewStats";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-function providerStubFromList(
-  p: Provider,
-  detail?: Awaited<ReturnType<typeof getProviderOpsDetail>>,
-): ProviderOpsRow {
-  return {
-    id: p.id,
-    slug: p.slug,
-    name: p.name,
-    status: p.status,
-    created_at: p.created_at,
-    channel_total: detail?.channel_total ?? 0,
-    channel_enabled: detail?.channel_enabled ?? 0,
-    attempt_total: detail?.attempt_total ?? 0,
-    attempt_succeeded: detail?.attempt_succeeded ?? 0,
-    success_rate: detail?.success_rate ?? 0,
-    timeout_total: detail?.timeout_total ?? 0,
-    latency: detail?.latency ?? {
-      avg: 0,
-      p50: 0,
-      p90: 0,
-      p95: 0,
-      p99: 0,
-      sample: 0,
-      coverage: 0,
-    },
-    health: "no_data",
-    tokens: 0,
-    revenue_usd: "0",
-    cost_usd: "0",
-    margin_usd: "0",
-    avg_tps: 0,
-  };
-}
 
 export function ProviderDetailPage() {
   const { providerId: providerIdParam } = useParams();
   const providerId = Number(providerIdParam);
   const { value, setRange, params, refresh, refreshedAt } = useRangeQuery("24h");
   const rangeQuery = { ...params, range: value.preset };
-
-  if (!Number.isFinite(providerId) || providerId <= 0) {
-    return <Navigate to="/providers" replace />;
-  }
+  const validId = Number.isFinite(providerId) && providerId > 0;
 
   const allProviders = useQuery({
     queryKey: ["providers", "all"],
     queryFn: listAllProviders,
+    enabled: validId,
   });
+
   const opsDetail = useQuery({
     queryKey: ["providers", providerId, "ops-detail", rangeQuery],
     queryFn: () => getProviderOpsDetail(providerId, rangeQuery),
     placeholderData: keepPreviousData,
+    enabled: validId && allProviders.isSuccess,
+    retry: 1,
   });
 
-  const opsRow = useQuery({
-    queryKey: ["providers", "ops-table", "row", providerId, rangeQuery],
-    queryFn: async () => {
-      const page = await getProvidersOpsTable({ ...rangeQuery, page: 1, page_size: 500 });
-      return page.items.find((p) => p.id === providerId) ?? null;
-    },
-    placeholderData: keepPreviousData,
-    enabled: allProviders.isSuccess,
-  });
+  if (!validId) {
+    return <Navigate to="/providers" replace />;
+  }
 
-  const providerEntity = useMemo(
-    () => allProviders.data?.find((x) => x.id === providerId) ?? null,
-    [allProviders.data, providerId],
-  );
-
-  const provider = useMemo(() => {
-    if (!providerEntity) return null;
-    return providerStubFromList(providerEntity, opsDetail.data);
-  }, [providerEntity, opsDetail.data]);
-
+  const providerEntity = allProviders.data?.find((x) => x.id === providerId) ?? null;
   const entityLoading = allProviders.isPending;
   const notFound = allProviders.isSuccess && providerEntity == null;
 
-  const overviewSummary =
-    opsDetail.isPending && !opsDetail.data ? (
-      <ProviderOverviewStatsSkeleton />
-    ) : opsDetail.data ? (
-      <ProviderOverviewStats detail={opsDetail.data} health={opsRow.data?.health} />
-    ) : null;
+  const overviewSummary = opsDetail.isError ? (
+    <p className="text-destructive text-sm">概览加载失败：{(opsDetail.error as Error).message}</p>
+  ) : opsDetail.isPending && !opsDetail.data ? (
+    <ProviderOverviewStatsSkeleton />
+  ) : opsDetail.data ? (
+    <ProviderOverviewStats detail={opsDetail.data} />
+  ) : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -107,9 +58,7 @@ export function ProviderDetailPage() {
         titleLoading={entityLoading}
         badge={
           providerEntity ? (
-            <Badge variant={providerEntity.status === "enabled" ? "default" : "outline"}>
-              {providerEntity.status === "enabled" ? "启用" : "停用"}
-            </Badge>
+            <StatusBadge status={providerEntity.status} />
           ) : null
         }
         subtitle={providerEntity ? providerEntity.slug : null}
@@ -140,8 +89,8 @@ export function ProviderDetailPage() {
             </Link>
           </AlertDescription>
         </Alert>
-      ) : provider ? (
-        <ProviderDetailContent providerId={provider.id} range={rangeQuery} />
+      ) : providerEntity ? (
+        <ProviderDetailContent providerId={providerEntity.id} range={rangeQuery} />
       ) : null}
     </div>
   );

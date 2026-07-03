@@ -8,21 +8,24 @@ import type { MetricIntent } from "@/components/common/MetricCard";
 // 概览雷达卡片的纯计算 / 阈值逻辑。与组件分离，避免 fast-refresh 失效（仅组件文件应导出组件）。
 
 // ---- 请求成功率 ----
-// SLO 参考线（与 rateIntent 阈值一致）
+// SLO 参考线（success 阈值）与 warning 阈值；rateIntent 与参考线统一引用，避免魔法数散落。
 export const SUCCESS_RATE_SLO = 0.95;
+export const SUCCESS_RATE_WARN = 0.8;
 
 export function rateIntent(rate: number): "success" | "warning" | "danger" {
-  if (rate >= 0.95) return "success";
-  if (rate >= 0.8) return "warning";
+  if (rate >= SUCCESS_RATE_SLO) return "success";
+  if (rate >= SUCCESS_RATE_WARN) return "warning";
   return "danger";
 }
 
+// 「完成」= 成功 + 失败（成功率分母口径）；canceled 客户端取消不计入。
 export function requestTerminal(req: RadarRequests): number {
-  return req.succeeded + req.failed + req.canceled;
+  return req.succeeded + req.failed;
 }
 
+// 进行中 = pending / running（总请求 − 完成 − 取消）。
 export function requestInFlight(req: RadarRequests): number {
-  return Math.max(0, req.total - requestTerminal(req));
+  return Math.max(0, req.total - req.succeeded - req.failed - req.canceled);
 }
 
 // ---- 缓存 ----
@@ -69,10 +72,18 @@ export function profitRate(r: Revenue): number {
   return Number(r.margin_usd) / rev;
 }
 
-export function profitIntent(margin: number): MetricIntent {
+// 毛利率低于此阈值视为「偏薄」，着 warning（避免极小正毛利也显示为健康的绿色）。
+export const PROFIT_THIN_RATE = 0.1;
+
+// 着色口径：亏损→danger；正毛利但毛利率 < 阈值→warning；健康→success；打平→default。
+// 缺 revenue 时退回按符号（正→success）。
+export function profitIntent(margin: number, revenue?: number): MetricIntent {
   if (margin < 0) return "danger";
-  if (margin > 0) return "success";
-  return "default";
+  if (margin === 0) return "default";
+  if (revenue != null && revenue > 0 && margin / revenue < PROFIT_THIN_RATE) {
+    return "warning";
+  }
+  return "success";
 }
 
 // ---- 结算异常 ----

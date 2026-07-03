@@ -13,10 +13,12 @@ import {
   DataTable,
   DataTableViewOptions,
   clampColumnSizing,
+  computeContentMinWidths,
   defaultTableLayout,
   ensureResizableColumns,
   pinnedColumnIdFromDefs,
   usePersistedTableState,
+  type ColumnFlexMode,
 } from "@/components/data-table";
 import { FilterChips, type FilterChip } from "./filter-chips";
 import { TablePagination } from "@/components/common/TablePagination";
@@ -51,6 +53,10 @@ export interface ServerDataTableProps<TData> {
   onClearChips?: () => void;
   /** 不参与拖拽的列 id；默认从列定义推断 */
   pinnedColumnId?: string | null;
+  /** proportional：按 minSize 比例；equal：各列等分容器宽度（默认） */
+  columnFlexMode?: ColumnFlexMode;
+  /** 覆盖单列内容宽度估算 */
+  getAutoSizeValue?: (row: TData, columnId: string) => unknown;
   onRowClick?: (row: TData) => void;
   /** 表格外框圆角边框；详情内嵌表可传 false */
   bordered?: boolean;
@@ -82,6 +88,8 @@ export function ServerDataTable<TData>({
   chips = [],
   onClearChips,
   pinnedColumnId: pinnedColumnIdProp,
+  columnFlexMode = "equal",
+  getAutoSizeValue,
   onRowClick,
   bordered = true,
 }: ServerDataTableProps<TData>) {
@@ -141,6 +149,10 @@ export function ServerDataTable<TData>({
   });
 
   const labels = useMemo(() => columnLabels, [columnLabels]);
+  const contentMinWidths = useMemo(
+    () => computeContentMinWidths(columns, data, labels, getAutoSizeValue),
+    [columns, data, getAutoSizeValue, labels],
+  );
   const rows = table.getRowModel().rows;
   const showEmpty = !loading && rows.length === 0;
 
@@ -206,6 +218,8 @@ export function ServerDataTable<TData>({
             columnOrder={columnOrder}
             onColumnOrderChange={setColumnOrder}
             pinnedColumnId={pinnedColumnId}
+            columnFlexMode={columnFlexMode}
+            contentMinWidths={contentMinWidths}
             emptyMessage={emptyMessage}
             onRowClick={onRowClick}
           />

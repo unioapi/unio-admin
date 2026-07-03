@@ -12,7 +12,9 @@ import {
   autoSizeTableLayout,
   clampColumnSizing,
   columnLabelsFromDefs,
+  computeContentMinWidths,
   defaultTableLayout,
+  type ColumnFlexMode,
 } from "./helpers";
 import {
   usePersistedTableState,
@@ -27,6 +29,8 @@ export type ConfigurableDataTableProps<TData> = {
   columnLabels?: Record<string, string>;
   /** 不参与拖拽的列 id；默认 `name`；传 null 则全部可拖 */
   pinnedColumnId?: string | null;
+  /** proportional：按 minSize 比例；equal：各列等分（默认） */
+  columnFlexMode?: ColumnFlexMode;
   defaultLayout?: TableLayoutPrefs;
   /** `fixed` 维持定义列宽；`content` 按当前数据估算默认列宽。 */
   layoutMode?: "fixed" | "content";
@@ -87,6 +91,7 @@ export function ConfigurableDataTable<TData>({
   columns,
   columnLabels: columnLabelsProp,
   pinnedColumnId = "name",
+  columnFlexMode = "equal",
   defaultLayout: defaultLayoutProp,
   layoutMode = "fixed",
   getAutoSizeValue,
@@ -115,6 +120,11 @@ export function ConfigurableDataTable<TData>({
     }
     return defaultTableLayout(columns);
   }, [columnLabels, columns, data, defaultLayoutProp, getAutoSizeValue, layoutMode]);
+
+  const contentMinWidths = useMemo(
+    () => computeContentMinWidths(columns, data, columnLabels, getAutoSizeValue),
+    [columnLabels, columns, data, getAutoSizeValue],
+  );
 
   const sanitizePrefs = useCallback(
     (prefs: TableLayoutPrefs) => {
@@ -200,6 +210,8 @@ export function ConfigurableDataTable<TData>({
           columnOrder={columnOrder}
           onColumnOrderChange={setColumnOrder}
           pinnedColumnId={pinnedColumnId}
+          columnFlexMode={columnFlexMode}
+          contentMinWidths={contentMinWidths}
           emptyMessage={emptyMessage}
           onRowClick={onRowClick}
         />
