@@ -8,6 +8,7 @@ export interface Provider {
   status: string;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 }
 
 // 服务端分页：把 page/page_size/status/q 作为 query 传给后端，拆出 items + total。
@@ -67,8 +68,18 @@ export async function updateProvider({
   return res.data.data;
 }
 
-// 删除服务商：录错的脏数据可真删（slug 随之释放，可重录同名）；
-// 名下仍有渠道或已被请求/账务历史引用时，后端返回 409，提示先删渠道或改用停用。
+// 删除服务商：仅允许删除已归档且无历史引用的服务商（后端「先归档才能删」闸门）；
+// 名下仍有渠道或已被请求/账务历史引用时，后端返回 409。
 export async function deleteProvider(id: number): Promise<void> {
   await api.delete(`/admin/v1/providers/${id}`);
+}
+
+// 归档服务商：级联归档名下渠道并从线路池移除；slug 不变；可恢复。
+export async function archiveProvider(id: number): Promise<void> {
+  await api.post(`/admin/v1/providers/${id}/archive`);
+}
+
+// 恢复服务商：archived → disabled（名下渠道不自动恢复，需逐个恢复）。
+export async function restoreProvider(id: number): Promise<void> {
+  await api.post(`/admin/v1/providers/${id}/restore`);
 }

@@ -125,7 +125,11 @@ export function UserDetailPage() {
           </AlertDescription>
         </Alert>
       ) : user && opsDetail.data ? (
-        <UserDetailContent user={user} detail={opsDetail.data} />
+        <UserDetailContent
+          user={user}
+          detail={opsDetail.data}
+          rangeParams={params}
+        />
       ) : null}
     </div>
   );

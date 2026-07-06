@@ -11,6 +11,7 @@ const PAGE_SIZE = 20;
 export const ENTITY_STATUS_OPTIONS = [
   { value: "enabled", label: "启用" },
   { value: "disabled", label: "停用" },
+  { value: "archived", label: "已归档" },
 ] as const;
 
 export interface StatusOption {
@@ -38,6 +39,8 @@ interface UseServerTableOptions<T> {
   defaultSort?: { id: string; desc: boolean };
   /** 提供后暴露 status / onStatusChange / statusOptions 与状态 chip。 */
   statusOptions?: readonly StatusOption[];
+  /** 状态过滤初值：缺省 ""（显示全部）；传 "enabled" 可默认只显示启用（归档/停用需手动切换）。 */
+  initialStatus?: string;
   /** 额外 query key 片段（如 userId、range），排在实体名之后以保证前缀失效可命中。 */
   extraKey?: readonly unknown[];
   enabled?: boolean;
@@ -52,6 +55,7 @@ export function useServerTable<T>({
   fetch,
   defaultSort,
   statusOptions,
+  initialStatus = "",
   extraKey = [],
   enabled = true,
   pageSize = PAGE_SIZE,
@@ -63,7 +67,7 @@ export function useServerTable<T>({
   });
 
   const [searchInput, setSearchInput] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(initialStatus);
   const search = useDebouncedValue(searchInput.trim(), 300);
 
   const query = useQuery({

@@ -16,6 +16,7 @@ export function ProvidersPage() {
     fetch: (p) => getProvidersOpsTable({ range: "all", ...p }),
     defaultSort: { id: "name", desc: false },
     statusOptions: ENTITY_STATUS_OPTIONS,
+    initialStatus: "enabled",
   });
 
   return (

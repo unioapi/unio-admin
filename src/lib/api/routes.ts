@@ -26,6 +26,7 @@ export interface Route {
   channels: RouteChannel[];
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 }
 
 export async function listRoutes(): Promise<Route[]> {
@@ -69,6 +70,43 @@ export async function updateRoute({
   return res.data.data;
 }
 
+// 删除线路：仅允许删除已归档线路（后端「先归档才能删」闸门）；被 api_key/用户引用时 409。
 export async function deleteRoute(id: number): Promise<void> {
   await api.delete(`/admin/v1/routes/${id}`);
+}
+
+export interface EmptyRouteWarning {
+  route_id: number;
+  name: string;
+  key_count: number;
+}
+
+// 归档线路：若线路仍绑定 api_key，须传 migrateKeysTo 先迁移再归档（§4B 入口②）；
+// 无绑定 key 时可省略。返回归档后「候选池空但仍有 key」的断供预警。
+export async function archiveRoute(
+  id: number,
+  migrateKeysTo?: number,
+): Promise<EmptyRouteWarning[]> {
+  const res = await api.post<{ data: { warnings: EmptyRouteWarning[] } }>(
+    `/admin/v1/routes/${id}/archive`,
+    migrateKeysTo != null ? { migrate_keys_to: migrateKeysTo } : {},
+  );
+  return res.data.data.warnings ?? [];
+}
+
+// 恢复线路：archived → disabled（归档前已无 key，恢复后需手动绑定/迁入）。
+export async function restoreRoute(id: number): Promise<void> {
+  await api.post(`/admin/v1/routes/${id}/restore`);
+}
+
+// 整条线路 api_key 一键迁移到目标线路（§4B 入口①）。返回迁移的 key 数。
+export async function migrateRouteKeys(
+  id: number,
+  targetRouteId: number,
+): Promise<number> {
+  const res = await api.post<{ data: { migrated: number } }>(
+    `/admin/v1/routes/${id}/migrate-keys`,
+    { target_route_id: targetRouteId },
+  );
+  return res.data.data.migrated;
 }

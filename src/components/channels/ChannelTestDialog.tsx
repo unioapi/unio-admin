@@ -182,6 +182,16 @@ function CurrentResult({ result }: { result: ChannelTestResult }) {
       {!result.success && result.message ? (
         <p className="text-muted-foreground break-words text-xs leading-relaxed">{result.message}</p>
       ) : null}
+      {!result.success && result.upstream_error ? (
+        <details className="mt-0.5">
+          <summary className="text-muted-foreground cursor-pointer text-xs select-none">
+            上游原始错误
+          </summary>
+          <pre className="text-muted-foreground bg-muted/50 mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md p-2 font-mono text-[11px] leading-relaxed">
+            {result.upstream_error}
+          </pre>
+        </details>
+      ) : null}
     </div>
   );
 }

@@ -21,6 +21,8 @@ function toProvider(row: ProviderOpsRow): Provider {
     status: row.status,
     created_at: row.created_at,
     updated_at: "",
+    // ops 行不带归档时间；行操作只按 status 判断，archived_at 置空即可满足类型。
+    archived_at: null,
   };
 }
 

@@ -17,6 +17,7 @@ export function ChannelsPage() {
     queryKey: "channels",
     fetch: (p) => getChannelsOpsTable({ range: "all", ...p }),
     statusOptions: ENTITY_STATUS_OPTIONS,
+    initialStatus: "enabled",
   });
 
   return (

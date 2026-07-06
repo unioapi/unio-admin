@@ -1,7 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 
-/** 启用/停用状态徽标（enabled → 启用/default，其余 → 停用/outline）。 */
+/** 三态状态徽标：enabled → 启用/default；archived → 已归档/secondary；其余(disabled) → 停用/outline。 */
 export function StatusBadge({ status }: { status: string }) {
+  if (status === "archived") {
+    return <Badge variant="secondary">已归档</Badge>;
+  }
   const enabled = status === "enabled";
   return (
     <Badge variant={enabled ? "default" : "outline"}>

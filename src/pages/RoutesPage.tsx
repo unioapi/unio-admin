@@ -21,6 +21,7 @@ export function RoutesPage() {
     fetch: (p) => getRoutesOpsTable({ range: "all", ...p }),
     defaultSort: { id: "name", desc: false },
     statusOptions: ENTITY_STATUS_OPTIONS,
+    initialStatus: "enabled",
   });
 
   return (

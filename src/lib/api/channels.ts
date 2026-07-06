@@ -22,6 +22,7 @@ export interface Channel {
   rpd_limit: number | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   // 最近一次主动检测结果（渠道检测，阶段一）：全 null 表示从未检测。
   last_tested_at: string | null;
   last_test_ok: boolean | null;
@@ -144,6 +145,21 @@ export async function rotateChannelCredential({
   await api.put(`/admin/v1/channels/${id}/credential`, { credential });
 }
 
+// 删除渠道：仅允许删除已归档且无历史引用的渠道（后端「先归档才能删」闸门）。
+export async function deleteChannel(id: number): Promise<void> {
+  await api.delete(`/admin/v1/channels/${id}`);
+}
+
+// 归档渠道：从所有线路池移除、置 archived、释放渠道名（追加 __archived_<id> 后缀）；可恢复。
+export async function archiveChannel(id: number): Promise<void> {
+  await api.post(`/admin/v1/channels/${id}/archive`);
+}
+
+// 恢复渠道：archived → disabled（护栏：所属服务商归档时后端拦截，需先恢复服务商）。
+export async function restoreChannel(id: number): Promise<void> {
+  await api.post(`/admin/v1/channels/${id}/restore`);
+}
+
 // 与后端 channelTestResultDTO 对齐：一次渠道检测结果。
 // 始终代表「检测已执行」（HTTP 200）；success 表达渠道是否健康，error_code 成功时为 null。
 export interface ChannelTestResult {
@@ -153,6 +169,8 @@ export interface ChannelTestResult {
   http_status: number;
   error_code: string | null;
   message: string;
+  // 失败时上游返回的原始错误体（截断快照）；成功/无响应体时为 null。
+  upstream_error: string | null;
   tested_at: string;
 }
 

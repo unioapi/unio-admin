@@ -3,7 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EllipsisIcon, EyeIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { getChannel, updateChannel } from "@/lib/api/channels";
+import {
+  archiveChannel,
+  deleteChannel,
+  getChannel,
+  restoreChannel,
+  updateChannel,
+} from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
@@ -56,9 +62,35 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
 
+  const archived = channel?.status === "archived";
+  const lifecycleMutation = useMutation({
+    mutationFn: (action: "archive" | "restore" | "delete") =>
+      action === "archive"
+        ? archiveChannel(channelId)
+        : action === "restore"
+          ? restoreChannel(channelId)
+          : deleteChannel(channelId),
+    onSuccess: (_, action) => {
+      queryClient.invalidateQueries({ queryKey: ["channels"] });
+      queryClient.invalidateQueries({ queryKey: ["channel", channelId] });
+      toast.success(
+        action === "archive"
+          ? "已归档渠道（已退出所有线路池）"
+          : action === "restore"
+            ? "已恢复渠道为停用（如需路由请重新加入线路并启用）"
+            : "已删除渠道",
+      );
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+
   function openDialog(setter: (open: boolean) => void) {
     setMenuOpen(false);
     setter(true);
+  }
+  function runLifecycle(action: "archive" | "restore" | "delete") {
+    setMenuOpen(false);
+    lifecycleMutation.mutate(action);
   }
 
   function requestStatusChange() {
@@ -96,14 +128,34 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
             </Button>
           </HoverDropdownMenuTrigger>
           <HoverDropdownMenuContent align="end" className="min-w-36">
-            <DropdownMenuItem onClick={() => openDialog(setTestOpen)}>检测</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
-            <DropdownMenuItem disabled={!channel} onClick={requestStatusChange}>
-              {channel?.status === "enabled" ? "停用" : "启用"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openDialog(setModelsOpen)}>管理模型</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openDialog(setPricesOpen)}>价格</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openDialog(setCredOpen)}>修改APIKey</DropdownMenuItem>
+            {archived ? (
+              <>
+                <DropdownMenuItem disabled={!channel} onClick={() => runLifecycle("restore")}>
+                  恢复
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  disabled={!channel}
+                  onClick={() => runLifecycle("delete")}
+                >
+                  删除
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                <DropdownMenuItem onClick={() => openDialog(setTestOpen)}>检测</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
+                <DropdownMenuItem disabled={!channel} onClick={requestStatusChange}>
+                  {channel?.status === "enabled" ? "停用" : "启用"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openDialog(setModelsOpen)}>管理模型</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openDialog(setPricesOpen)}>价格</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openDialog(setCredOpen)}>修改APIKey</DropdownMenuItem>
+                <DropdownMenuItem disabled={!channel} onClick={() => runLifecycle("archive")}>
+                  归档
+                </DropdownMenuItem>
+              </>
+            )}
           </HoverDropdownMenuContent>
         </HoverDropdownMenu>
       </div>

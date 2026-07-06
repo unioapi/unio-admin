@@ -75,6 +75,8 @@ export interface ChannelTestLog {
   tested_model: string;
   credential_valid_after: boolean;
   message: string;
+  // 失败时上游返回的原始错误体（截断快照）；成功/无响应体时为 null。
+  upstream_error: string | null;
 }
 
 export interface ChannelOpsDetail {

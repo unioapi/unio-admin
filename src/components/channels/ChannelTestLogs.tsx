@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getChannelTestLogs } from "@/lib/api/channelsOps";
 import { formatDateTime, formatLatencySec } from "@/lib/format";
@@ -29,6 +29,17 @@ function sourceLabel(source: string): string {
 /** 渠道检测/凭据事件日志（worker 巡检 / 手动检测 / 运行时 401 翻失效）。 */
 export function ChannelTestLogs({ channelId }: { channelId: number }) {
   const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggleExpanded = (id: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   const q = useQuery({
     queryKey: ["channel", channelId, "test-logs", page],
     queryFn: () => getChannelTestLogs(channelId, { page, page_size: PAGE_SIZE }),
@@ -74,39 +85,66 @@ export function ChannelTestLogs({ channelId }: { channelId: number }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell className="whitespace-nowrap text-xs">
-                  {formatDateTime(log.created_at)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                    {sourceLabel(log.source)}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={log.success ? "secondary" : "destructive"}
-                    className="h-5 px-1.5 text-[10px]"
-                  >
-                    {log.success ? "正常" : "异常"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground max-w-[280px] truncate text-xs">
-                  {log.success
-                    ? log.credential_valid_after
-                      ? "凭据有效"
-                      : ""
-                    : log.message || log.error_code || "异常"}
-                </TableCell>
-                <TableCell className="text-right text-xs tabular-nums">
-                  {log.latency_ms > 0 ? formatLatencySec(log.latency_ms) : "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {log.tested_model || "—"}
-                </TableCell>
-              </TableRow>
-            ))}
+            {items.map((log) => {
+              const isOpen = expanded.has(log.id);
+              return (
+                <Fragment key={log.id}>
+                  <TableRow>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {formatDateTime(log.created_at)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                        {sourceLabel(log.source)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={log.success ? "secondary" : "destructive"}
+                        className="h-5 px-1.5 text-[10px]"
+                      >
+                        {log.success ? "正常" : "异常"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[280px] text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate">
+                          {log.success
+                            ? log.credential_valid_after
+                              ? "凭据有效"
+                              : ""
+                            : log.message || log.error_code || "异常"}
+                        </span>
+                        {log.upstream_error ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(log.id)}
+                            className="text-primary hover:text-primary/80 shrink-0 whitespace-nowrap text-[10px] underline underline-offset-2"
+                          >
+                            {isOpen ? "收起原文" : "上游原文"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {log.latency_ms > 0 ? formatLatencySec(log.latency_ms) : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {log.tested_model || "—"}
+                    </TableCell>
+                  </TableRow>
+                  {isOpen && log.upstream_error ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="bg-muted/30">
+                        <pre className="text-muted-foreground max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+                          {log.upstream_error}
+                        </pre>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

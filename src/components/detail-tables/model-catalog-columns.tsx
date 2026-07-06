@@ -3,14 +3,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
+import { CopyIcon } from "lucide-react";
 import {
   getCatalogEntry,
   type CatalogEntry,
 } from "@/lib/api/modelCatalog";
+import { copySecretToClipboard } from "@/components/common/SecretCopyCell";
 import { resizableColumn } from "@/components/data-table";
+import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { AdoptFromCatalogDialog } from "@/components/models/AdoptFromCatalogDialog";
 import { SupportLevelBadge } from "@/components/capability/shared";
 import { formatInt, roundPrice3 } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +61,65 @@ function CatalogStatusBadge({
     return <Badge variant="secondary">已采纳</Badge>;
   }
   return <Badge variant="outline">未采纳</Badge>;
+}
+
+function CatalogCopyField({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-muted-foreground text-[10px]">{label}</span>
+      <div className="flex items-start gap-1">
+        <span className={cn("min-w-0 flex-1 break-all text-xs", mono && "font-mono")}>{value}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0"
+          aria-label={`复制${label}`}
+          onClick={() =>
+            void copySecretToClipboard(value, {
+              success: `已复制${label}`,
+              empty: `无可复制的${label}`,
+            })
+          }
+        >
+          <CopyIcon className="size-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** 模型列：列表内截断展示，悬浮显示完整名称 / 厂商 / ID，详情内可复制。 */
+function CatalogModelCell({ entry }: { entry: CatalogEntry }) {
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button type="button" className="flex min-w-0 flex-col gap-0.5 text-left">
+          <span className="truncate font-medium underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
+            {entry.display_name}
+          </span>
+          <span className="text-muted-foreground truncate font-mono text-xs">
+            {entry.canonical_id}
+          </span>
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-72">
+        <div className="flex flex-col gap-2.5 text-xs" onClick={(e) => e.stopPropagation()}>
+          <CatalogCopyField label="显示名称" value={entry.display_name} />
+          <CatalogCopyField label="厂商" value={entry.lab} />
+          <CatalogCopyField label="模型 ID" value={entry.canonical_id} mono />
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
+  );
 }
 
 // 能力列：悬浮时按需拉取目录详情（与采纳弹窗共用缓存键），展示每条能力 key + 支持级别。
@@ -115,14 +178,7 @@ export function modelCatalogColumns(): ColumnDef<CatalogEntry, unknown>[] {
       size: 240,
       minSize: 180,
       enableHiding: false,
-      cell: ({ row }) => (
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-medium">{row.original.display_name}</span>
-          <span className="text-muted-foreground truncate font-mono text-xs">
-            {row.original.canonical_id}
-          </span>
-        </div>
-      ),
+      cell: ({ row }) => <CatalogModelCell entry={row.original} />,
     }),
     resizableColumn<CatalogEntry>("lab", {
       header: "厂商",

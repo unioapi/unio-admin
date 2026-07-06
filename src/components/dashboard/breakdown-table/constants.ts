@@ -120,6 +120,7 @@ export const BREAKDOWN_COLUMN_MIN_SIZE: Record<BreakdownColumnId, number> = {
 export const STATUS_LABEL: Record<string, string> = {
   enabled: "启用",
   disabled: "停用",
+  archived: "已归档",
 };
 
 export const ERROR_CODE_LABEL: Record<string, string> = {
