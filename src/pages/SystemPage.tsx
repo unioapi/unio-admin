@@ -28,10 +28,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AnthropicBetaPolicyCard } from "@/components/system/AnthropicBetaPolicyCard";
 
 const PAGE_SIZE = 20;
 
-const SYSTEM_TABS = ["recovery", "sync", "config"] as const;
+const SYSTEM_TABS = ["recovery", "sync", "config", "providers"] as const;
 type SystemTab = (typeof SYSTEM_TABS)[number];
 
 export function SystemPage() {
@@ -59,6 +60,7 @@ export function SystemPage() {
           <TabsTrigger value="recovery">结算补偿任务</TabsTrigger>
           <TabsTrigger value="sync">同步任务</TabsTrigger>
           <TabsTrigger value="config">网关配置</TabsTrigger>
+          <TabsTrigger value="providers">Provider 设置</TabsTrigger>
         </TabsList>
         <TabsContent value="recovery" className="pt-4">
           <RecoveryTab />
@@ -68,6 +70,9 @@ export function SystemPage() {
         </TabsContent>
         <TabsContent value="config" className="pt-4">
           <ConfigTab />
+        </TabsContent>
+        <TabsContent value="providers" className="pt-4">
+          <AnthropicBetaPolicyCard />
         </TabsContent>
       </Tabs>
     </div>

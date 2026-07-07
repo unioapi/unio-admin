@@ -153,3 +153,30 @@ export async function getSystemConfig(): Promise<SystemConfig> {
   const res = await api.get<{ data: SystemConfig }>("/admin/v1/system/config");
   return res.data.data;
 }
+
+// Provider 全局设置（可编辑）：Anthropic beta 转发策略。与后端 anthropicBetaPolicyDTO 对齐。
+// mode：passthrough（全透传）/ filter（黑名单）/ whitelist（白名单）。
+// list：filter 当黑名单、whitelist 当白名单；passthrough 忽略。
+export type AnthropicBetaMode = "passthrough" | "filter" | "whitelist";
+
+export interface AnthropicBetaPolicy {
+  mode: AnthropicBetaMode;
+  list: string[];
+}
+
+export async function getAnthropicBetaPolicy(): Promise<AnthropicBetaPolicy> {
+  const res = await api.get<{ data: AnthropicBetaPolicy }>(
+    "/admin/v1/provider-settings/anthropic/beta-policy",
+  );
+  return res.data.data;
+}
+
+export async function updateAnthropicBetaPolicy(
+  policy: AnthropicBetaPolicy,
+): Promise<AnthropicBetaPolicy> {
+  const res = await api.put<{ data: AnthropicBetaPolicy }>(
+    "/admin/v1/provider-settings/anthropic/beta-policy",
+    policy,
+  );
+  return res.data.data;
+}
