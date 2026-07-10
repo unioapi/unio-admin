@@ -6,7 +6,9 @@ import {
   rateIntent,
   requestInFlight,
   requestTerminal,
+  type MetricThresholds,
 } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 
 const FINISHED_FIELDS = [
   { key: "succeeded", getValue: (r: RadarRequests) => r.succeeded, meaning: "请求已成功完成" },
@@ -86,8 +88,8 @@ function FormulaBlock({
   );
 }
 
-function rateColor(rate: number): string {
-  const intent = rateIntent(rate);
+function rateColor(rate: number, th: MetricThresholds): string {
+  const intent = rateIntent(rate, th);
   return intent === "success"
     ? "text-emerald-600 dark:text-emerald-400"
     : intent === "warning"
@@ -97,6 +99,7 @@ function rateColor(rate: number): string {
 
 /** 请求成功率卡片悬浮详情。 */
 export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
+  const th = useMetricThresholds();
   const terminal = requestTerminal(requests);
   const inFlight = requestInFlight(requests);
 
@@ -115,7 +118,7 @@ export function RequestSuccessTip({ requests }: { requests: RadarRequests }) {
         <div
           className={cn(
             "font-heading text-xl font-semibold tabular-nums",
-            rateColor(requests.success_rate),
+            rateColor(requests.success_rate, th),
           )}
         >
           {formatPercent(requests.success_rate)}

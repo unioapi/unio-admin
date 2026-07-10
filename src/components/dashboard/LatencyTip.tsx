@@ -3,11 +3,8 @@ import type { LatencyStats } from "@/lib/api/dashboard";
 import type { MetricIntent } from "@/components/common/MetricCard";
 import { formatCompact, formatLatencyMs, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import {
-  LATENCY_DANGER_MS,
-  LATENCY_WARN_MS,
-  latencyIntent,
-} from "@/components/dashboard/metrics";
+import { latencyIntent, type MetricThresholds } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 
 function intentTextClass(intent: MetricIntent): string {
   return intent === "danger"
@@ -18,9 +15,9 @@ function intentTextClass(intent: MetricIntent): string {
 }
 
 // 详情内 P95 条着色：健康时显示绿色给出正向读数（与卡片大号中性策略互补）。
-function sloBarClass(p95: number): string {
-  if (p95 > LATENCY_DANGER_MS) return "bg-destructive/80";
-  if (p95 >= LATENCY_WARN_MS) return "bg-amber-500/80";
+function sloBarClass(p95: number, th: MetricThresholds): string {
+  if (p95 > th.latencyDangerMs) return "bg-destructive/80";
+  if (p95 >= th.latencyWarnMs) return "bg-amber-500/80";
   return "bg-emerald-500/80";
 }
 
@@ -97,6 +94,7 @@ function SummaryRow({
 
 /** 分位数横向条：三列 grid（标签 | 条 | 数值），说明与条形图同列对齐。 */
 function PercentileBars({ latency }: { latency: LatencyStats }) {
+  const th = useMetricThresholds();
   const max = Math.max(latency.p50, latency.p90, latency.p95, latency.p99, 1);
   return (
     <div className="space-y-2.5">
@@ -121,7 +119,7 @@ function PercentileBars({ latency }: { latency: LatencyStats }) {
               <div
                 className={cn(
                   "h-full rounded-full",
-                  slo ? sloBarClass(latency.p95) : "bg-primary/55",
+                  slo ? sloBarClass(latency.p95, th) : "bg-primary/55",
                 )}
                 style={{ width: `${(value / max) * 100}%` }}
               />
@@ -130,7 +128,7 @@ function PercentileBars({ latency }: { latency: LatencyStats }) {
               className={cn(
                 "self-center text-right text-[11px] leading-none tabular-nums",
                 slo
-                  ? cn("font-semibold", intentTextClass(latencyIntent(latency.p95)))
+                  ? cn("font-semibold", intentTextClass(latencyIntent(latency.p95, th)))
                   : "font-medium",
               )}
             >
@@ -148,6 +146,7 @@ function PercentileBars({ latency }: { latency: LatencyStats }) {
 
 /** 平均延迟卡片悬浮详情。 */
 export function LatencyTip({ latency }: { latency: LatencyStats }) {
+  const th = useMetricThresholds();
   return (
     <div className="w-full space-y-3">
       {/* 顶栏 + 平均值（中性色；告警看 P95 行，避免平均被 P95 阈值误染色） */}
@@ -195,9 +194,11 @@ export function LatencyTip({ latency }: { latency: LatencyStats }) {
         <div className="bg-muted/30 mt-2 flex items-center justify-between gap-3 rounded-md px-2.5 py-2 text-[11px]">
           <span className="text-muted-foreground">P95 阈值</span>
           <span className="tabular-nums">
-            <span className="text-amber-600 dark:text-amber-400">注意 ≥ 15s</span>
+            <span className="text-amber-600 dark:text-amber-400">
+              注意 ≥ {formatLatencyMs(th.latencyWarnMs)}
+            </span>
             {" · "}
-            <span className="text-destructive">异常 &gt; 30s</span>
+            <span className="text-destructive">异常 &gt; {formatLatencyMs(th.latencyDangerMs)}</span>
           </span>
         </div>
       </TipSection>
@@ -229,8 +230,9 @@ export function LatencyTip({ latency }: { latency: LatencyStats }) {
 
 /** 卡片副栏：典型 P50 / 尾部 P95（仅 P95 按 SLO 着色）。 */
 export function LatencyHint({ latency }: { latency: LatencyStats }) {
+  const th = useMetricThresholds();
   if (latency.sample <= 0) return null;
-  const p95Intent = latencyIntent(latency.p95);
+  const p95Intent = latencyIntent(latency.p95, th);
   return (
     <div className="grid grid-cols-2 gap-x-1.5 tabular-nums">
       <span className="truncate">P50 {formatLatencyMs(latency.p50)}</span>

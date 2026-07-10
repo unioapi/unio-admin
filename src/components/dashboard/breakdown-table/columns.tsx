@@ -17,6 +17,7 @@ import {
   latencyIntent,
   profitIntent,
   rateIntent,
+  type MetricThresholds,
 } from "@/components/dashboard/metrics";
 import { RevenueTip } from "@/components/dashboard/RevenueTip";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
@@ -98,6 +99,7 @@ function columnMeta(id: BreakdownColumnId) {
 export function createBreakdownColumns(
   dimension: BreakdownDimension,
   nameLabel: string,
+  th: MetricThresholds,
 ): ColumnDef<BreakdownRow>[] {
   const ids = BREAKDOWN_COLUMNS[dimension];
 
@@ -169,7 +171,7 @@ export function createBreakdownColumns(
           <span
             className={cn(
               "tabular-nums",
-              statIntentClass(rateIntent(row.original.success_rate)),
+              statIntentClass(rateIntent(row.original.success_rate, th)),
             )}
           >
             {formatPercent(row.original.success_rate)}
@@ -206,7 +208,7 @@ export function createBreakdownColumns(
               className={cn(
                 "cursor-default tabular-nums underline decoration-dotted underline-offset-2",
                 statIntentClass(
-                  profitIntent(Number(row.original.margin_usd), Number(row.original.revenue_usd)),
+                  profitIntent(Number(row.original.margin_usd), th, Number(row.original.revenue_usd)),
                 ),
               )}
             >
@@ -232,7 +234,7 @@ export function createBreakdownColumns(
           <span
             className={cn(
               "tabular-nums",
-              ms > 0 ? statIntentClass(latencyIntent(ms)) : undefined,
+              ms > 0 ? statIntentClass(latencyIntent(ms, th)) : undefined,
             )}
           >
             {ms > 0 ? formatLatencyMs(ms) : "—"}

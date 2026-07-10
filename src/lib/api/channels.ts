@@ -20,6 +20,10 @@ export interface Channel {
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
+  // 在途并发上限（DEC-029）：同时进行中的上游调用数（含整段流式传输）。null=继承全局默认，0=不限。
+  concurrency_limit: number | null;
+  // 上游「断开仍计费」标记（bill-on-cancel 中转，如 sub2api）：true 时失败/取消会记平台成本敞口。
+  upstream_bills_on_disconnect: boolean;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
@@ -30,11 +34,12 @@ export interface Channel {
   last_test_error: string | null;
 }
 
-// 限流三维入参（P2-8）：null=继承全局默认，0=不限，>0=具体上限。
+// 限流入参（P2-8 + DEC-029 并发）：null=继承全局默认，0=不限，>0=具体上限。
 export interface RateLimitsInput {
   rpm: number | null;
   tpm: number | null;
   rpd: number | null;
+  concurrency: number | null;
 }
 
 export interface ChannelListParams extends ListParams {
@@ -79,15 +84,19 @@ export interface CreateChannelInput {
   timeout_ms: number | null;
   // 可选渠道级限流；省略表示三维全继承全局默认。
   rateLimits?: RateLimitsInput;
+  // 上游「断开仍计费」标记；省略=false。
+  billsOnDisconnect?: boolean;
 }
 
 export async function createChannel({
   rateLimits,
+  billsOnDisconnect,
   ...input
 }: CreateChannelInput): Promise<Channel> {
   const res = await api.post<{ data: Channel }>("/admin/v1/channels", {
     ...input,
     rate_limits: rateLimits ?? undefined,
+    upstream_bills_on_disconnect: billsOnDisconnect,
   });
   return res.data.data;
 }
@@ -118,16 +127,20 @@ export interface UpdateChannelInput {
   timeout_ms: number | null;
   // 渠道级限流；省略表示不变，传对象即原子替换三维。
   rateLimits?: RateLimitsInput;
+  // 上游「断开仍计费」标记；省略=不变。
+  billsOnDisconnect?: boolean;
 }
 
 export async function updateChannel({
   id,
   rateLimits,
+  billsOnDisconnect,
   ...body
 }: UpdateChannelInput): Promise<Channel> {
   const res = await api.patch<{ data: Channel }>(`/admin/v1/channels/${id}`, {
     ...body,
     rate_limits: rateLimits ?? undefined,
+    upstream_bills_on_disconnect: billsOnDisconnect,
   });
   return res.data.data;
 }

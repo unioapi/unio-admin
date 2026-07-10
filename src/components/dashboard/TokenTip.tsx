@@ -66,6 +66,7 @@ export function TokenTip({
         <Row label="缓存读取" value={cache.cache_read_tokens} indent />
         <Row label="缓存写入 5m" value={cache.cache_write_5m_tokens} indent />
         <Row label="缓存写入 1h" value={cache.cache_write_1h_tokens} indent />
+        <Row label="缓存写入 30m" value={cache.cache_write_30m_tokens} indent />
         <Row label="输出" value={tokens.output} emphasis />
         <div className="mt-1 flex items-center justify-between gap-3 border-t py-1.5">
           <span className="text-xs font-semibold text-foreground">总计</span>

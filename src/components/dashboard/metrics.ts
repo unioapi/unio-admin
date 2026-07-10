@@ -6,15 +6,41 @@ import type {
 import type { MetricIntent } from "@/components/common/MetricCard";
 
 // 概览雷达卡片的纯计算 / 阈值逻辑。与组件分离，避免 fast-refresh 失效（仅组件文件应导出组件）。
+//
+// 告警阈值已迁移为运行时配置 admin_frontend.dashboard_thresholds（后台「运行时配置」可改，
+// 免部署生效）：组件经 useMetricThresholds() 拉取当前值后显式传入本文件的纯函数。
+// DEFAULT_METRIC_THRESHOLDS 是拉取失败/加载中的回退值，与后端注册表默认**同源同值**
+// （unio-api appsettings/admin_frontend_settings.go），改默认须两处同步。
+
+/** 仪表盘告警灯阈值（毫秒字段与后端 *_ms 命名对应）。 */
+export interface MetricThresholds {
+  successRateSlo: number;
+  successRateWarn: number;
+  ttftWarnMs: number;
+  ttftDangerMs: number;
+  latencyWarnMs: number;
+  latencyDangerMs: number;
+  profitThinRate: number;
+}
+
+export const DEFAULT_METRIC_THRESHOLDS: MetricThresholds = {
+  successRateSlo: 0.95,
+  successRateWarn: 0.8,
+  ttftWarnMs: 5000,
+  ttftDangerMs: 12000,
+  latencyWarnMs: 15000,
+  latencyDangerMs: 30000,
+  profitThinRate: 0.1,
+};
 
 // ---- 请求成功率 ----
-// SLO 参考线（success 阈值）与 warning 阈值；rateIntent 与参考线统一引用，避免魔法数散落。
-export const SUCCESS_RATE_SLO = 0.95;
-export const SUCCESS_RATE_WARN = 0.8;
 
-export function rateIntent(rate: number): "success" | "warning" | "danger" {
-  if (rate >= SUCCESS_RATE_SLO) return "success";
-  if (rate >= SUCCESS_RATE_WARN) return "warning";
+export function rateIntent(
+  rate: number,
+  th: MetricThresholds,
+): "success" | "warning" | "danger" {
+  if (rate >= th.successRateSlo) return "success";
+  if (rate >= th.successRateWarn) return "warning";
   return "danger";
 }
 
@@ -31,31 +57,25 @@ export function requestInFlight(req: RadarRequests): number {
 // ---- 缓存 ----
 
 export function cacheWeightTokens(c: CacheStats): number {
-  return c.cache_read_tokens + c.cache_write_5m_tokens + c.cache_write_1h_tokens;
+  return c.cache_read_tokens + c.cache_write_5m_tokens + c.cache_write_1h_tokens + c.cache_write_30m_tokens;
 }
 
-// ---- 首 token 时间（TTFT） ----
-// 健康阈值（P95，与平台状态 §3.1 一致）：> 12s 异常，≥ 5s 注意。
-export const TTFT_WARN_MS = 5000;
-export const TTFT_DANGER_MS = 12000;
+// ---- 首 token 时间（TTFT，P95 口径） ----
 
 // 健康时保持中性（仅在降级/异常时着色），避免常驻绿色噪声。
-export function ttftIntent(p95: number): MetricIntent {
+export function ttftIntent(p95: number, th: MetricThresholds): MetricIntent {
   if (p95 <= 0) return "default";
-  if (p95 > TTFT_DANGER_MS) return "danger";
-  if (p95 >= TTFT_WARN_MS) return "warning";
+  if (p95 > th.ttftDangerMs) return "danger";
+  if (p95 >= th.ttftWarnMs) return "warning";
   return "default";
 }
 
-// ---- 请求完成延迟 ----
-// 健康阈值（P95，与平台状态 §3.1 一致）：> 30s 异常，≥ 15s 注意。
-export const LATENCY_WARN_MS = 15000;
-export const LATENCY_DANGER_MS = 30000;
+// ---- 请求完成延迟（P95 口径） ----
 
-export function latencyIntent(p95: number): MetricIntent {
+export function latencyIntent(p95: number, th: MetricThresholds): MetricIntent {
   if (p95 <= 0) return "default";
-  if (p95 > LATENCY_DANGER_MS) return "danger";
-  if (p95 >= LATENCY_WARN_MS) return "warning";
+  if (p95 > th.latencyDangerMs) return "danger";
+  if (p95 >= th.latencyWarnMs) return "warning";
   return "default";
 }
 
@@ -72,15 +92,16 @@ export function profitRate(r: Revenue): number {
   return Number(r.margin_usd) / rev;
 }
 
-// 毛利率低于此阈值视为「偏薄」，着 warning（避免极小正毛利也显示为健康的绿色）。
-export const PROFIT_THIN_RATE = 0.1;
-
-// 着色口径：亏损→danger；正毛利但毛利率 < 阈值→warning；健康→success；打平→default。
-// 缺 revenue 时退回按符号（正→success）。
-export function profitIntent(margin: number, revenue?: number): MetricIntent {
+// 着色口径：亏损→danger；正毛利但毛利率 < profit_thin_rate 阈值→warning（避免极小正毛利
+// 也显示为健康的绿色）；健康→success；打平→default。缺 revenue 时退回按符号（正→success）。
+export function profitIntent(
+  margin: number,
+  th: MetricThresholds,
+  revenue?: number,
+): MetricIntent {
   if (margin < 0) return "danger";
   if (margin === 0) return "default";
-  if (revenue != null && revenue > 0 && margin / revenue < PROFIT_THIN_RATE) {
+  if (revenue != null && revenue > 0 && margin / revenue < th.profitThinRate) {
     return "warning";
   }
   return "success";

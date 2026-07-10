@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/empty";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RecoveryJobsPanel } from "@/components/ledger/RecoveryJobsPanel";
 
 const PAGE_SIZE = 20;
 
@@ -49,18 +50,23 @@ const EXCEPTION_LABELS: Record<string, string> = {
 const LEDGER_VIEW_OPTIONS = [
   { value: "entries", label: "流水" },
   { value: "exceptions", label: "计费异常" },
+  { value: "recovery", label: "结算补偿" },
 ] as const;
+
+type LedgerTab = (typeof LEDGER_VIEW_OPTIONS)[number]["value"];
 
 export function LedgerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab: "entries" | "exceptions" =
-    searchParams.get("tab") === "exceptions" ? "exceptions" : "entries";
+  const raw = searchParams.get("tab");
+  const tab: LedgerTab = LEDGER_VIEW_OPTIONS.some((o) => o.value === raw)
+    ? (raw as LedgerTab)
+    : "entries";
   const setTab = (v: string) => {
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
-        if (v === "exceptions") sp.set("tab", "exceptions");
-        else sp.delete("tab");
+        if (v === "entries") sp.delete("tab");
+        else sp.set("tab", v);
         return sp;
       },
       { replace: true },
@@ -82,6 +88,10 @@ export function LedgerPage() {
         </TabsContent>
         <TabsContent value="exceptions" className="pt-4">
           <ExceptionsPanel />
+        </TabsContent>
+        {/* 结算补偿任务：上游已扣费但 settlement 未确认的补偿队列(原系统页迁入)。 */}
+        <TabsContent value="recovery" className="pt-4">
+          <RecoveryJobsPanel />
         </TabsContent>
       </Tabs>
     </div>

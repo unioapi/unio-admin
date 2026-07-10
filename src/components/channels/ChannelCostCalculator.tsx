@@ -51,6 +51,12 @@ const CALC_FIELDS = [
     label: "1 小时缓存写入",
     priceField: "cache_write_1h_input_price",
   },
+  {
+    baseKey: "cache_write_30m_input",
+    costKey: "cache_write_30m_input",
+    label: "30 分钟缓存写入",
+    priceField: "cache_write_30m_input_price",
+  },
 ] as const;
 
 type BaseKey = (typeof CALC_FIELDS)[number]["baseKey"];
@@ -72,6 +78,7 @@ function emptyBasePrices(): BasePrices {
     reasoning_output: "",
     cache_write_5m_input: "",
     cache_write_1h_input: "",
+    cache_write_30m_input: "",
   };
 }
 

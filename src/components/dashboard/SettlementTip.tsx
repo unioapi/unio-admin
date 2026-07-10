@@ -101,8 +101,8 @@ export function SettlementTip({ settlement }: { settlement: Settlement }) {
             ? { label: "紧急", variant: "destructive" }
             : undefined
         }
-        deeplink="/system?tab=jobs"
-        deeplinkLabel="任务"
+        deeplink="/ledger?tab=recovery"
+        deeplinkLabel="结算补偿"
       >
         <MetricRow label="补偿中（自动重试）" value={formatInt(backlog.active)} />
         <MetricRow

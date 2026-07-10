@@ -319,6 +319,7 @@ function CostSection({ detail }: { detail: RequestDetail }) {
             cacheRead: u?.cache_read_input_tokens ?? 0,
             cacheWrite5m: u?.cache_write_5m_input_tokens ?? 0,
             cacheWrite1h: u?.cache_write_1h_input_tokens ?? 0,
+            cacheWrite30m: u?.cache_write_30m_input_tokens ?? 0,
             outputTotal: u?.output_tokens_total ?? 0,
             reasoningOutput: u?.reasoning_output_tokens ?? 0,
           },
@@ -327,6 +328,7 @@ function CostSection({ detail }: { detail: RequestDetail }) {
             cacheRead: cs?.cache_read_input_cost_unit ?? null,
             cacheWrite5m: cs?.cache_write_5m_input_cost_unit ?? null,
             cacheWrite1h: cs?.cache_write_1h_input_cost_unit ?? null,
+            cacheWrite30m: cs?.cache_write_30m_input_cost_unit ?? null,
             output: cs?.output_cost_unit ?? null,
             reasoning: cs?.reasoning_output_cost_unit ?? null,
           },
@@ -335,6 +337,7 @@ function CostSection({ detail }: { detail: RequestDetail }) {
             cacheRead: ps?.cache_read_input_price ?? null,
             cacheWrite5m: ps?.cache_write_5m_input_price ?? null,
             cacheWrite1h: ps?.cache_write_1h_input_price ?? null,
+            cacheWrite30m: ps?.cache_write_30m_input_price ?? null,
             output: ps?.output_price ?? null,
             reasoning: ps?.reasoning_output_price ?? null,
           },
@@ -344,6 +347,7 @@ function CostSection({ detail }: { detail: RequestDetail }) {
                 cacheRead: cs.cache_read_input_cost_amount,
                 cacheWrite5m: cs.cache_write_5m_input_cost_amount,
                 cacheWrite1h: cs.cache_write_1h_input_cost_amount,
+                cacheWrite30m: cs.cache_write_30m_input_cost_amount,
                 output: cs.output_cost_amount,
                 reasoning: cs.reasoning_output_cost_amount,
                 total: cs.total_cost_amount,
@@ -367,6 +371,7 @@ function UsageBlock({ usage }: { usage: RequestDetail["usage"] }) {
       <Row label="reasoning 输出">{usage.reasoning_output_tokens}</Row>
       <Row label="5m 缓存写入">{usage.cache_write_5m_input_tokens}</Row>
       <Row label="1h 缓存写入">{usage.cache_write_1h_input_tokens}</Row>
+      <Row label="30m 缓存写入">{usage.cache_write_30m_input_tokens}</Row>
       <Row label="来源">{usage.usage_source}</Row>
       <Row label="映射版本">{usage.usage_mapping_version}</Row>
     </dl>

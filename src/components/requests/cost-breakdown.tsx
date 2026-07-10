@@ -7,12 +7,14 @@ import { cn } from "@/lib/utils";
 
 type Num = string | null | undefined;
 
-// 六个计费维度的单价/金额集合（USD 十进制字符串，per_1m_tokens）。
+// 计费维度的单价/金额集合（USD 十进制字符串，per_1m_tokens）。
+// 缓存写入分 5m/1h（Anthropic）与 30m（OpenAI GPT-5.6+）三档，按 TTL 语义独立展示。
 export interface SixUnit {
   uncachedInput: Num;
   cacheRead: Num;
   cacheWrite5m: Num;
   cacheWrite1h: Num;
+  cacheWrite30m: Num;
   output: Num;
   reasoning: Num;
 }
@@ -27,6 +29,7 @@ export interface CostBreakdownInput {
     cacheRead: number;
     cacheWrite5m: number;
     cacheWrite1h: number;
+    cacheWrite30m: number;
     outputTotal: number;
     reasoningOutput: number;
   };
@@ -63,6 +66,7 @@ function buildLines(t: CostBreakdownInput["tokens"]): LineDef[] {
       { key: "cacheRead", label: "缓存读取", tokens: t.cacheRead },
       { key: "cacheWrite5m", label: "缓存写入·5m", tokens: t.cacheWrite5m },
       { key: "cacheWrite1h", label: "缓存写入·1h", tokens: t.cacheWrite1h },
+      { key: "cacheWrite30m", label: "缓存写入·30m", tokens: t.cacheWrite30m },
       { key: "output", label: "输出", tokens: normalOutput },
       { key: "reasoning", label: "推理输出", tokens: t.reasoningOutput },
     ] as LineDef[]

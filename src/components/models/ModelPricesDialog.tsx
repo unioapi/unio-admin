@@ -60,6 +60,7 @@ const PRICE_FIELDS = [
   { key: "reasoning_output", label: "reasoning 输出", required: false },
   { key: "cache_write_5m_input", label: "5 分钟缓存写入", required: false },
   { key: "cache_write_1h_input", label: "1 小时缓存写入", required: false },
+  { key: "cache_write_30m_input", label: "30 分钟缓存写入", required: false },
 ] as const;
 
 type PriceFieldKey = (typeof PRICE_FIELDS)[number]["key"];
@@ -199,6 +200,7 @@ function ModelPriceForm({
         reasoning_output_price: optionalMoney(price.reasoning_output),
         cache_write_5m_input_price: optionalMoney(price.cache_write_5m_input),
         cache_write_1h_input_price: optionalMoney(price.cache_write_1h_input),
+        cache_write_30m_input_price: optionalMoney(price.cache_write_30m_input),
         status,
         effective_from: localToRFC3339(effectiveFrom),
         effective_to: effectiveTo.trim() ? localToRFC3339(effectiveTo) : null,
@@ -516,6 +518,7 @@ function emptyAmounts(): Record<PriceFieldKey, string> {
     reasoning_output: "",
     cache_write_5m_input: "",
     cache_write_1h_input: "",
+    cache_write_30m_input: "",
   };
 }
 

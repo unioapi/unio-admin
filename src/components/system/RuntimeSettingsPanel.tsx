@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { listSettings, updateSetting, type SettingItem } from "@/lib/api/system";
+import {
+  RUNTIME_SETTINGS_QUERY_KEY,
+  listSettings,
+  updateSetting,
+  type SettingItem,
+} from "@/lib/api/system";
 import { apiErrorMessage } from "@/lib/api/client";
 import {
   RateLimitInput,
@@ -10,6 +15,7 @@ import {
   rateLimitWithUnitError,
   type RateLimitFieldValue,
 } from "@/components/common/rate-limit-input";
+import { AnthropicBetaPolicyCard } from "@/components/system/AnthropicBetaPolicyCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -26,24 +33,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// 运行时配置（gateway 6 组）可编辑面板。
+// 运行时配置面板：按「域」分 Tab 渲染（batch2 §2/§6.2，对齐 new-api 设置页组织方式）。
+//
+// 域 = 注册表 Category = key 前缀：gateway（网关热路径，applier ~5s 热生效）/
+// admin_backend（admin 后端判定，现读 ≤3s 生效）/ admin_frontend（仅前端消费，保存即生效）/
+// anthropic（Provider 策略）。未知域自动落「其他」Tab 用 JSON 兜底编辑器——新增域不改前端也能管。
 //
 // 数据流：listSettings 返回注册元数据 + 当前生效值 + 代码默认值 + 生效来源；
-// 保存走 PUT /settings/{key}（后端按注册表校验），gateway 约 5s 内热生效（免重启）。
-// value ≠ default 时显示「已偏离代码默认」——启动 seed 写入 DB 后行即固化，
-// 后续代码默认值升级不会自动跟进，靠此标记提示人工决策（设计 §11.2）。
+// 保存走 PUT /settings/{key}（后端按注册表校验）。value ≠ default 时显示「已偏离代码默认」——
+// 启动 seed 写入 DB 后行即固化，后续代码默认值升级不会自动跟进，靠此标记提示人工决策。
 //
-// 单位约定（与渠道配置对齐）：
-// - TPM/RPD 用「数字 + K/M/B」输入（rate-limit-input，与渠道页同款），入库真实整数；
-// - 时长一律「数字 + 时间单位下拉」，入库 int 毫秒（对齐 channels.timeout_ms），无字符串格式。
-
-const QUERY_KEY = ["runtime-settings"];
+// 单位约定（与渠道配置对齐）：时长一律「数字 + 时间单位下拉」入库 int 毫秒（对齐
+// channels.timeout_ms）；TPM/RPD 用「数字 + K/M/B」（rate-limit-input，与渠道页同款）。
 
 const SOURCE_LABEL: Record<string, string> = {
-  redis: "Redis 实时源（gateway 秒级读到）",
+  redis: "Redis 实时源（消费方秒级读到）",
   db: "数据库（Redis 未命中时回退）",
   default: "内置默认（DB 尚无记录）",
 };
+
+// 已知域 Tab（按此顺序展示）；未知 category 归入 other。
+const DOMAIN_TABS: { value: string; label: string; hint: string }[] = [
+  { value: "gateway", label: "网关", hint: "gateway 进程热路径，保存后约 5 秒热生效（applier 周期推送）" },
+  { value: "admin_backend", label: "运营判定", hint: "admin 后端每请求现读，保存后 3 秒内生效" },
+  { value: "admin_frontend", label: "前端展示", hint: "仅前端消费的展示档位，保存后本页面立即生效" },
+  { value: "anthropic", label: "Provider 策略", hint: "gateway adapter 现读，保存后秒级生效" },
+];
 
 /** 序无关深比较：Go 编码与前端编码的 JSON 键序可能不同，不能比字符串。 */
 function jsonEquals(a: unknown, b: unknown): boolean {
@@ -159,8 +174,9 @@ function DurationInput({
   );
 }
 
-export function RuntimeGatewaySettings() {
-  const query = useQuery({ queryKey: QUERY_KEY, queryFn: listSettings });
+/** 运行时配置面板（分域 Tab）。 */
+export function RuntimeSettingsPanel() {
+  const query = useQuery({ queryKey: RUNTIME_SETTINGS_QUERY_KEY, queryFn: listSettings });
 
   if (query.isError) {
     return (
@@ -180,23 +196,55 @@ export function RuntimeGatewaySettings() {
     );
   }
 
-  const gatewayItems = query.data.filter((s) => s.category === "gateway");
+  const items = query.data;
+  const knownDomains = new Set(DOMAIN_TABS.map((t) => t.value));
+  const otherItems = items.filter((s) => !knownDomains.has(s.category));
+  const tabs = [
+    ...DOMAIN_TABS,
+    ...(otherItems.length > 0
+      ? [{ value: "other", label: "其他", hint: "未识别域（JSON 兜底编辑）" }]
+      : []),
+  ];
 
   return (
     <div className="flex flex-col gap-4">
       <Alert>
         <AlertTitle>运行时配置（免重启生效）</AlertTitle>
         <AlertDescription>
-          保存后写入数据库并经 Redis 推送，gateway 约 5 秒内热生效。标有「已偏离代码默认」
-          的项表示当前值与代码内置默认不同（可能是人为调整，也可能是新版本默认值已升级而 DB
-          仍为旧值），是否跟进由你决定。
+          按域分组：配置保存后写入数据库并经 Redis 推送到对应消费方（各域生效时效见 Tab 内说明）。
+          标有「已偏离代码默认」的项表示当前值与代码内置默认不同（可能是人为调整，也可能是新版本
+          默认值已升级而 DB 仍为旧值），是否跟进由你决定。
         </AlertDescription>
       </Alert>
-      <div className="grid items-start gap-4 md:grid-cols-2">
-        {gatewayItems.map((item) => (
-          <SettingCard key={item.key} item={item} />
-        ))}
-      </div>
+      <Tabs defaultValue="gateway">
+        <TabsList>
+          {tabs.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabs.map((t) => {
+          const domainItems =
+            t.value === "other"
+              ? otherItems
+              : items.filter((s) => s.category === t.value);
+          return (
+            <TabsContent key={t.value} value={t.value} className="flex flex-col gap-4 pt-3">
+              <p className="text-muted-foreground text-xs">{t.hint}</p>
+              {/* anthropic 域的 beta 策略有专用 typed 卡片（含生效探针），生成式卡片跳过该 key。 */}
+              {t.value === "anthropic" && <AnthropicBetaPolicyCard />}
+              <div className="grid items-start gap-4 md:grid-cols-2">
+                {domainItems
+                  .filter((item) => item.key !== "anthropic.beta_policy")
+                  .map((item) => (
+                    <SettingCard key={item.key} item={item} />
+                  ))}
+              </div>
+            </TabsContent>
+          );
+        })}
+      </Tabs>
     </div>
   );
 }
@@ -246,6 +294,10 @@ function SettingEditor({ item }: { item: SettingItem }) {
       return <DurationMsEditor item={item} />;
     case "gateway.credential_401_threshold":
       return <PositiveIntEditor item={item} />;
+    case "admin_backend.channel_health_thresholds":
+      return <ChannelHealthEditor item={item} />;
+    case "admin_frontend.dashboard_thresholds":
+      return <DashboardThresholdsEditor item={item} />;
     default:
       return <RawJSONEditor item={item} />;
   }
@@ -257,8 +309,8 @@ function useSaveSetting(key: string) {
   return useMutation({
     mutationFn: (value: unknown) => updateSetting(key, value),
     onSuccess: () => {
-      toast.success("已保存，gateway 约 5 秒内生效");
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      toast.success("已保存");
+      void queryClient.invalidateQueries({ queryKey: RUNTIME_SETTINGS_QUERY_KEY });
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
@@ -540,6 +592,192 @@ function PositiveIntEditor({ item }: { item: SettingItem }) {
         onSave={() => mutation.mutate(Number(value))}
         onReset={() => setValue(String(server))}
       />
+    </div>
+  );
+}
+
+// ---- admin_backend.channel_health_thresholds ----
+
+interface ChannelHealthValue {
+  healthy_rate: number;
+  degraded_rate: number;
+}
+
+/** 比率输入的通用前端预检（服务端注册表校验仍是权威）。 */
+function rateError(s: string, label: string): string | undefined {
+  const n = Number(s);
+  if (s.trim() === "" || !Number.isFinite(n)) return `${label}：请输入数字`;
+  if (n <= 0 || n > 1) return `${label}：需在 (0, 1] 内`;
+  return undefined;
+}
+
+function ChannelHealthEditor({ item }: { item: SettingItem }) {
+  const server = item.value as ChannelHealthValue;
+  const [healthy, setHealthy] = useState(String(server.healthy_rate));
+  const [degraded, setDegraded] = useState(String(server.degraded_rate));
+  const mutation = useSaveSetting(item.key);
+
+  const save = () => {
+    const err = rateError(healthy, "健康线") ?? rateError(degraded, "降级线");
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    if (Number(degraded) >= Number(healthy)) {
+      toast.error("降级线必须低于健康线");
+      return;
+    }
+    mutation.mutate({
+      healthy_rate: Number(healthy),
+      degraded_rate: Number(degraded),
+    } satisfies ChannelHealthValue);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FieldText
+          label="健康线（成功率 ≥ 此值）"
+          value={healthy}
+          onChange={setHealthy}
+          inputMode="decimal"
+          placeholder="0.95"
+        />
+        <FieldText
+          label="降级线（成功率 ≥ 此值）"
+          value={degraded}
+          onChange={setDegraded}
+          inputMode="decimal"
+          placeholder="0.8"
+        />
+      </div>
+      <SaveReset
+        saving={mutation.isPending}
+        onSave={save}
+        onReset={() => {
+          setHealthy(String(server.healthy_rate));
+          setDegraded(String(server.degraded_rate));
+        }}
+      />
+    </div>
+  );
+}
+
+// ---- admin_frontend.dashboard_thresholds ----
+
+interface DashboardThresholdsValue {
+  success_rate_slo: number;
+  success_rate_warn: number;
+  ttft_warn_ms: number;
+  ttft_danger_ms: number;
+  latency_warn_ms: number;
+  latency_danger_ms: number;
+  profit_thin_rate: number;
+}
+
+function DashboardThresholdsEditor({ item }: { item: SettingItem }) {
+  const server = item.value as DashboardThresholdsValue;
+  const [slo, setSlo] = useState(String(server.success_rate_slo));
+  const [warn, setWarn] = useState(String(server.success_rate_warn));
+  const [ttftWarn, setTtftWarn] = useState(() => decomposeDurationMs(server.ttft_warn_ms));
+  const [ttftDanger, setTtftDanger] = useState(() => decomposeDurationMs(server.ttft_danger_ms));
+  const [latWarn, setLatWarn] = useState(() => decomposeDurationMs(server.latency_warn_ms));
+  const [latDanger, setLatDanger] = useState(() => decomposeDurationMs(server.latency_danger_ms));
+  const [profitThin, setProfitThin] = useState(String(server.profit_thin_rate));
+  const mutation = useSaveSetting(item.key);
+
+  const reset = () => {
+    setSlo(String(server.success_rate_slo));
+    setWarn(String(server.success_rate_warn));
+    setTtftWarn(decomposeDurationMs(server.ttft_warn_ms));
+    setTtftDanger(decomposeDurationMs(server.ttft_danger_ms));
+    setLatWarn(decomposeDurationMs(server.latency_warn_ms));
+    setLatDanger(decomposeDurationMs(server.latency_danger_ms));
+    setProfitThin(String(server.profit_thin_rate));
+  };
+
+  const save = () => {
+    const err =
+      rateError(slo, "成功率 SLO") ??
+      rateError(warn, "成功率警戒") ??
+      durationError(ttftWarn, false) ??
+      durationError(ttftDanger, false) ??
+      durationError(latWarn, false) ??
+      durationError(latDanger, false);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    const profit = Number(profitThin);
+    if (profitThin.trim() === "" || !Number.isFinite(profit) || profit < 0 || profit >= 1) {
+      toast.error("毛利偏薄线需在 [0, 1) 内（0=关闭）");
+      return;
+    }
+    if (Number(warn) >= Number(slo)) {
+      toast.error("成功率警戒线必须低于 SLO 线");
+      return;
+    }
+    if (composeDurationMs(ttftWarn) >= composeDurationMs(ttftDanger)) {
+      toast.error("TTFT 注意线必须低于异常线");
+      return;
+    }
+    if (composeDurationMs(latWarn) >= composeDurationMs(latDanger)) {
+      toast.error("延迟注意线必须低于异常线");
+      return;
+    }
+    mutation.mutate({
+      success_rate_slo: Number(slo),
+      success_rate_warn: Number(warn),
+      ttft_warn_ms: composeDurationMs(ttftWarn),
+      ttft_danger_ms: composeDurationMs(ttftDanger),
+      latency_warn_ms: composeDurationMs(latWarn),
+      latency_danger_ms: composeDurationMs(latDanger),
+      profit_thin_rate: profit,
+    } satisfies DashboardThresholdsValue);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FieldText
+          label="成功率 SLO（绿线）"
+          value={slo}
+          onChange={setSlo}
+          inputMode="decimal"
+          placeholder="0.95"
+        />
+        <FieldText
+          label="成功率警戒（黄线下界）"
+          value={warn}
+          onChange={setWarn}
+          inputMode="decimal"
+          placeholder="0.8"
+        />
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">TTFT 注意线（P95）</Label>
+          <DurationInput value={ttftWarn} onChange={setTtftWarn} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">TTFT 异常线（P95）</Label>
+          <DurationInput value={ttftDanger} onChange={setTtftDanger} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">延迟注意线（P95）</Label>
+          <DurationInput value={latWarn} onChange={setLatWarn} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">延迟异常线（P95）</Label>
+          <DurationInput value={latDanger} onChange={setLatDanger} />
+        </div>
+        <FieldText
+          label="毛利偏薄线（比率，0=关闭）"
+          value={profitThin}
+          onChange={setProfitThin}
+          inputMode="decimal"
+          placeholder="0.1"
+        />
+      </div>
+      <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
     </div>
   );
 }

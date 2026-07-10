@@ -15,6 +15,7 @@ export interface ChannelPrice {
   cache_read_input_cost: string | null;
   cache_write_5m_input_cost: string | null;
   cache_write_1h_input_cost: string | null;
+  cache_write_30m_input_cost: string | null;
   output_cost: string;
   reasoning_output_cost: string | null;
   status: string;
@@ -53,6 +54,38 @@ export function pickCurrentChannelPrice(
   )[0]!;
 }
 
+/**
+ * 找出同一模型下、启用中且生效窗口与目标窗口 [from, to) 相交的渠道成本价。
+ * 与后端 windowsOverlap 保持一致（半开区间，null 结束时间表示 +∞）。
+ * 用于新建成本价前提示「将覆盖现有价」：命中项需先关闭旧窗口再建新价，避免窗口重叠报错。
+ * 返回按 effective_from 倒序排列（最近生效的排在最前，便于取「当前价」做对比）。
+ */
+export function findOverlappingChannelPrices(
+  prices: ChannelPrice[],
+  modelId: number,
+  from: string,
+  to: string | null,
+  excludeId?: number,
+): ChannelPrice[] {
+  const aFrom = new Date(from).getTime();
+  const aTo = to ? new Date(to).getTime() : null;
+  return prices
+    .filter((p) => {
+      if (excludeId != null && p.id === excludeId) return false;
+      if (p.model_id !== modelId) return false;
+      if (p.status !== "enabled") return false;
+      const bFrom = new Date(p.effective_from).getTime();
+      const bTo = p.effective_to ? new Date(p.effective_to).getTime() : null;
+      const aStartsBeforeBEnds = bTo == null || aFrom < bTo;
+      const bStartsBeforeAEnds = aTo == null || bFrom < aTo;
+      return aStartsBeforeBEnds && bStartsBeforeAEnds;
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime(),
+    );
+}
+
 // 主成本必填（uncached_input_cost/output_cost），其余成本分项可空（null）。时间为 RFC3339（UTC）。
 export interface CreateChannelPriceInput {
   channelId: number;
@@ -63,6 +96,7 @@ export interface CreateChannelPriceInput {
   cache_read_input_cost: string | null;
   cache_write_5m_input_cost: string | null;
   cache_write_1h_input_cost: string | null;
+  cache_write_30m_input_cost: string | null;
   output_cost: string;
   reasoning_output_cost: string | null;
   status: string;

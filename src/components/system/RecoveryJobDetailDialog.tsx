@@ -128,13 +128,23 @@ function DetailContent({ detail }: { detail: RecoveryJobDetail }) {
         </dl>
       </Section>
 
-      <Section title="金额（授权快照）">
+      <Section title="资金闭环">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-          <Row label="估算金额">
+          <Row label="预估金额（拟冻结上限）">
             {trimDecimal(detail.estimated_amount)} {detail.currency}
           </Row>
-          <Row label="冻结金额">
+          <Row label="冻结金额（实际冻结）">
             {trimDecimal(detail.authorized_amount)} {detail.currency}
+          </Row>
+          <Row label="结算状态">{reservationStatusLabel(detail.reservation_status)}</Row>
+          <Row label="实扣（冻结内）">
+            {trimDecimal(detail.captured_amount)} {detail.currency}
+          </Row>
+          <Row label="加扣（超冻结补扣）">
+            {trimDecimal(detail.overage_amount)} {detail.currency}
+          </Row>
+          <Row label="释放（退回冻结）">
+            {trimDecimal(detail.released_amount)} {detail.currency}
           </Row>
           <Row label="计价 / 公式">
             {detail.pricing_unit} · {detail.formula_version}
@@ -150,6 +160,7 @@ function DetailContent({ detail }: { detail: RecoveryJobDetail }) {
           <Row label="reasoning 输出">{detail.reasoning_output_tokens}</Row>
           <Row label="5m 缓存写入">{detail.cache_write_5m_input_tokens}</Row>
           <Row label="1h 缓存写入">{detail.cache_write_1h_input_tokens}</Row>
+          <Row label="30m 缓存写入">{detail.cache_write_30m_input_tokens}</Row>
           <Row label="来源 / 映射">
             {detail.usage_source} · {detail.usage_mapping_version}
           </Row>
@@ -205,4 +216,18 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 function dash(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
   return String(v);
+}
+
+// 预授权状态 → 人话:authorized 冻结在途;captured 已扣费;released 全额退回(dead 收口,平台承担)。
+function reservationStatusLabel(status: string): string {
+  switch (status) {
+    case "authorized":
+      return "未结算（冻结在途）";
+    case "captured":
+      return "已实扣";
+    case "released":
+      return "已全额释放（未扣费）";
+    default:
+      return "—";
+  }
 }

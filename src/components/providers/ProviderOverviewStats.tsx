@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ProviderOpsDetail } from "@/lib/api/providersOps";
-import { profitIntent } from "@/components/dashboard/metrics";
+import { profitIntent, type MetricThresholds } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { RevenueTip } from "@/components/dashboard/RevenueTip";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
@@ -21,8 +22,8 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function profitClass(marginUsd: string, revenueUsd?: string): string {
-  const intent = profitIntent(Number(marginUsd), revenueUsd != null ? Number(revenueUsd) : undefined);
+function profitClass(marginUsd: string, th: MetricThresholds, revenueUsd?: string): string {
+  const intent = profitIntent(Number(marginUsd), th, revenueUsd != null ? Number(revenueUsd) : undefined);
   switch (intent) {
     case "success":
       return "text-emerald-600 dark:text-emerald-400";
@@ -36,6 +37,7 @@ function profitClass(marginUsd: string, revenueUsd?: string): string {
 }
 
 export function ProviderOverviewStats({ detail }: { detail: ProviderOpsDetail }) {
+  const th = useMetricThresholds();
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
       <Stat label="渠道" value={`${detail.channel_enabled}/${detail.channel_total}`} />
@@ -74,7 +76,7 @@ export function ProviderOverviewStats({ detail }: { detail: ProviderOpsDetail })
                 type="button"
                 className={cn(
                   "cursor-default underline decoration-dotted underline-offset-2",
-                  profitClass(detail.margin_usd, detail.revenue_usd),
+                  profitClass(detail.margin_usd, th, detail.revenue_usd),
                 )}
               >
                 {formatUSD(detail.margin_usd)}

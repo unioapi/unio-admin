@@ -1,52 +1,42 @@
-import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ActivityIcon, RefreshCwIcon } from "lucide-react";
-import { listRecoveryJobs, getSystemConfig } from "@/lib/api/system";
-import { listSyncJobs } from "@/lib/api/capability";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useServerList } from "@/hooks/useServerList";
-import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
-import type { FilterChip } from "@/components/openstatus-table";
-import {
-  recoveryJobOsColumns,
-  syncJobOsColumns,
-  RECOVERY_OS_COLUMN_LABELS,
-  SYNC_OS_COLUMN_LABELS,
-  RECOVERY_STATUS_OPTIONS,
-} from "@/components/openstatus-table/system-os-columns";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { Navigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { getSystemConfig } from "@/lib/api/system";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AnthropicBetaPolicyCard } from "@/components/system/AnthropicBetaPolicyCard";
-import { RuntimeGatewaySettings } from "@/components/system/RuntimeGatewaySettings";
+import { RuntimeSettingsPanel } from "@/components/system/RuntimeSettingsPanel";
 
-const PAGE_SIZE = 20;
+// 系统设置页只留「配置」职责：运行时配置(可编辑) + 网关配置(只读 env)。
+// 任务记录已按领域归位：结算补偿 → 账本页「结算补偿」Tab;模型目录同步 → 参考目录页「同步记录」Tab。
 
-const SYSTEM_TABS = ["recovery", "sync", "config", "providers"] as const;
+const SYSTEM_TABS = ["providers", "config"] as const;
 type SystemTab = (typeof SYSTEM_TABS)[number];
+
+// 旧深链兼容(看板结算卡片等曾指向 /system?tab=jobs / recovery / sync)。
+const LEGACY_TAB_REDIRECTS: Record<string, string> = {
+  recovery: "/ledger?tab=recovery",
+  jobs: "/ledger?tab=recovery",
+  sync: "/models/catalog?tab=jobs",
+};
 
 export function SystemPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const raw = searchParams.get("tab");
+
+  const legacyTarget = raw ? LEGACY_TAB_REDIRECTS[raw] : undefined;
+  if (legacyTarget) {
+    return <Navigate to={legacyTarget} replace />;
+  }
+
   const tab: SystemTab = SYSTEM_TABS.includes(raw as SystemTab)
     ? (raw as SystemTab)
-    : "recovery";
+    : "providers";
   const setTab = (v: string) => {
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
-        if (v === "recovery") sp.delete("tab");
+        if (v === "providers") sp.delete("tab");
         else sp.set("tab", v);
         return sp;
       },
@@ -58,24 +48,15 @@ export function SystemPage() {
     <div className="flex flex-col gap-4">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="recovery">结算补偿任务</TabsTrigger>
-          <TabsTrigger value="sync">同步任务</TabsTrigger>
-          <TabsTrigger value="config">网关配置(只读)</TabsTrigger>
           <TabsTrigger value="providers">运行时配置</TabsTrigger>
+          <TabsTrigger value="config">网关配置(只读)</TabsTrigger>
         </TabsList>
-        <TabsContent value="recovery" className="pt-4">
-          <RecoveryTab />
-        </TabsContent>
-        <TabsContent value="sync" className="pt-4">
-          <SyncJobsTab />
+        {/* 运行时配置：按域分 Tab(网关/运营判定/前端展示/Provider 策略),均免重启生效。 */}
+        <TabsContent value="providers" className="pt-4">
+          <RuntimeSettingsPanel />
         </TabsContent>
         <TabsContent value="config" className="pt-4">
           <ConfigTab />
-        </TabsContent>
-        {/* 运行时配置：gateway 6 组热路径配置 + Anthropic beta 策略,均免重启生效。 */}
-        <TabsContent value="providers" className="flex flex-col gap-4 pt-4">
-          <RuntimeGatewaySettings />
-          <AnthropicBetaPolicyCard />
         </TabsContent>
       </Tabs>
     </div>
@@ -139,180 +120,4 @@ function ConfigTab() {
       </div>
     </div>
   );
-}
-
-function RecoveryTab() {
-  const [status, setStatus] = useState("");
-  const [userIdInput, setUserIdInput] = useState("");
-  const { page, setPage, sorting, setSorting, sort } = useServerList({
-    defaultSort: { id: "created_at", desc: true },
-  });
-  const userId = useDebouncedValue(parsePositiveInt(userIdInput), 300);
-
-  const query = useQuery({
-    queryKey: ["recovery-jobs", { status, userId, page, sort }],
-    queryFn: () =>
-      listRecoveryJobs({
-        page,
-        pageSize: PAGE_SIZE,
-        sort,
-        status: status || undefined,
-        userId,
-      }),
-    placeholderData: keepPreviousData,
-  });
-
-  const items = query.data?.items ?? [];
-  const total = query.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount, setPage]);
-
-  function reset<T>(setter: (v: T) => void) {
-    return (value: T) => {
-      setter(value);
-      setPage(1);
-    };
-  }
-
-  const chips: FilterChip[] = [];
-  if (status) {
-    const label = RECOVERY_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
-    chips.push({ id: `status:${status}`, label: `状态 · ${label}`, onRemove: () => reset(setStatus)("") });
-  }
-  if (userId != null) {
-    chips.push({ id: "user", label: `用户 · ${userId}`, onRemove: () => reset(setUserIdInput)("") });
-  }
-
-  return (
-    <>
-      {query.isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription>{query.error.message}</AlertDescription>
-        </Alert>
-      ) : (
-        <ServerDataTable
-          storageKey="system:recovery-jobs"
-          columns={recoveryJobOsColumns()}
-          data={items}
-          columnLabels={RECOVERY_OS_COLUMN_LABELS}
-          total={total}
-          page={page}
-          pageCount={pageCount}
-          onPageChange={setPage}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          getRowId={(r) => String(r.id)}
-          loading={query.isPending}
-          refetching={query.isFetching && !query.isPending}
-          emptyContent={<RecoveryEmpty />}
-          chips={chips}
-          onClearChips={() => {
-            setStatus("");
-            setUserIdInput("");
-            setPage(1);
-          }}
-          toolbarFilters={
-            <>
-              <FacetFilterButton
-                label="状态"
-                multiple={false}
-                value={status ? [status] : []}
-                options={[...RECOVERY_STATUS_OPTIONS]}
-                onChange={(v) => reset(setStatus)(v[0] ?? "")}
-              />
-              <Input
-                placeholder="用户 ID"
-                value={userIdInput}
-                onChange={(e) => reset(setUserIdInput)(e.target.value)}
-                inputMode="numeric"
-                className="h-8 w-28"
-              />
-            </>
-          }
-        />
-      )}
-    </>
-  );
-}
-
-function RecoveryEmpty() {
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <ActivityIcon />
-        </EmptyMedia>
-        <EmptyTitle>暂无补偿任务</EmptyTitle>
-        <EmptyDescription>没有匹配当前筛选条件的结算补偿任务。</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-function SyncJobsTab() {
-  const { page, setPage, sorting, setSorting, sort } = useServerList({
-    defaultSort: { id: "created_at", desc: true },
-  });
-
-  const query = useQuery({
-    queryKey: ["system-sync-jobs", page, sort],
-    queryFn: () => listSyncJobs({ page, pageSize: PAGE_SIZE, sort }),
-    placeholderData: keepPreviousData,
-  });
-
-  const items = query.data?.items ?? [];
-  const total = query.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount, setPage]);
-
-  return (
-    <>
-      {query.isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription>{query.error.message}</AlertDescription>
-        </Alert>
-      ) : (
-        <ServerDataTable
-          storageKey="system:sync-jobs"
-          columns={syncJobOsColumns()}
-          data={items}
-          columnLabels={SYNC_OS_COLUMN_LABELS}
-          total={total}
-          page={page}
-          pageCount={pageCount}
-          onPageChange={setPage}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          getRowId={(r) => String(r.id)}
-          loading={query.isPending}
-          refetching={query.isFetching && !query.isPending}
-          emptyMessage="还没有同步任务"
-          toolbarActions={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="刷新"
-              onClick={() => query.refetch()}
-              disabled={query.isFetching}
-            >
-              <RefreshCwIcon className={query.isFetching ? "animate-spin" : undefined} />
-            </Button>
-          }
-        />
-      )}
-    </>
-  );
-}
-
-function parsePositiveInt(raw: string): number | undefined {
-  const n = Number(raw.trim());
-  return Number.isInteger(n) && n > 0 ? n : undefined;
 }

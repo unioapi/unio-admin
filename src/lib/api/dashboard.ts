@@ -117,6 +117,7 @@ export interface CacheStats {
   cache_read_tokens: number;
   cache_write_5m_tokens: number;
   cache_write_1h_tokens: number;
+  cache_write_30m_tokens: number;
 }
 
 export interface RadarActionItem {

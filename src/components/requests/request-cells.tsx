@@ -8,12 +8,8 @@ import {
   formatUSDPrecise,
   trimDecimal,
 } from "@/lib/format";
-import {
-  LATENCY_DANGER_MS,
-  LATENCY_WARN_MS,
-  TTFT_DANGER_MS,
-  TTFT_WARN_MS,
-} from "@/components/dashboard/metrics";
+import type { MetricThresholds } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +20,15 @@ import { cn } from "@/lib/utils";
 
 const Dash = () => <span className="text-muted-foreground">—</span>;
 
-function latencyClass(ms: number): string {
-  if (ms > LATENCY_DANGER_MS) return "text-red-600 dark:text-red-400";
-  if (ms >= LATENCY_WARN_MS) return "text-amber-600 dark:text-amber-400";
+function latencyClass(ms: number, th: MetricThresholds): string {
+  if (ms > th.latencyDangerMs) return "text-red-600 dark:text-red-400";
+  if (ms >= th.latencyWarnMs) return "text-amber-600 dark:text-amber-400";
   return "text-foreground";
 }
 
-function ttftClass(ms: number): string {
-  if (ms > TTFT_DANGER_MS) return "text-red-600 dark:text-red-400";
-  if (ms >= TTFT_WARN_MS) return "text-amber-600 dark:text-amber-400";
+function ttftClass(ms: number, th: MetricThresholds): string {
+  if (ms > th.ttftDangerMs) return "text-red-600 dark:text-red-400";
+  if (ms >= th.ttftWarnMs) return "text-amber-600 dark:text-amber-400";
   return "text-muted-foreground";
 }
 
@@ -127,6 +123,7 @@ function tokenLines(row: RequestListItem): TokenLine[] {
     { label: "缓存读取", value: row.cache_read_input_tokens },
     { label: "缓存写入·5m", value: row.cache_write_5m_input_tokens },
     { label: "缓存写入·1h", value: row.cache_write_1h_input_tokens },
+    { label: "缓存写入·30m", value: row.cache_write_30m_input_tokens },
     { label: "输出", value: normalOutput },
     { label: "推理输出", value: row.reasoning_output_tokens },
   ].filter((l) => l.value > 0);
@@ -137,7 +134,7 @@ export function RequestTokensCell({ row }: { row: RequestListItem }) {
   const input = row.uncached_input_tokens;
   const output = row.output_tokens;
   const cacheRead = row.cache_read_input_tokens;
-  const cacheWrite = row.cache_write_5m_input_tokens + row.cache_write_1h_input_tokens;
+  const cacheWrite = row.cache_write_5m_input_tokens + row.cache_write_1h_input_tokens + row.cache_write_30m_input_tokens;
   const total = input + cacheRead + cacheWrite + output;
 
   if (total === 0) return <Dash />;
@@ -184,6 +181,7 @@ export function RequestTokensCell({ row }: { row: RequestListItem }) {
 
 /** 耗时：主行总耗时（着色）+ 次行 首字/TPS；悬浮显示明细 + 口径说明。 */
 export function RequestTimingCell({ row }: { row: RequestListItem }) {
+  const th = useMetricThresholds();
   if (row.latency_ms == null && row.ttft_ms == null && row.tps == null) return <Dash />;
 
   return (
@@ -191,7 +189,7 @@ export function RequestTimingCell({ row }: { row: RequestListItem }) {
       <HoverCardTrigger asChild>
         <button type="button" className="flex flex-col gap-1 py-0.5 text-left text-xs tabular-nums">
           {row.latency_ms != null ? (
-            <span className={cn("font-medium", latencyClass(row.latency_ms))}>
+            <span className={cn("font-medium", latencyClass(row.latency_ms, th))}>
               {formatLatencyMs(row.latency_ms)}
             </span>
           ) : (
@@ -200,7 +198,7 @@ export function RequestTimingCell({ row }: { row: RequestListItem }) {
           {(row.ttft_ms != null || row.tps != null) && (
             <span className="text-muted-foreground text-[10px]">
               {row.ttft_ms != null && (
-                <span className={ttftClass(row.ttft_ms)}>首字 {formatLatencyMs(row.ttft_ms)}</span>
+                <span className={ttftClass(row.ttft_ms, th)}>首字 {formatLatencyMs(row.ttft_ms)}</span>
               )}
               {row.ttft_ms != null && row.tps != null ? " · " : ""}
               {row.tps != null && formatTPS(row.tps)}
@@ -250,6 +248,7 @@ export function RequestCostCell({ row }: { row: RequestListItem }) {
                 cacheRead: row.cache_read_input_tokens,
                 cacheWrite5m: row.cache_write_5m_input_tokens,
                 cacheWrite1h: row.cache_write_1h_input_tokens,
+                cacheWrite30m: row.cache_write_30m_input_tokens,
                 outputTotal: row.output_tokens,
                 reasoningOutput: row.reasoning_output_tokens,
               },
@@ -258,6 +257,7 @@ export function RequestCostCell({ row }: { row: RequestListItem }) {
                 cacheRead: row.cache_read_input_cost_unit_usd,
                 cacheWrite5m: row.cache_write_5m_input_cost_unit_usd,
                 cacheWrite1h: row.cache_write_1h_input_cost_unit_usd,
+                cacheWrite30m: row.cache_write_30m_input_cost_unit_usd,
                 output: row.output_cost_unit_usd,
                 reasoning: row.reasoning_output_cost_unit_usd,
               },
@@ -266,6 +266,7 @@ export function RequestCostCell({ row }: { row: RequestListItem }) {
                 cacheRead: row.cache_read_input_price_unit_usd,
                 cacheWrite5m: row.cache_write_5m_input_price_unit_usd,
                 cacheWrite1h: row.cache_write_1h_input_price_unit_usd,
+                cacheWrite30m: row.cache_write_30m_input_price_unit_usd,
                 output: row.output_price_unit_usd,
                 reasoning: row.reasoning_output_price_unit_usd,
               },
@@ -274,6 +275,7 @@ export function RequestCostCell({ row }: { row: RequestListItem }) {
                 cacheRead: row.cache_read_input_cost_usd,
                 cacheWrite5m: row.cache_write_5m_input_cost_usd,
                 cacheWrite1h: row.cache_write_1h_input_cost_usd,
+                cacheWrite30m: row.cache_write_30m_input_cost_usd,
                 output: row.output_cost_usd,
                 reasoning: row.reasoning_output_cost_usd,
                 total: row.total_cost_usd,

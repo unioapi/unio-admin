@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
 import { formatCompact, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import {
-  SUCCESS_RATE_SLO,
-  rateIntent,
-} from "@/components/dashboard/metrics";
+import { rateIntent, type MetricThresholds } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 
-function rateColor(rate: number): string {
-  const intent = rateIntent(rate);
+function rateColor(rate: number, th: MetricThresholds): string {
+  const intent = rateIntent(rate, th);
   return intent === "success"
     ? "text-emerald-600 dark:text-emerald-400"
     : intent === "warning"
@@ -68,6 +66,7 @@ export function AttemptSuccessTip({
   attemptSucceeded: number;
   successRate: number;
 }) {
+  const th = useMetricThresholds();
   const attemptFailed = Math.max(0, attemptTotal - attemptSucceeded);
   const successPct = attemptTotal > 0 ? attemptSucceeded / attemptTotal : 0;
   const failedPct = attemptTotal > 0 ? attemptFailed / attemptTotal : 0;
@@ -79,7 +78,7 @@ export function AttemptSuccessTip({
           <div className="text-sm font-semibold leading-tight">成功率</div>
           <div className="text-muted-foreground mt-0.5 text-[11px]">成功 ÷（成功 + 失败）</div>
         </div>
-        <div className={cn("font-heading text-xl font-semibold tabular-nums", rateColor(successRate))}>
+        <div className={cn("font-heading text-xl font-semibold tabular-nums", rateColor(successRate, th))}>
           {formatPercent(successRate)}
         </div>
       </div>
@@ -129,7 +128,7 @@ export function AttemptSuccessTip({
         <div className="bg-muted/30 mt-2 flex items-center justify-between gap-3 rounded-md px-2.5 py-2 text-[11px]">
           <span className="text-muted-foreground">SLO 参考</span>
           <span className="tabular-nums">
-            <span className="text-emerald-600 dark:text-emerald-400">健康 ≥ {formatPercent(SUCCESS_RATE_SLO)}</span>
+            <span className="text-emerald-600 dark:text-emerald-400">健康 ≥ {formatPercent(th.successRateSlo)}</span>
           </span>
         </div>
       </TipSection>

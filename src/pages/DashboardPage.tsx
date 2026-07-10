@@ -65,15 +65,13 @@ import {
 } from "@/components/detail-tables/dashboard-columns";
 import {
   latencyIntent,
-  LATENCY_WARN_MS,
   profitIntent,
   rateIntent,
   settlementAnomalyCount,
   settlementIntent,
-  SUCCESS_RATE_SLO,
   ttftIntent,
-  TTFT_WARN_MS,
 } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import {
   formatCompact,
   formatInt,
@@ -166,6 +164,7 @@ function RadarCards({
   data?: RadarReport;
   loading: boolean;
 }) {
+  const th = useMetricThresholds();
   const r = data;
   const ttftValue =
     r && r.ttft.has_data ? formatLatencyMs(r.ttft.avg) : "—";
@@ -176,7 +175,7 @@ function RadarCards({
         label="请求成功率"
         loading={loading}
         value={formatPercent(r?.requests.success_rate ?? 0)}
-        intent={r ? rateIntent(r.requests.success_rate) : "default"}
+        intent={r ? rateIntent(r.requests.success_rate, th) : "default"}
         icon={<ActivityIcon className="size-3.5" />}
         hint={r ? <RequestSuccessHint requests={r.requests} /> : undefined}
         tooltip={r ? <RequestSuccessTip requests={r.requests} /> : undefined}
@@ -226,7 +225,7 @@ function RadarCards({
         label="营收"
         loading={loading}
         value={r ? formatUSD(r.margin_usd) : "—"}
-        intent={r ? profitIntent(Number(r.margin_usd), Number(r.revenue_usd)) : "default"}
+        intent={r ? profitIntent(Number(r.margin_usd), th, Number(r.revenue_usd)) : "default"}
         icon={<CircleDollarSignIcon className="size-3.5" />}
         hint={r ? <RevenueHint revenue={r} /> : undefined}
         tooltip={r ? <RevenueTip revenue={r} /> : undefined}
@@ -390,6 +389,7 @@ function StabilityChart({
   range: RangeQuery;
   interval: TimeseriesInterval;
 }) {
+  const th = useMetricThresholds();
   const prevRange = usePreviousRange(range);
   const q = useQuery({
     queryKey: ["dashboard", "ts", "requests", interval, range],
@@ -464,7 +464,7 @@ function StabilityChart({
           {
             label: "平均成功率",
             value: formatPercent(avgRate),
-            intent: rateIntent(avgRate),
+            intent: rateIntent(avgRate, th),
             compare:
               prevQ.isSuccess && prevAvgRate != null
                 ? formatRatePointChange(avgRate, prevAvgRate)
@@ -478,7 +478,7 @@ function StabilityChart({
                 {
                   label: "最低成功率",
                   value: `${formatPercent(worst.rate)}（${fmtBucket(worst.bucket, interval)}）`,
-                  intent: rateIntent(worst.rate),
+                  intent: rateIntent(worst.rate, th),
                 },
               ]
             : []),
@@ -538,8 +538,8 @@ function StabilityChart({
           <ChartLegend content={<ChartLegendContent />} />
           <SloReferenceLine
             yAxisId="rate"
-            y={SUCCESS_RATE_SLO}
-            label="SLO 95%"
+            y={th.successRateSlo}
+            label={`SLO ${Math.round(th.successRateSlo * 100)}%`}
           />
           <Area
             yAxisId="vol"
@@ -572,6 +572,7 @@ function PerformanceChart({
   range: RangeQuery;
   interval: TimeseriesInterval;
 }) {
+  const th = useMetricThresholds();
   const prevRange = usePreviousRange(range);
   const q = useQuery({
     queryKey: ["dashboard", "ts", "performance", range],
@@ -639,7 +640,7 @@ function PerformanceChart({
                 {
                   label: "P95 延迟峰值",
                   value: `${formatLatencyMs(latPeak.v)}（${fmtBucket(latPeak.bucket, interval)}）`,
-                  intent: latencyIntent(latPeak.v) as StatIntent,
+                  intent: latencyIntent(latPeak.v, th) as StatIntent,
                   compare: prevQ.isSuccess
                     ? formatRelativeChange(
                         relativeChange(latPeak.v, prevLatPeak),
@@ -656,7 +657,7 @@ function PerformanceChart({
                 {
                   label: "P95 TTFT 峰值",
                   value: `${formatLatencyMs(ttftPeak.v)}（${fmtBucket(ttftPeak.bucket, interval)}）`,
-                  intent: ttftIntent(ttftPeak.v) as StatIntent,
+                  intent: ttftIntent(ttftPeak.v, th) as StatIntent,
                   compare: prevQ.isSuccess
                     ? formatRelativeChange(
                         relativeChange(ttftPeak.v, prevTtftPeak),
@@ -732,10 +733,14 @@ function PerformanceChart({
           <ChartLegend content={<ChartLegendContent />} />
           <SloReferenceLine
             yAxisId="ms"
-            y={LATENCY_WARN_MS}
-            label="延迟 15s"
+            y={th.latencyWarnMs}
+            label={`延迟 ${formatLatencyMs(th.latencyWarnMs)}`}
           />
-          <SloReferenceLine yAxisId="ms" y={TTFT_WARN_MS} label="TTFT 5s" />
+          <SloReferenceLine
+            yAxisId="ms"
+            y={th.ttftWarnMs}
+            label={`TTFT ${formatLatencyMs(th.ttftWarnMs)}`}
+          />
           <Line
             yAxisId="ms"
             dataKey="latency_p95"
@@ -775,6 +780,7 @@ function ProfitChart({
   range: RangeQuery;
   interval: TimeseriesInterval;
 }) {
+  const th = useMetricThresholds();
   const prevRange = usePreviousRange(range);
   const revenueQ = useQuery({
     queryKey: ["dashboard", "ts", "spend", interval, range],
@@ -883,7 +889,7 @@ function ProfitChart({
               marginRate != null
                 ? `${formatUSD(marginTotal)}（${formatPercent(marginRate)}）`
                 : formatUSD(marginTotal),
-            intent: profitIntent(marginTotal, revTotal) as StatIntent,
+            intent: profitIntent(marginTotal, th, revTotal) as StatIntent,
             compare: prevReady
               ? formatRelativeChange(
                   relativeChange(marginTotal, prevMarginTotal),

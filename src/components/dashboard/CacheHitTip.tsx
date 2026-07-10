@@ -25,6 +25,11 @@ const CACHE_FIELDS = [
     getValue: (c: CacheStats) => c.cache_write_1h_tokens,
     meaning: "写入 1 小时 TTL cache（Anthropic 等）",
   },
+  {
+    key: "cache_write_30m",
+    getValue: (c: CacheStats) => c.cache_write_30m_tokens,
+    meaning: "写入 30 分钟 TTL cache（OpenAI GPT-5.6+）",
+  },
 ] as const;
 
 function TipSection({
@@ -87,7 +92,7 @@ function CacheFormulaBlock({ cache }: { cache: CacheStats }) {
 export function CacheHitTip({ cache }: { cache: CacheStats }) {
   const input = cache.input_tokens;
   const weight = cacheWeightTokens(cache);
-  const writeTotal = cache.cache_write_5m_tokens + cache.cache_write_1h_tokens;
+  const writeTotal = cache.cache_write_5m_tokens + cache.cache_write_1h_tokens + cache.cache_write_30m_tokens;
 
   const readPct = input > 0 ? cache.cache_read_tokens / input : 0;
   const writePct = input > 0 ? writeTotal / input : 0;

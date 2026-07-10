@@ -37,6 +37,16 @@ export interface RecoveryJobSummary {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+
+  // 对外 request_id（req_xxx）：供后台跳转到对应请求详情；缺失为空串。
+  request_public_id: string;
+
+  // 资金闭环（关联预授权/超额补扣流水派生）：冻结(authorized)→ 实扣(captured+overage)→ 释放(released)。
+  // reservation_status: authorized=未结算 / captured=已实扣 / released=已全额释放(dead 收口)。
+  reservation_status: "authorized" | "captured" | "released" | "";
+  captured_amount: string;
+  released_amount: string;
+  overage_amount: string;
 }
 
 // 详情：摘要 + 审计补充字段 + 受控内部诊断详情（仅 includeInternal=true 时回显）。
@@ -52,6 +62,7 @@ export interface RecoveryJobDetail extends RecoveryJobSummary {
   cache_read_input_tokens: number;
   cache_write_5m_input_tokens: number;
   cache_write_1h_input_tokens: number;
+  cache_write_30m_input_tokens: number;
   output_tokens_total: number;
   reasoning_output_tokens: number;
   last_internal_error_detail?: string | null;
@@ -180,6 +191,10 @@ export async function updateAnthropicBetaPolicy(
   );
   return res.data.data;
 }
+
+// 运行时配置列表的共享 react-query key：设置面板与各消费方（如 useMetricThresholds）
+// 共用同一缓存——面板保存后 invalidate，消费方立即拿到新值，无需刷新页面。
+export const RUNTIME_SETTINGS_QUERY_KEY = ["runtime-settings"] as const;
 
 // 通用运行时配置项：注册元数据 + 当前生效值 + 生效来源（redis=已跨进程传播 / db / default）。
 export interface SettingItem {

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ArrowDownIcon, ArrowUpIcon, CheckIcon, PlusIcon } from "lucide-react";
 import {
   createChannelPrice,
+  findOverlappingChannelPrices,
   listChannelPrices,
   pickCurrentChannelPrice,
   updateChannelPrice,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/api/channelPrices";
 import { listChannelModels } from "@/lib/api/channelModels";
 import { type Channel } from "@/lib/api/channels";
-import { apiErrorMessage } from "@/lib/api/client";
+import { apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
   formatDateTime,
   localToRFC3339,
@@ -37,6 +38,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -64,6 +66,7 @@ const COST_FIELDS = [
   { key: "reasoning_output", label: "reasoning 输出", required: false },
   { key: "cache_write_5m_input", label: "5 分钟缓存写入", required: false },
   { key: "cache_write_1h_input", label: "1 小时缓存写入", required: false },
+  { key: "cache_write_30m_input", label: "30 分钟缓存写入", required: false },
 ] as const;
 
 type CostFieldKey = (typeof COST_FIELDS)[number]["key"];
@@ -76,6 +79,7 @@ const COST_PRICE_FIELD: Record<
   | "reasoning_output_cost"
   | "cache_write_5m_input_cost"
   | "cache_write_1h_input_cost"
+  | "cache_write_30m_input_cost"
 > = {
   uncached_input: "uncached_input_cost",
   output: "output_cost",
@@ -83,6 +87,7 @@ const COST_PRICE_FIELD: Record<
   reasoning_output: "reasoning_output_cost",
   cache_write_5m_input: "cache_write_5m_input_cost",
   cache_write_1h_input: "cache_write_1h_input_cost",
+  cache_write_30m_input: "cache_write_30m_input_cost",
 };
 
 const COST_TABLE_GRID =
@@ -186,7 +191,12 @@ function ChannelPriceManager({ channel }: { channel: Channel }) {
         ) : (
           <ul className="divide-border max-h-[60vh] divide-y overflow-y-auto rounded-md border">
             {prices.map((p) => (
-              <ChannelPriceRow key={p.id} price={p} onChanged={invalidate} />
+              <ChannelPriceRow
+                key={p.id}
+                price={p}
+                prices={prices}
+                onChanged={invalidate}
+              />
             ))}
           </ul>
         )}
@@ -194,6 +204,13 @@ function ChannelPriceManager({ channel }: { channel: Channel }) {
     </>
   );
 }
+
+// 待确认的一次「覆盖现有价」创建：新价窗口 + 命中重叠的启用中历史价（按 effective_from 倒序）。
+type PendingOverwrite = {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  overlapping: ChannelPrice[];
+};
 
 function ChannelPriceForm({
   channelId,
@@ -218,6 +235,9 @@ function ChannelPriceForm({
   const [status, setStatus] = useState("enabled");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [continueAfterCreate, setContinueAfterCreate] = useState(false);
+  // 待用户在「覆盖现有价」弹窗中确认的一次创建：命中重叠历史价时暂存，确认后先关旧窗口再建新价。
+  const [pendingOverwrite, setPendingOverwrite] =
+    useState<PendingOverwrite | null>(null);
 
   const pricesQuery = useQuery({
     queryKey: ["channel-prices", channelId],
@@ -231,8 +251,31 @@ function ChannelPriceForm({
   );
 
   const mutation = useMutation({
-    mutationFn: () =>
-      createChannelPrice({
+    // vars.overlapping：建新价前需先消解窗口重叠的启用中历史价（见 resolveOverlap 的两种处理）。
+    mutationFn: async (vars: {
+      effectiveFrom: string;
+      effectiveTo: string | null;
+      overlapping: ChannelPrice[];
+    }) => {
+      const fromMs = new Date(vars.effectiveFrom).getTime();
+      for (const old of vars.overlapping) {
+        if (new Date(old.effective_from).getTime() < fromMs) {
+          // 旧价开始更早：收口到新价开始时间，保留其历史区间且仍启用（[oldFrom, newFrom)）。
+          await updateChannelPrice({
+            id: old.id,
+            status: old.status,
+            effective_to: vars.effectiveFrom,
+          });
+        } else {
+          // 旧价开始不早于新价：无法向左收口（会得到零/负区间），新价已从更早或同一时刻覆盖它 → 停用。
+          await updateChannelPrice({
+            id: old.id,
+            status: "disabled",
+            effective_to: old.effective_to,
+          });
+        }
+      }
+      return createChannelPrice({
         channelId,
         modelId: Number(modelId),
         currency: currency.trim(),
@@ -243,11 +286,14 @@ function ChannelPriceForm({
         reasoning_output_cost: optionalMoney(cost.reasoning_output),
         cache_write_5m_input_cost: optionalMoney(cost.cache_write_5m_input),
         cache_write_1h_input_cost: optionalMoney(cost.cache_write_1h_input),
+        cache_write_30m_input_cost: optionalMoney(cost.cache_write_30m_input),
         status,
-        effective_from: localToRFC3339(effectiveFrom),
-        effective_to: effectiveTo.trim() ? localToRFC3339(effectiveTo) : null,
-      }),
+        effective_from: vars.effectiveFrom,
+        effective_to: vars.effectiveTo,
+      });
+    },
     onSuccess: (created) => {
+      setPendingOverwrite(null);
       toast.success(`已为「${created.model_external_id}」新增渠道-模型成本价`);
       if (continueAfterCreate) {
         onSaved();
@@ -258,6 +304,7 @@ function ChannelPriceForm({
       }
     },
     onError: (err) => {
+      setPendingOverwrite(null);
       setContinueAfterCreate(false);
       toast.error(apiErrorMessage(err));
     },
@@ -286,13 +333,14 @@ function ChannelPriceForm({
       }
     }
 
-    if (effectiveFrom.trim() === "") next.effective_from = "请选择生效开始时间";
-    if (
-      effectiveTo.trim() !== "" &&
-      effectiveFrom.trim() !== "" &&
-      new Date(effectiveTo) <= new Date(effectiveFrom)
-    ) {
-      next.effective_to = "结束时间须晚于开始时间";
+    // 生效开始留空即默认取创建时间；仅当填了结束时间时校验须晚于开始（留空时以「现在」为准）。
+    if (effectiveTo.trim() !== "") {
+      const fromForCheck = effectiveFrom.trim() ? new Date(effectiveFrom) : new Date();
+      if (new Date(effectiveTo) <= fromForCheck) {
+        next.effective_to = effectiveFrom.trim()
+          ? "结束时间须晚于开始时间"
+          : "结束时间须晚于当前时间";
+      }
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -300,8 +348,32 @@ function ChannelPriceForm({
 
   function submit(continueEditing: boolean) {
     if (!validate()) return;
+    // 开始时间留空 → 默认取当前时间（创建即生效），省去每次手动选。
+    const from = effectiveFrom.trim()
+      ? localToRFC3339(effectiveFrom)
+      : new Date().toISOString();
+    const to = effectiveTo.trim() ? localToRFC3339(effectiveTo) : null;
+
+    // 停用价不参与窗口重叠校验（与后端一致），直接创建。
+    const overlapping =
+      status === "enabled"
+        ? findOverlappingChannelPrices(
+            pricesQuery.data ?? [],
+            Number(modelId),
+            from,
+            to,
+          )
+        : [];
+
     setContinueAfterCreate(continueEditing);
-    mutation.mutate();
+
+    if (overlapping.length > 0) {
+      // 有历史价：弹窗展示当前价 vs 新价对比，确认后再关旧窗口 + 建新价。
+      setPendingOverwrite({ effectiveFrom: from, effectiveTo: to, overlapping });
+      return;
+    }
+
+    mutation.mutate({ effectiveFrom: from, effectiveTo: to, overlapping: [] });
   }
 
   function handleSubmit(e: FormEvent) {
@@ -401,13 +473,17 @@ function ChannelPriceForm({
 
       <div className="grid grid-cols-2 gap-4">
         <Field data-invalid={!!errors.effective_from}>
-          <HintLabel htmlFor="cp_from" hint="该成本价开始生效的时间点。">
-            生效开始
+          <HintLabel
+            htmlFor="cp_from"
+            hint="该成本价开始生效的时间点；留空默认取创建时间（立即生效）。"
+          >
+            生效开始（可选）
           </HintLabel>
           <DateTimePicker
             id="cp_from"
             value={effectiveFrom}
             onChange={setEffectiveFrom}
+            placeholder="留空默认创建时间"
             aria-invalid={!!errors.effective_from}
           />
           <FieldError>{errors.effective_from}</FieldError>
@@ -465,7 +541,159 @@ function ChannelPriceForm({
           {mutation.isPending && !continueAfterCreate ? "保存中..." : "创建"}
         </Button>
       </div>
+
+      <PriceOverwriteDialog
+        pending={pendingOverwrite}
+        currency={currency.trim() || "USD"}
+        newCost={cost}
+        busy={mutation.isPending}
+        onCancel={() => {
+          if (mutation.isPending) return;
+          setPendingOverwrite(null);
+          setContinueAfterCreate(false);
+        }}
+        onConfirm={() => {
+          if (pendingOverwrite) mutation.mutate(pendingOverwrite);
+        }}
+      />
     </form>
+  );
+}
+
+function PriceOverwriteDialog({
+  pending,
+  currency,
+  newCost,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  pending: PendingOverwrite | null;
+  currency: string;
+  newCost: Record<CostFieldKey, string>;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  // 取最近生效的一条作为「当前价」做逐项对比。
+  const current = pending?.overlapping[0] ?? null;
+  const fromMs = pending ? new Date(pending.effectiveFrom).getTime() : 0;
+
+  return (
+    <Dialog
+      open={pending != null}
+      onOpenChange={(o) => {
+        if (!o) onCancel();
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>覆盖现有成本价？</DialogTitle>
+          <DialogDescription>
+            {current
+              ? `「${current.model_external_id}」已有与新价时间重叠的成本价。确认后：开始早于新价的会在新价生效时间收口，开始不早于新价的会被停用；随后新价生效，彼此不再重叠。`
+              : "已有生效中的成本价，确认后将消解重叠并生效新价。"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {pending && current && (
+          <div className="flex flex-col gap-3">
+            <div className="overflow-hidden rounded-md border">
+              <div
+                className={cn(
+                  "bg-muted/40 text-muted-foreground px-3 py-2 text-xs font-medium",
+                  COST_TABLE_GRID,
+                )}
+              >
+                <div>分项</div>
+                <div>当前价</div>
+                <div>新价</div>
+                <div>差额</div>
+              </div>
+              {COST_FIELDS.map((f) => {
+                const cur = readCurrentCost(current, f.key);
+                const next = newCost[f.key].trim();
+                return (
+                  <div
+                    key={f.key}
+                    className={cn("items-center border-t px-3 py-2", COST_TABLE_GRID)}
+                  >
+                    <div className="text-sm">{f.label}</div>
+                    <div className="text-muted-foreground tabular-nums text-sm">
+                      {cur ?? "—"}
+                    </div>
+                    <div className="tabular-nums text-sm">
+                      {next === "" ? "—" : next}
+                    </div>
+                    <div className="flex items-center">
+                      <CostDelta current={cur} next={newCost[f.key]} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col gap-2 text-xs">
+              <div className="text-muted-foreground">
+                币种：<span className="text-foreground">{currency}</span>
+                <span className="mx-2">·</span>
+                新价窗口：
+                <span className="text-foreground tabular-nums">
+                  {formatDateTime(pending.effectiveFrom)} ~{" "}
+                  {pending.effectiveTo
+                    ? formatDateTime(pending.effectiveTo)
+                    : "长期"}
+                </span>
+              </div>
+
+              <div className="overflow-hidden rounded-md border">
+                <div className="bg-muted/40 text-muted-foreground px-3 py-1.5">
+                  确认后将处理 {pending.overlapping.length} 条重叠的历史价：
+                </div>
+                <ul className="divide-border divide-y">
+                  {pending.overlapping.map((o) => {
+                    const willClose =
+                      new Date(o.effective_from).getTime() < fromMs;
+                    return (
+                      <li
+                        key={o.id}
+                        className="flex items-center justify-between gap-3 px-3 py-1.5"
+                      >
+                        <span className="text-muted-foreground tabular-nums">
+                          {formatDateTime(o.effective_from)} ~{" "}
+                          {o.effective_to
+                            ? formatDateTime(o.effective_to)
+                            : "长期"}
+                        </span>
+                        {willClose ? (
+                          <Badge variant="secondary" className="shrink-0">
+                            收口于 {formatDateTime(pending.effectiveFrom)}
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="shrink-0">
+                            停用
+                          </Badge>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
+            取消
+          </Button>
+          <Button type="button" disabled={busy} onClick={onConfirm}>
+            {busy && <Spinner data-icon="inline-start" />}
+            {busy ? "处理中…" : "确认继续"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -560,9 +788,11 @@ function readCurrentCost(
 
 function ChannelPriceRow({
   price,
+  prices,
   onChanged,
 }: {
   price: ChannelPrice;
+  prices: ChannelPrice[];
   onChanged: () => void;
 }) {
   const [draftTo, setDraftTo] = useState(rfc3339ToLocal(price.effective_to));
@@ -581,7 +811,22 @@ function ChannelPriceRow({
       setPendingStatus(null);
       onChanged();
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, vars) => {
+      // 窗口重叠（启用/改结束时间时最常见）：透出后端英文 message 没意义，改成中文引导并点名冲突价。
+      if (apiErrorCode(err) === "admin_pricing_window_overlap") {
+        setPendingStatus(null);
+        const conflicts = findOverlappingChannelPrices(
+          prices,
+          price.model_id,
+          price.effective_from,
+          vars.effective_to,
+          price.id,
+        );
+        toast.error(overlapMessage(price, conflicts, vars.status));
+        return;
+      }
+      toast.error(apiErrorMessage(err));
+    },
   });
 
   const enabled = price.status === "enabled";
@@ -670,6 +915,25 @@ function ChannelPriceRow({
   );
 }
 
+// overlapMessage 把「窗口重叠」错误翻成中文引导：点名冲突价的生效区间，提示如何避开，而不自动改数据。
+function overlapMessage(
+  price: ChannelPrice,
+  conflicts: ChannelPrice[],
+  attemptedStatus: string,
+): string {
+  const action = attemptedStatus === "enabled" ? "启用" : "保存";
+  const win = (p: ChannelPrice) =>
+    `${formatDateTime(p.effective_from)} ~ ${
+      p.effective_to ? formatDateTime(p.effective_to) : "长期"
+    }`;
+  if (conflicts.length === 0) {
+    return `无法${action}：本条成本价的生效区间与「${price.model_external_id}」另一条启用中的价重叠。请调整两者的生效时间使其不重叠后再试。`;
+  }
+  const first = conflicts[0]!;
+  const more = conflicts.length > 1 ? `等 ${conflicts.length} 条` : "";
+  return `无法${action}：本条生效区间与「${price.model_external_id}」启用中的价（${win(first)}${more}）重叠。请调整本条或该冲突价的生效时间，使两者不重叠后再试。`;
+}
+
 function emptyAmounts(): Record<CostFieldKey, string> {
   return {
     uncached_input: "",
@@ -678,6 +942,7 @@ function emptyAmounts(): Record<CostFieldKey, string> {
     reasoning_output: "",
     cache_write_5m_input: "",
     cache_write_1h_input: "",
+    cache_write_30m_input: "",
   };
 }
 

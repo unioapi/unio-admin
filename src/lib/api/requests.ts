@@ -37,6 +37,7 @@ export interface RequestListItem extends RequestSummary {
   cache_read_input_tokens: number;
   cache_write_5m_input_tokens: number;
   cache_write_1h_input_tokens: number;
+  cache_write_30m_input_tokens: number;
   output_tokens: number;
   reasoning_output_tokens: number;
   user_charge_usd: string | null;
@@ -45,6 +46,7 @@ export interface RequestListItem extends RequestSummary {
   cache_read_input_cost_usd: string | null;
   cache_write_5m_input_cost_usd: string | null;
   cache_write_1h_input_cost_usd: string | null;
+  cache_write_30m_input_cost_usd: string | null;
   output_cost_usd: string | null;
   reasoning_output_cost_usd: string | null;
   // 计费单价快照（USD 字符串，per_1m_tokens）：平台成本单价×6 + 用户售价单价×6，供「单价×tokens=金额」计算过程。
@@ -52,12 +54,14 @@ export interface RequestListItem extends RequestSummary {
   cache_read_input_cost_unit_usd: string | null;
   cache_write_5m_input_cost_unit_usd: string | null;
   cache_write_1h_input_cost_unit_usd: string | null;
+  cache_write_30m_input_cost_unit_usd: string | null;
   output_cost_unit_usd: string | null;
   reasoning_output_cost_unit_usd: string | null;
   uncached_input_price_unit_usd: string | null;
   cache_read_input_price_unit_usd: string | null;
   cache_write_5m_input_price_unit_usd: string | null;
   cache_write_1h_input_price_unit_usd: string | null;
+  cache_write_30m_input_price_unit_usd: string | null;
   output_price_unit_usd: string | null;
   reasoning_output_price_unit_usd: string | null;
   // 用户/Key：明文供列表点击复制（口径同 api-keys 页）。
@@ -86,12 +90,14 @@ export interface CostSnapshot {
   cache_read_input_cost_unit: string | null;
   cache_write_5m_input_cost_unit: string | null;
   cache_write_1h_input_cost_unit: string | null;
+  cache_write_30m_input_cost_unit: string | null;
   output_cost_unit: string | null;
   reasoning_output_cost_unit: string | null;
   uncached_input_cost_amount: string | null;
   cache_read_input_cost_amount: string | null;
   cache_write_5m_input_cost_amount: string | null;
   cache_write_1h_input_cost_amount: string | null;
+  cache_write_30m_input_cost_amount: string | null;
   output_cost_amount: string | null;
   reasoning_output_cost_amount: string | null;
   total_cost_amount: string | null;
@@ -103,6 +109,7 @@ export interface PriceSnapshot {
   cache_read_input_price: string | null;
   cache_write_5m_input_price: string | null;
   cache_write_1h_input_price: string | null;
+  cache_write_30m_input_price: string | null;
   output_price: string | null;
   reasoning_output_price: string | null;
 }
@@ -143,6 +150,7 @@ export interface RequestUsage {
   cache_read_input_tokens: number;
   cache_write_5m_input_tokens: number;
   cache_write_1h_input_tokens: number;
+  cache_write_30m_input_tokens: number;
   output_tokens_total: number;
   reasoning_output_tokens: number;
   usage_source: string;

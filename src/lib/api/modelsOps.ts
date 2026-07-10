@@ -42,6 +42,7 @@ export interface ModelOpsRow {
   base_cache_read_input_price: string | null;
   base_cache_write_5m_input_price: string | null;
   base_cache_write_1h_input_price: string | null;
+  base_cache_write_30m_input_price: string | null;
   base_output_price: string | null;
   base_reasoning_output_price: string | null;
 }

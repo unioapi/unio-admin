@@ -21,6 +21,7 @@ import {
   formatTPS,
   formatUSD,
 } from "@/lib/format";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { BREAKDOWN_TABS, breakdownColumnLabels } from "./constants";
 import { createBreakdownColumns } from "./columns";
 import { breakdownRowHref } from "./navigation";
@@ -94,6 +95,7 @@ export function BreakdownDataTable({
   toolbarStart?: ReactNode;
 }) {
   const [searchParams] = useSearchParams();
+  const thresholds = useMetricThresholds();
 
   const q = useQuery({
     queryKey: ["dashboard", "breakdown", dimension, range],
@@ -106,10 +108,10 @@ export function BreakdownDataTable({
     BREAKDOWN_TABS.find((t) => t.value === dimension)?.label ?? "名称";
   const columns = useMemo(
     () => [
-      ...createBreakdownColumns(dimension, nameLabel),
+      ...createBreakdownColumns(dimension, nameLabel, thresholds),
       breakdownActionColumn(dimension, searchParams),
     ],
-    [dimension, nameLabel, searchParams],
+    [dimension, nameLabel, searchParams, thresholds],
   );
   const columnLabels = useMemo(() => {
     const labels = breakdownColumnLabels(dimension, nameLabel);

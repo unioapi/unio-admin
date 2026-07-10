@@ -53,7 +53,8 @@ const BASE_PRICE_BREAKDOWN: {
     | "base_output_price"
     | "base_reasoning_output_price"
     | "base_cache_write_5m_input_price"
-    | "base_cache_write_1h_input_price";
+    | "base_cache_write_1h_input_price"
+    | "base_cache_write_30m_input_price";
   label: string;
 }[] = [
   { key: "base_uncached_input_price", label: "输入（未缓存）" },
@@ -62,6 +63,7 @@ const BASE_PRICE_BREAKDOWN: {
   { key: "base_reasoning_output_price", label: "reasoning 输出" },
   { key: "base_cache_write_5m_input_price", label: "5 分钟缓存写入" },
   { key: "base_cache_write_1h_input_price", label: "1 小时缓存写入" },
+  { key: "base_cache_write_30m_input_price", label: "30 分钟缓存写入" },
 ];
 
 function BasePriceCell({ row }: { row: ModelOpsRow }) {

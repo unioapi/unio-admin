@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogClose,
@@ -78,6 +79,7 @@ interface FieldErrors {
   rpm_limit?: string;
   tpm_limit?: string;
   rpd_limit?: string;
+  concurrency_limit?: string;
 }
 
 // 限流输入回填：null（继承全局默认）→ 空串；数字（含 0=不限）→ 字符串。
@@ -129,6 +131,12 @@ function ChannelForm({
     channel?.timeout_ms != null ? String(channel.timeout_ms) : "",
   );
   const [rpmLimit, setRpmLimit] = useState(rateLimitToInput(channel?.rpm_limit));
+  const [concurrencyLimit, setConcurrencyLimit] = useState(
+    rateLimitToInput(channel?.concurrency_limit),
+  );
+  const [billsOnDisconnect, setBillsOnDisconnect] = useState(
+    channel?.upstream_bills_on_disconnect ?? false,
+  );
   // TPM/RPD 量级大,用「数字 + 单位(K/M/B)」输入;入库换算成真实整数。
   const [tpmLimit, setTpmLimit] = useState<RateLimitFieldValue>(
     decomposeRateLimit(channel?.tpm_limit),
@@ -186,6 +194,7 @@ function ChannelForm({
         rpm: parseRateLimit(rpmLimit),
         tpm: composeRateLimit(tpmLimit),
         rpd: composeRateLimit(rpdLimit),
+        concurrency: parseRateLimit(concurrencyLimit),
       };
       if (channel) {
         return updateChannel({
@@ -196,6 +205,7 @@ function ChannelForm({
           priority: prio,
           timeout_ms: timeout,
           rateLimits,
+          billsOnDisconnect,
         });
       }
       return createChannel({
@@ -209,6 +219,7 @@ function ChannelForm({
         priority: prio,
         timeout_ms: timeout,
         rateLimits,
+        billsOnDisconnect,
       });
     },
     onSuccess: (saved) => {
@@ -253,6 +264,7 @@ function ChannelForm({
     next.rpm_limit = rateLimitError(rpmLimit);
     next.tpm_limit = rateLimitWithUnitError(tpmLimit);
     next.rpd_limit = rateLimitWithUnitError(rpdLimit);
+    next.concurrency_limit = rateLimitError(concurrencyLimit);
     setErrors(next);
     return Object.values(next).every((v) => v === undefined);
   }
@@ -268,7 +280,10 @@ function ChannelForm({
   }
 
   const rateLimitInvalid =
-    !!errors.rpm_limit || !!errors.tpm_limit || !!errors.rpd_limit;
+    !!errors.rpm_limit ||
+    !!errors.tpm_limit ||
+    !!errors.rpd_limit ||
+    !!errors.concurrency_limit;
 
   return (
     <>
@@ -526,7 +541,7 @@ function ChannelForm({
                 渠道级限流
               </HintLabel>
               <div className="rounded-lg border bg-muted/30 p-3">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <Field data-invalid={!!errors.rpm_limit}>
                     <HintLabel htmlFor="rpm_limit" hint="每分钟请求数。">
                       RPM
@@ -566,7 +581,41 @@ function ChannelForm({
                     />
                     <FieldError>{errors.rpd_limit}</FieldError>
                   </Field>
+                  <Field data-invalid={!!errors.concurrency_limit}>
+                    <HintLabel
+                      htmlFor="concurrency_limit"
+                      hint="同时进行中的上游调用数（含整段流式传输）。慢上游 + 客户端自动重试时防止长请求堆积；每个在途请求都可能被上游计费。"
+                    >
+                      并发
+                    </HintLabel>
+                    <Input
+                      id="concurrency_limit"
+                      type="number"
+                      min={0}
+                      value={concurrencyLimit}
+                      onChange={(e) => setConcurrencyLimit(e.target.value)}
+                      placeholder="继承默认"
+                      aria-invalid={!!errors.concurrency_limit}
+                    />
+                    <FieldError>{errors.concurrency_limit}</FieldError>
+                  </Field>
                 </div>
+              </div>
+            </Field>
+
+            <Field>
+              <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                <HintLabel
+                  htmlFor="bills_on_disconnect"
+                  hint="上游在连接断开后仍会完成生成并计费（sub2api 类订阅中转）。打开后，失败/取消的请求会记入平台成本敞口（channel_cost_exposures），供成本对账；不影响路由与客户计费。"
+                >
+                  断开仍计费（bill-on-disconnect）
+                </HintLabel>
+                <Switch
+                  id="bills_on_disconnect"
+                  checked={billsOnDisconnect}
+                  onCheckedChange={setBillsOnDisconnect}
+                />
               </div>
             </Field>
 

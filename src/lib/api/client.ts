@@ -55,3 +55,12 @@ export function apiErrorMessage(
 export function apiErrorStatus(err: unknown): number | undefined {
   return axios.isAxiosError(err) ? err.response?.status : undefined;
 }
+
+// 取后端错误码（error.code），便于按业务码分流文案，
+// 例如价格窗口重叠（admin_pricing_window_overlap）时给出中文引导而非透出英文 message。
+export function apiErrorCode(err: unknown): string | undefined {
+  if (axios.isAxiosError<ApiErrorBody>(err)) {
+    return err.response?.data?.error?.code;
+  }
+  return undefined;
+}

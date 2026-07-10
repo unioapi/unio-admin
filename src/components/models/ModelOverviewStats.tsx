@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { ModelOpsDetail } from "@/lib/api/modelsOps";
 import { formatCompact, formatLatencyMs, formatPercent, formatTPS, formatUSD } from "@/lib/format";
 import { profitIntent } from "@/components/dashboard/metrics";
+import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { AttemptSuccessRateCell } from "@/components/table-cells/AttemptSuccessRateCell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ function Stat({
 }
 
 export function ModelOverviewStats({ detail }: { detail: ModelOpsDetail }) {
+  const th = useMetricThresholds();
   const failed = Math.max(0, detail.request_total - detail.request_succeeded);
 
   return (
@@ -57,7 +59,7 @@ export function ModelOverviewStats({ detail }: { detail: ModelOpsDetail }) {
       <Stat
         label="毛利 (USD)"
         value={formatUSD(detail.margin_usd)}
-        intentClass={cn(profitIntent(Number(detail.margin_usd), Number(detail.revenue_usd)))}
+        intentClass={cn(profitIntent(Number(detail.margin_usd), th, Number(detail.revenue_usd)))}
       />
       <Stat label="毛利率" value={formatPercent(detail.margin_rate)} />
     </div>

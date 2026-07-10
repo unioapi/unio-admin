@@ -14,6 +14,7 @@ export interface ModelPrice {
   cache_read_input_price: string | null;
   cache_write_5m_input_price: string | null;
   cache_write_1h_input_price: string | null;
+  cache_write_30m_input_price: string | null;
   output_price: string;
   reasoning_output_price: string | null;
   status: string;
@@ -40,6 +41,7 @@ export interface CreateModelPriceInput {
   cache_read_input_price: string | null;
   cache_write_5m_input_price: string | null;
   cache_write_1h_input_price: string | null;
+  cache_write_30m_input_price: string | null;
   output_price: string;
   reasoning_output_price: string | null;
   status: string;
