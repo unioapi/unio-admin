@@ -9,8 +9,6 @@ import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-tabl
 import type { FilterChip } from "@/components/openstatus-table";
 import {
   billingExceptionColumns,
-  billingExceptionEventLabel,
-  billingExceptionReasonCodeLabel,
   ledgerEntryColumns,
   EVENT_TYPE_FILTER_OPTIONS,
   REASON_CODE_FILTER_OPTIONS,
@@ -222,26 +220,7 @@ function ExceptionsPanel() {
       setPage(1);
     }),
   ];
-  if (eventType) {
-    chips.push({
-      id: `event:${eventType}`,
-      label: `类型 · ${billingExceptionEventLabel(eventType)}`,
-      onRemove: () => {
-        setEventType("");
-        setPage(1);
-      },
-    });
-  }
-  if (reasonCode) {
-    chips.push({
-      id: `reason:${reasonCode}`,
-      label: `原因码 · ${billingExceptionReasonCodeLabel(reasonCode)}`,
-      onRemove: () => {
-        setReasonCode("");
-        setPage(1);
-      },
-    });
-  }
+  // 类型 / 原因码已在 FacetFilterButton 内展示，不再单独出 chip。
 
   return (
     <ServerDataTable

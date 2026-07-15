@@ -24,6 +24,13 @@ import {
 } from "@/components/ui/tooltip";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
+import type { FacetOption } from "./types";
+
+/** 模型状态筛选项（与 models_status_check 一致：仅启停，无归档）。 */
+export const MODEL_STATUS_OPTIONS: FacetOption[] = [
+  { value: "enabled", label: "启用" },
+  { value: "disabled", label: "停用" },
+];
 
 const facetedFilter: FilterFn<ModelOpsRow> = (row, columnId, filterValue) => {
   const selected = filterValue as string[] | undefined;

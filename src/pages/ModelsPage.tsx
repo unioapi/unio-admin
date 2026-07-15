@@ -6,11 +6,12 @@ import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-tabl
 import {
   modelOsColumns,
   MODEL_OS_COLUMN_LABELS,
+  MODEL_STATUS_OPTIONS,
 } from "@/components/openstatus-table/models-os-columns";
 import { ModelFormDialog } from "@/components/models/ModelFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
+import { useServerTable } from "@/hooks/useServerTable";
 
 export function ModelsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,7 +35,7 @@ export function ModelsPage() {
     queryKey: "models",
     fetch: (p) => getModelsOpsTable({ range: "all", ...p }),
     defaultSort: { id: "name", desc: false },
-    statusOptions: ENTITY_STATUS_OPTIONS,
+    statusOptions: MODEL_STATUS_OPTIONS,
   });
 
   if (searchParams.get("tab") === "catalog") {

@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  HardDriveDownloadIcon,
+  HardDriveUploadIcon,
+} from "lucide-react";
 import type { RequestListItem } from "@/lib/api/requests";
 import {
   formatInt,
@@ -19,6 +25,23 @@ import { RequestCostBreakdown } from "@/components/requests/cost-breakdown";
 import { cn } from "@/lib/utils";
 
 const Dash = () => <span className="text-muted-foreground">—</span>;
+
+/** 长上下文计费标记：奶油色小胶囊 + Long。 */
+function LongContextBadge() {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-[15px] shrink-0 items-center rounded-full border px-[5px]",
+        "border-[#ECD9A8] bg-[#FBF4E3] text-[10px] font-medium leading-none text-[#C47B2D]",
+        "dark:border-[#6B5428] dark:bg-[#2C2416] dark:text-[#E0B56A]",
+      )}
+      title="长上下文计费：输入 ×2 / 输出 ×1.5"
+      aria-label="长上下文计费"
+    >
+      Long
+    </span>
+  );
+}
 
 function ttftClass(ms: number, th: MetricThresholds): string {
   if (ms > th.ttftDangerMs) return "text-red-600 dark:text-red-400";
@@ -123,33 +146,57 @@ function tokenLines(row: RequestListItem): TokenLine[] {
   ].filter((l) => l.value > 0);
 }
 
-/** Tokens：主行 输入↓/输出↑；悬浮显示分项明细 + 合计。 */
+/** Tokens：主行 未缓存输入/输出（彩色箭头）；有缓存时副行用硬盘图标区分读/写。 */
 export function RequestTokensCell({ row }: { row: RequestListItem }) {
-  const input = row.uncached_input_tokens;
+  const uncached = row.uncached_input_tokens;
   const output = row.output_tokens;
   const cacheRead = row.cache_read_input_tokens;
-  const cacheWrite = row.cache_write_5m_input_tokens + row.cache_write_1h_input_tokens + row.cache_write_30m_input_tokens;
-  const total = input + cacheRead + cacheWrite + output;
+  const cacheWrite =
+    row.cache_write_5m_input_tokens +
+    row.cache_write_1h_input_tokens +
+    row.cache_write_30m_input_tokens;
+  const inputTotal = uncached + cacheRead + cacheWrite;
+  const total = inputTotal + output;
 
   if (total === 0) return <Dash />;
 
   const lines = tokenLines(row);
+  const hasCache = cacheRead > 0 || cacheWrite > 0;
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
       <HoverCardTrigger asChild>
         <button type="button" className="flex flex-col gap-1 py-0.5 text-left text-xs tabular-nums">
-          <span>
-            ↓{formatTokenScale(input + cacheRead + cacheWrite)}{" "}
-            <span className="text-muted-foreground">/</span> ↑{formatTokenScale(output)}
-          </span>
-          {(cacheRead > 0 || cacheWrite > 0) && (
-            <span className="text-muted-foreground text-[10px]">
-              {cacheRead > 0 ? `缓存↓${formatTokenScale(cacheRead)}` : ""}
-              {cacheRead > 0 && cacheWrite > 0 ? " · " : ""}
-              {cacheWrite > 0 ? `缓存↑${formatTokenScale(cacheWrite)}` : ""}
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-0.5 text-sky-600 dark:text-sky-400">
+              <ArrowDownIcon className="size-3 shrink-0" aria-hidden />
+              {formatTokenScale(uncached)}
             </span>
-          )}
+            <span className="text-muted-foreground">/</span>
+            <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+              <ArrowUpIcon className="size-3 shrink-0" aria-hidden />
+              {formatTokenScale(output)}
+            </span>
+          </span>
+          {hasCache ? (
+            <span className="inline-flex items-center gap-1.5 text-[10px]">
+              {cacheRead > 0 ? (
+                <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                  <HardDriveDownloadIcon className="size-3 shrink-0" aria-hidden />
+                  {formatTokenScale(cacheRead)}
+                </span>
+              ) : null}
+              {cacheRead > 0 && cacheWrite > 0 ? (
+                <span className="text-muted-foreground">·</span>
+              ) : null}
+              {cacheWrite > 0 ? (
+                <span className="inline-flex items-center gap-0.5 text-orange-600 dark:text-orange-400">
+                  <HardDriveUploadIcon className="size-3 shrink-0" aria-hidden />
+                  {formatTokenScale(cacheWrite)}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </button>
       </HoverCardTrigger>
       <TipHoverCardContent align="start" className="w-56">
@@ -163,7 +210,15 @@ export function RequestTokensCell({ row }: { row: RequestListItem }) {
               </div>
             ))}
             <div className="mt-0.5 flex items-baseline justify-between gap-4 border-t border-dashed pt-1 font-medium">
-              <span>合计</span>
+              <span>输入合计（含缓存）</span>
+              <span className="tabular-nums">{formatInt(inputTotal)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 font-medium">
+              <span>输出合计</span>
+              <span className="tabular-nums">{formatInt(output)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 font-medium">
+              <span>全部合计</span>
               <span className="tabular-nums">{formatInt(total)}</span>
             </div>
           </div>
@@ -225,14 +280,27 @@ export function RequestCostCell({ row }: { row: RequestListItem }) {
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className="cursor-default py-0.5 font-medium tabular-nums underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+          className="flex max-w-full cursor-default items-center justify-end gap-1 py-0.5"
         >
-          {formatUSDPrecise(row.user_charge_usd)}
+          <span
+            className={cn(
+              "font-medium tabular-nums underline decoration-dotted underline-offset-2",
+              row.long_context_applied
+                ? "text-emerald-600 decoration-emerald-600/30 dark:text-emerald-400 dark:decoration-emerald-400/30"
+                : "decoration-muted-foreground/40",
+            )}
+          >
+            {formatUSDPrecise(row.user_charge_usd)}
+          </span>
+          {row.long_context_applied ? <LongContextBadge /> : null}
         </button>
       </HoverCardTrigger>
       <TipHoverCardContent align="end" className="w-[22rem]">
         <div className="flex flex-col gap-2">
-          <div className="text-sm font-medium">费用明细</div>
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <span>费用明细</span>
+            {row.long_context_applied ? <LongContextBadge /> : null}
+          </div>
           <RequestCostBreakdown
             data={{
               tokens: {
@@ -276,6 +344,7 @@ export function RequestCostCell({ row }: { row: RequestListItem }) {
               routeRatio: row.route_price_ratio,
               channelCostMultiplier: row.channel_cost_multiplier,
               rechargeFactor: row.recharge_factor,
+              longContextApplied: row.long_context_applied,
             }}
           />
         </div>

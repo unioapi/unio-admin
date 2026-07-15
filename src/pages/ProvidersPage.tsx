@@ -4,18 +4,19 @@ import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-tabl
 import {
   providerOsColumns,
   PROVIDER_OS_COLUMN_LABELS,
+  PROVIDER_STATUS_OPTIONS,
 } from "@/components/openstatus-table/providers-os-columns";
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
+import { useServerTable } from "@/hooks/useServerTable";
 
 export function ProvidersPage() {
   const table = useServerTable({
     queryKey: "providers",
     fetch: (p) => getProvidersOpsTable({ range: "all", ...p }),
     defaultSort: { id: "name", desc: false },
-    statusOptions: ENTITY_STATUS_OPTIONS,
+    statusOptions: PROVIDER_STATUS_OPTIONS,
     initialStatus: "enabled",
   });
 

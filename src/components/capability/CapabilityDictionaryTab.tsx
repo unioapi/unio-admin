@@ -152,16 +152,7 @@ export function CapabilityDictionaryTab() {
 
   const chips = useMemo((): FilterChip[] => {
     const out: FilterChip[] = [];
-    if (protocolScope) {
-      out.push({
-        id: `protocol:${protocolScope}`,
-        label: `协议 · ${protocolScopeLabel(protocolScope as ProtocolScope)}`,
-        onRemove: () => {
-          setProtocolScope("");
-          setPage(1);
-        },
-      });
-    }
+    // 协议归属已在 FacetFilterButton 内展示，不再单独出 chip。
     if (search) {
       out.push({
         id: "search",
@@ -173,7 +164,7 @@ export function CapabilityDictionaryTab() {
       });
     }
     return out;
-  }, [protocolScope, search, setPage]);
+  }, [search, setPage]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteCapabilityKey,

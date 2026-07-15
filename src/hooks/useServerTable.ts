@@ -7,13 +7,6 @@ import type { Page } from "@/lib/api/types";
 
 const PAGE_SIZE = 20;
 
-/** 启停状态过滤选项（服务商/渠道/模型/线路列表通用）。 */
-export const ENTITY_STATUS_OPTIONS = [
-  { value: "enabled", label: "启用" },
-  { value: "disabled", label: "停用" },
-  { value: "archived", label: "已归档" },
-] as const;
-
 interface StatusOption {
   value: string;
   label: string;
@@ -47,6 +40,8 @@ interface UseServerTableOptions<T> {
   pageSize?: number;
   /** 搜索 chip 文案前缀，默认「搜索」。 */
   searchChipLabel?: string;
+  /** 传给 useQuery 的 refetchInterval（毫秒）；用于熔断倒计时等需周期性刷新的列表。 */
+  refetchInterval?: number | false;
 }
 
 /** 服务端聚合列表通用 hook：分页 / 排序 / 可选 status / search（含 chips）。 */
@@ -60,6 +55,7 @@ export function useServerTable<T>({
   enabled = true,
   pageSize = PAGE_SIZE,
   searchChipLabel = "搜索",
+  refetchInterval,
 }: UseServerTableOptions<T>) {
   const { page, setPage, sorting, setSorting, sort } = useServerList({
     pageSize,
@@ -82,6 +78,7 @@ export function useServerTable<T>({
       }),
     placeholderData: keepPreviousData,
     enabled,
+    refetchInterval,
   });
 
   const total = query.data?.total ?? 0;
@@ -93,17 +90,7 @@ export function useServerTable<T>({
 
   const chips = useMemo((): FilterChip[] => {
     const out: FilterChip[] = [];
-    if (status && statusOptions) {
-      const label = statusOptions.find((o) => o.value === status)?.label ?? status;
-      out.push({
-        id: `status:${status}`,
-        label: `状态 · ${label}`,
-        onRemove: () => {
-          setStatus("");
-          setPage(1);
-        },
-      });
-    }
+    // 状态已在 FacetFilterButton 按钮内展示，不再单独出 chip。
     if (search) {
       out.push({
         id: "search",
@@ -115,7 +102,7 @@ export function useServerTable<T>({
       });
     }
     return out;
-  }, [status, statusOptions, search, searchChipLabel, setPage]);
+  }, [search, searchChipLabel, setPage]);
 
   return {
     items: query.data?.items ?? [],

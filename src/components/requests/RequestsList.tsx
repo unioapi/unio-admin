@@ -149,14 +149,7 @@ export function RequestsList({
   }
 
   const chips: FilterChip[] = [];
-  if (status) {
-    const label = REQUEST_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
-    chips.push({
-      id: `status:${status}`,
-      label: `状态 · ${label}`,
-      onRemove: () => reset(setStatus)(""),
-    });
-  }
+  // 状态已在 FacetFilterButton 内展示，不再单独出 chip。
   if (model) {
     chips.push({
       id: "model",
@@ -213,7 +206,8 @@ export function RequestsList({
           onSortingChange={setSorting}
           getRowId={(r) => String(r.id)}
           loading={query.isPending}
-          refetching={query.isFetching && !query.isPending}
+          // 有进行中请求时每 5s 后台轮询：keepPreviousData 已保底，不再整表 opacity 闪烁。
+          refetching={false}
           emptyContent={<RequestsEmpty />}
           searchValue={modelInput}
           onSearchChange={reset(setModelInput)}

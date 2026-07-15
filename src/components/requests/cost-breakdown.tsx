@@ -38,6 +38,7 @@ export interface CostBreakdownInput {
   routeRatio?: Num;
   channelCostMultiplier?: Num;
   rechargeFactor?: Num;
+  longContextApplied?: boolean;
 }
 
 function num(v: Num): number | null {
@@ -263,6 +264,11 @@ export function RequestCostBreakdown({
           <MetaRow label="线路倍率">
             {ratio != null ? `× ${trimDecimal(String(data.routeRatio))}` : "—"}
           </MetaRow>
+          {data.longContextApplied ? (
+            <MetaRow label="长上下文">
+              <span className="text-amber-700 dark:text-amber-400">已应用（入×2 / 出×1.5）</span>
+            </MetaRow>
+          ) : null}
         </div>
         {lines.map((l) => {
           const { display, fallbackUsed } = lineUnit(data.priceUnit, l);

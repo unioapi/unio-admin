@@ -1,23 +1,27 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PlusIcon } from "lucide-react";
 import { getChannelsOpsTable } from "@/lib/api/channelsOps";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import {
   channelOsColumns,
   CHANNEL_OS_COLUMN_LABELS,
+  CHANNEL_STATUS_OPTIONS,
 } from "@/components/openstatus-table/channels-os-columns";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
+import { useServerTable } from "@/hooks/useServerTable";
 
 export function ChannelsPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const columns = useMemo(() => channelOsColumns(), []);
   const table = useServerTable({
     queryKey: "channels",
     fetch: (p) => getChannelsOpsTable({ range: "all", ...p }),
-    statusOptions: ENTITY_STATUS_OPTIONS,
+    statusOptions: CHANNEL_STATUS_OPTIONS,
     initialStatus: "enabled",
+    // 不在此页做定时整表轮询：会整表重渲染，关掉「…」菜单并闪一下。
+    // 熔断打开剩余由徽章本地倒计时；状态变化等下次进入/筛选取数即可。
   });
 
   return (
@@ -30,7 +34,7 @@ export function ChannelsPage() {
       ) : (
         <ServerDataTable
           storageKey="channels"
-          columns={channelOsColumns()}
+          columns={columns}
           data={table.items}
           columnLabels={CHANNEL_OS_COLUMN_LABELS}
           total={table.total}

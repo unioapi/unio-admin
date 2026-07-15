@@ -67,6 +67,8 @@ export interface RequestListItem extends RequestSummary {
   // DEC-027 成本来源倍率快照（倍率路径有值，覆盖/旧数据为 null）：价格倍率 + 充值倍率。
   channel_cost_multiplier: string | null;
   recharge_factor: string | null;
+  /** 费用是否已按长上下文倍率结算。 */
+  long_context_applied: boolean;
   // 用户/Key：明文供列表点击复制（口径同 api-keys 页）。
   api_key_name: string | null;
   api_key_prefix: string | null;

@@ -63,10 +63,6 @@ export function RecoveryJobsPanel() {
   }
 
   const chips: FilterChip[] = [];
-  if (status) {
-    const label = RECOVERY_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
-    chips.push({ id: `status:${status}`, label: `状态 · ${label}`, onRemove: () => reset(setStatus)("") });
-  }
   if (userId != null) {
     chips.push({ id: "user", label: `用户 · ${userId}`, onRemove: () => reset(setUserIdInput)("") });
   }

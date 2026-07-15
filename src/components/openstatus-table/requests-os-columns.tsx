@@ -35,8 +35,8 @@ export const REQUEST_OS_COLUMN_LABELS: Record<string, string> = {
   ip: "IP",
   route: "线路",
   reasoning: "推理强度",
-  tokens: "Tokens",
   timing: "耗时",
+  tokens: "Tokens",
   cost: "费用",
   request_id: "请求 ID",
   action: "操作",
@@ -127,16 +127,16 @@ export function requestOsColumns(
       cell: ({ row }) => <RequestReasoningCell row={row.original} />,
     },
     {
-      id: "tokens",
-      header: () => <span className="text-muted-foreground">Tokens</span>,
-      enableSorting: false,
-      cell: ({ row }) => <RequestTokensCell row={row.original} />,
-    },
-    {
       id: "timing",
       header: () => <span className="text-muted-foreground">耗时</span>,
       enableSorting: false,
       cell: ({ row }) => <RequestTimingCell row={row.original} />,
+    },
+    {
+      id: "tokens",
+      header: () => <span className="text-muted-foreground">Tokens</span>,
+      enableSorting: false,
+      cell: ({ row }) => <RequestTokensCell row={row.original} />,
     },
     {
       id: "cost",

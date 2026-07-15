@@ -12,6 +12,14 @@ import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { ColumnHeader } from "./column-header";
 import { TruncateCell } from "./truncate-cell";
+import type { FacetOption } from "./types";
+
+/** 服务商状态筛选项（与 providers_status_check 一致：含归档）。 */
+export const PROVIDER_STATUS_OPTIONS: FacetOption[] = [
+  { value: "enabled", label: "启用" },
+  { value: "disabled", label: "停用" },
+  { value: "archived", label: "已归档" },
+];
 
 function toProvider(row: ProviderOpsRow): Provider {
   return {

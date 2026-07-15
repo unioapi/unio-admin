@@ -6,11 +6,12 @@ import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-tabl
 import {
   routeOsColumns,
   ROUTE_OS_COLUMN_LABELS,
+  ROUTE_STATUS_OPTIONS,
 } from "@/components/openstatus-table/routes-os-columns";
 import { RouteFormDialog } from "@/components/routes/RouteFormDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useServerTable, ENTITY_STATUS_OPTIONS } from "@/hooks/useServerTable";
+import { useServerTable } from "@/hooks/useServerTable";
 
 export function RoutesPage() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -20,7 +21,7 @@ export function RoutesPage() {
     queryKey: "routes",
     fetch: (p) => getRoutesOpsTable({ range: "all", ...p }),
     defaultSort: { id: "name", desc: false },
-    statusOptions: ENTITY_STATUS_OPTIONS,
+    statusOptions: ROUTE_STATUS_OPTIONS,
     initialStatus: "enabled",
   });
 

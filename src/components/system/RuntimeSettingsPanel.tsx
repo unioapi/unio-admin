@@ -15,6 +15,7 @@ import {
   rateLimitWithUnitError,
   type RateLimitFieldValue,
 } from "@/components/common/rate-limit-input";
+import { HintLabel } from "@/components/common/field-hint";
 import { AnthropicBetaPolicyCard } from "@/components/system/AnthropicBetaPolicyCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -291,10 +292,11 @@ function SettingEditor({ item }: { item: SettingItem }) {
       return <CooldownEditor item={item} />;
     case "gateway.stream_idle_timeout_ms":
     case "gateway.default_channel_timeout_ms":
-    case "admin_backend.channel_test_probe_timeout_ms":
       return <DurationMsEditor item={item} />;
     case "gateway.credential_401_threshold":
-      return <PositiveIntEditor item={item} />;
+      return <PositiveIntEditor item={item} label="阈值（次）" />;
+    case "admin_backend.channel_test":
+      return <ChannelTestEditor item={item} />;
     case "admin_backend.channel_health_thresholds":
       return <ChannelHealthEditor item={item} />;
     case "admin_frontend.dashboard_thresholds":
@@ -385,28 +387,41 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <Label htmlFor={`${item.key}-enabled`}>启用熔断</Label>
+        <HintLabel
+          htmlFor={`${item.key}-enabled`}
+          hint="总开关。关掉后所有渠道照常走，也不记成功/失败；打开后才统计并可能摘除渠道。"
+        >
+          启用熔断
+        </HintLabel>
         <Switch id={`${item.key}-enabled`} checked={enabled} onCheckedChange={setEnabled} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">统计窗口</Label>
+          <HintLabel
+            hint="在固定时间窗里数成功/失败。窗口一过，计数清零重算。例：最近一个窗口内该渠道的请求结果。"
+          >
+            统计窗口
+          </HintLabel>
           <DurationInput value={window_} onChange={setWindow} />
         </div>
         <FieldText
           label="最小请求数（次）"
+          hint="窗口里请求太少就不熔断，避免偶然 1～2 次失败就误伤。例：窗口内只有 5 次请求，即使全失败也不会跳闸。"
           value={minRequests}
           onChange={setMinRequests}
           inputMode="numeric"
         />
         <FieldText
           label="失败比例阈值 (0,1]"
+          hint="样本够了之后：失败数 / 总请求数 ≥ 该阈值就熔断。例：窗口内 20 次里至少 10 次失败（阈值 0.5）→ 该渠道进入「打开」状态，后续选路会跳过它。"
           value={failureRatio}
           onChange={setFailureRatio}
           inputMode="decimal"
         />
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">熔断打开时长</Label>
+          <HintLabel hint="跳闸后先挡住这段时间，再进入半开：只放行一次探测请求。探测成功 → 恢复正常；探测失败 → 再按本时长熔断。">
+            熔断打开时长
+          </HintLabel>
           <DurationInput value={openDuration} onChange={setOpenDuration} />
         </div>
       </div>
@@ -580,19 +595,105 @@ function DurationMsEditor({ item }: { item: SettingItem }) {
 
 // ---- 正整数单值 ----
 
-function PositiveIntEditor({ item }: { item: SettingItem }) {
+function PositiveIntEditor({
+  item,
+  label = "数值",
+}: {
+  item: SettingItem;
+  label?: string;
+}) {
   const server = item.value as number;
   const [value, setValue] = useState(String(server));
   const mutation = useSaveSetting(item.key);
 
   return (
     <div className="flex flex-col gap-3">
-      <FieldText label="阈值（次）" value={value} onChange={setValue} inputMode="numeric" />
+      <FieldText label={label} value={value} onChange={setValue} inputMode="numeric" />
       <SaveReset
         saving={mutation.isPending}
         onSave={() => mutation.mutate(Number(value))}
         onReset={() => setValue(String(server))}
       />
+    </div>
+  );
+}
+
+// ---- admin_backend.channel_test ----
+
+interface ChannelTestValue {
+  enabled: boolean;
+  interval_ms: number;
+  probe_timeout_ms: number;
+  log_retention_per_channel: number;
+}
+
+function ChannelTestEditor({ item }: { item: SettingItem }) {
+  const server = item.value as ChannelTestValue;
+  const [enabled, setEnabled] = useState(server.enabled);
+  const [interval, setInterval] = useState(() => decomposeDurationMs(server.interval_ms));
+  const [probeTimeout, setProbeTimeout] = useState(() =>
+    decomposeDurationMs(server.probe_timeout_ms),
+  );
+  const [retention, setRetention] = useState(String(server.log_retention_per_channel));
+  const mutation = useSaveSetting(item.key);
+
+  const reset = () => {
+    setEnabled(server.enabled);
+    setInterval(decomposeDurationMs(server.interval_ms));
+    setProbeTimeout(decomposeDurationMs(server.probe_timeout_ms));
+    setRetention(String(server.log_retention_per_channel));
+  };
+
+  const save = () => {
+    const err =
+      durationError(interval, false) ??
+      durationError(probeTimeout, false) ??
+      (() => {
+        const n = Number(retention);
+        if (retention.trim() === "" || !Number.isFinite(n) || n <= 0) {
+          return "日志保留条数须为大于 0 的整数";
+        }
+        return undefined;
+      })();
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    mutation.mutate({
+      enabled,
+      interval_ms: composeDurationMs(interval),
+      probe_timeout_ms: composeDurationMs(probeTimeout),
+      log_retention_per_channel: Number(retention),
+    } satisfies ChannelTestValue);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor={`${item.key}-enabled`}>启用自动巡检</Label>
+        <Switch
+          id={`${item.key}-enabled`}
+          checked={enabled}
+          onCheckedChange={setEnabled}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">巡检间隔</Label>
+          <DurationInput value={interval} onChange={setInterval} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">探测超时</Label>
+          <DurationInput value={probeTimeout} onChange={setProbeTimeout} />
+        </div>
+        <FieldText
+          label="日志保留条数（每渠道）"
+          value={retention}
+          onChange={setRetention}
+          inputMode="numeric"
+        />
+      </div>
+      <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
     </div>
   );
 }
@@ -813,12 +914,14 @@ function RawJSONEditor({ item }: { item: SettingItem }) {
 
 function FieldText({
   label,
+  hint,
   value,
   onChange,
   placeholder,
   inputMode,
 }: {
   label: string;
+  hint?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -826,7 +929,7 @@ function FieldText({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-xs">{label}</Label>
+      {hint ? <HintLabel hint={hint}>{label}</HintLabel> : <Label className="text-xs">{label}</Label>}
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}

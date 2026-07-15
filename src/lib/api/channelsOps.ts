@@ -36,6 +36,36 @@ export interface ChannelOpsRow {
   last_test_error: string | null;
   // 阶段二凭据闸门：false=系统判定凭据失效（连续 401 或检测判定），即使 status=enabled 也不参与路由。
   credential_valid: boolean;
+  // 当前生效的渠道默认价格倍率；null=未配置。
+  cost_multiplier: string | null;
+  // 当前生效的逐模型价格倍率覆盖条数。
+  cost_multiplier_overrides: number;
+  // 当前生效的充值倍率；null=未配置（结算按 1.0）。
+  recharge_factor: string | null;
+  // gateway 进程内熔断快照；仅 open / half_open 时出现（列表名前列徽章）。
+  circuit_breaker?: ChannelCircuitBreakerStatus | null;
+}
+
+export interface ChannelCircuitBreakerStatus {
+  state: "open" | "half_open" | "closed" | string;
+  failures: number;
+  successes: number;
+  window_start?: string | null;
+  opened_at?: string | null;
+  open_remaining_ms?: number | null;
+  half_open_in_flight: boolean;
+  health_score: number;
+  observed_at: string;
+  instances?: ChannelCircuitBreakerInstance[];
+}
+
+export interface ChannelCircuitBreakerInstance {
+  id: string;
+  state: string;
+  open_remaining_ms?: number | null;
+  half_open_in_flight: boolean;
+  failures: number;
+  successes: number;
 }
 
 export interface ChannelTestLog {
