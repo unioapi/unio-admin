@@ -10,7 +10,7 @@ import type { MetricIntent } from "@/components/common/MetricCard";
 // 告警阈值已迁移为运行时配置 admin_frontend.dashboard_thresholds（后台「运行时配置」可改，
 // 免部署生效）：组件经 useMetricThresholds() 拉取当前值后显式传入本文件的纯函数。
 // DEFAULT_METRIC_THRESHOLDS 是拉取失败/加载中的回退值，与后端注册表默认**同源同值**
-// （unio-api appsettings/admin_frontend_settings.go），改默认须两处同步。
+// （unio-gateway appsettings/admin_frontend_settings.go），改默认须两处同步。
 
 /** 仪表盘告警灯阈值（毫秒字段与后端 *_ms 命名对应）。 */
 export interface MetricThresholds {

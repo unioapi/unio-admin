@@ -135,6 +135,7 @@ const ERROR_CODE_LABEL: Record<string, string> = {
   gateway_stream_usage_missing: "流式用量缺失",
   gateway_chat_settlement_failed: "结算失败",
   gateway_chat_authorization_failed: "授权失败",
+  gateway_request_orphan_reclaimed: "孤儿请求清扫",
   adapter_upstream_status: "上游 HTTP 异常",
   adapter_send_request_failed: "上游请求失败",
   adapter_decode_response_failed: "上游响应解析失败",
