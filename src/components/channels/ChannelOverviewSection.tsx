@@ -1,6 +1,7 @@
-import type { ChannelOpsRow } from "@/lib/api/channelsOps";
+import type { ChannelCircuitBreakerStatus, ChannelOpsRow } from "@/lib/api/channelsOps";
 import { errorCodeLabel } from "@/components/dashboard/breakdown-table/constants";
 import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
+import { ChannelCircuitBreakerSummary } from "@/components/channels/ChannelOverviewStats";
 import { Badge } from "@/components/ui/badge";
 import { TruncateCell } from "@/components/openstatus-table/truncate-cell";
 import { cn } from "@/lib/utils";
@@ -26,12 +27,16 @@ function InfoItem({
 export function ChannelOverviewSection({
   channel,
   opsRow,
+  circuitBreaker,
 }: {
   channel: { priority: number };
   opsRow?: ChannelOpsRow | null;
+  circuitBreaker?: ChannelCircuitBreakerStatus | null;
 }) {
+  const breaker = circuitBreaker ?? opsRow?.circuit_breaker ?? null;
+
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <InfoItem label="优先级">
         <span className="tabular-nums">{channel.priority}</span>
       </InfoItem>
@@ -41,6 +46,9 @@ export function ChannelOverviewSection({
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
+      </InfoItem>
+      <InfoItem label="熔断">
+        <ChannelCircuitBreakerSummary breaker={breaker} />
       </InfoItem>
       <InfoItem label="最近错误">
         {opsRow?.recent_error_code ? (

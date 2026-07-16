@@ -8,11 +8,13 @@ import { useServerList } from "@/hooks/useServerList";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import type { FilterChip } from "@/components/openstatus-table";
 import {
-  billingExceptionColumns,
-  ledgerEntryColumns,
+  billingExceptionOsColumns,
+  ledgerEntryOsColumns,
+  LEDGER_ENTRY_OS_COLUMN_LABELS,
+  BILLING_EXCEPTION_OS_COLUMN_LABELS,
   EVENT_TYPE_FILTER_OPTIONS,
   REASON_CODE_FILTER_OPTIONS,
-} from "@/components/detail-tables/ledger-columns";
+} from "@/components/openstatus-table/ledger-os-columns";
 import { Input } from "@/components/ui/input";
 import {
   Empty,
@@ -26,24 +28,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecoveryJobsPanel } from "@/components/ledger/RecoveryJobsPanel";
 
 const PAGE_SIZE = 20;
-
-const ENTRY_LABELS: Record<string, string> = {
-  user_id: "用户",
-  entry_type: "类型",
-  amount: "金额",
-  balance_after: "余额",
-  reason: "原因",
-  created_at: "时间",
-};
-
-const EXCEPTION_LABELS: Record<string, string> = {
-  user_id: "用户",
-  event_type: "类型",
-  platform_amount: "平台承担",
-  reason_code: "原因码",
-  reason: "原因",
-  created_at: "时间",
-};
 
 const LEDGER_VIEW_OPTIONS = [
   { value: "entries", label: "流水" },
@@ -131,9 +115,9 @@ function EntriesPanel() {
   return (
     <ServerDataTable
       storageKey="ledger:entries"
-      columns={ledgerEntryColumns()}
+      columns={ledgerEntryOsColumns()}
       data={items}
-      columnLabels={ENTRY_LABELS}
+      columnLabels={LEDGER_ENTRY_OS_COLUMN_LABELS}
       total={total}
       page={page}
       pageCount={pageCount}
@@ -225,9 +209,9 @@ function ExceptionsPanel() {
   return (
     <ServerDataTable
       storageKey="ledger:exceptions"
-      columns={billingExceptionColumns()}
+      columns={billingExceptionOsColumns()}
       data={items}
-      columnLabels={EXCEPTION_LABELS}
+      columnLabels={BILLING_EXCEPTION_OS_COLUMN_LABELS}
       total={total}
       page={page}
       pageCount={pageCount}
@@ -261,7 +245,7 @@ function ExceptionsPanel() {
             label="原因码"
             multiple={false}
             value={reasonCode ? [reasonCode] : []}
-            options={[...REASON_CODE_FILTER_OPTIONS]}
+            options={REASON_CODE_FILTER_OPTIONS}
             onChange={(v) => {
               setReasonCode(v[0] ?? "");
               setPage(1);

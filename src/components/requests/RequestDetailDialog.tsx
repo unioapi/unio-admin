@@ -6,7 +6,7 @@ import {
   type RequestDetail,
 } from "@/lib/api/requests";
 import type { BillingException, LedgerEntry } from "@/lib/api/ledger";
-import { billingExceptionEventLabel } from "@/components/detail-tables/ledger-columns";
+import { billingExceptionEventLabel } from "@/components/openstatus-table/ledger-os-columns";
 import { formatDateTime, formatLatencyMs, formatTPS, trimDecimal } from "@/lib/format";
 import {
   Dialog,

@@ -12,6 +12,7 @@ import {
   ChannelOverviewStatsSkeleton,
 } from "@/components/channels/ChannelOverviewStats";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ChannelCircuitBreakerBadge } from "@/components/channels/ChannelCircuitBreakerBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function ChannelDetailPage() {
@@ -77,7 +78,12 @@ export function ChannelDetailPage() {
         titleLoading={entityLoading}
         badge={
           channel ? (
-            <StatusBadge status={channel.status} />
+            <span className="inline-flex items-center gap-1.5">
+              <StatusBadge status={channel.status} />
+              <ChannelCircuitBreakerBadge
+                breaker={opsDetail.data?.circuit_breaker ?? opsRow.data?.circuit_breaker}
+              />
+            </span>
           ) : null
         }
         subtitle={
@@ -116,6 +122,7 @@ export function ChannelDetailPage() {
           channel={channel}
           range={rangeQuery}
           opsRow={opsRow.data}
+          circuitBreaker={opsDetail.data?.circuit_breaker ?? opsRow.data?.circuit_breaker}
         />
       ) : null}
     </div>

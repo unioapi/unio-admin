@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
+import { ZapOffIcon, ZapIcon } from "lucide-react";
 import type { ChannelCircuitBreakerStatus } from "@/lib/api/channelsOps";
-import { Badge } from "@/components/ui/badge";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 /** 把 observed_at + open_remaining_ms 换成仍在走的剩余毫秒（可到 0）。 */
 export function remainingOpenMs(
@@ -32,7 +33,7 @@ export function formatCountdown(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function stateLabel(state: string): string {
+export function circuitBreakerStateLabel(state: string): string {
   switch (state) {
     case "open":
       return "熔断中";
@@ -45,48 +46,75 @@ function stateLabel(state: string): string {
   }
 }
 
+function stateLabel(state: string): string {
+  return circuitBreakerStateLabel(state);
+}
+
+const DEFAULT_CLOSED: ChannelCircuitBreakerStatus = {
+  state: "closed",
+  failures: 0,
+  successes: 0,
+  half_open_in_flight: false,
+  health_score: 0,
+  observed_at: "",
+};
+
 /**
- * 渠道名前熔断徽章：仅 open / half_open 显示；悬浮看详情；打开剩余用倒计时。
+ * 渠道名后熔断图标：始终显示。
+ * closed=绿 / half_open=琥珀 / open=红。
  */
 export function ChannelCircuitBreakerBadge({
   breaker,
 }: {
-  breaker: ChannelCircuitBreakerStatus;
+  breaker?: ChannelCircuitBreakerStatus | null;
 }) {
+  const status = breaker ?? DEFAULT_CLOSED;
   const [now, setNow] = useState(() => Date.now());
-  const remaining = remainingOpenMs(breaker, now);
+  const remaining = remainingOpenMs(status, now);
 
   useEffect(() => {
-    if (breaker.state !== "open") return;
+    if (status.state !== "open") return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [breaker.state, breaker.observed_at, breaker.open_remaining_ms]);
+  }, [status.state, status.observed_at, status.open_remaining_ms]);
 
-  if (breaker.state !== "open" && breaker.state !== "half_open") return null;
-
-  const isOpen = breaker.state === "open";
-  const badgeText = isOpen
+  const isOpen = status.state === "open";
+  const isHalfOpen = status.state === "half_open";
+  const Icon = isOpen ? ZapOffIcon : ZapIcon;
+  const title = isOpen
     ? remaining != null && remaining > 0
-      ? `熔断 ${formatCountdown(remaining)}`
-      : "熔断 即将探测"
-    : "半开";
+      ? `熔断中 · 剩余 ${formatCountdown(remaining)}`
+      : "熔断中 · 即将半开探测"
+    : isHalfOpen
+      ? "半开探测中"
+      : "熔断闭合 · 正常";
 
   return (
     <HoverCard openDelay={150}>
       <HoverCardTrigger asChild>
-        <Badge
-          variant={isOpen ? "destructive" : "secondary"}
-          className="h-5 shrink-0 cursor-default px-1.5 text-[10px] tabular-nums"
+        <button
+          type="button"
+          title={title}
+          aria-label={title}
+          className={cn(
+            "inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm",
+            isOpen
+              ? "text-destructive"
+              : isHalfOpen
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-emerald-600 dark:text-emerald-400",
+          )}
+          onClick={(e) => e.preventDefault()}
         >
-          {badgeText}
-        </Badge>
+          <Icon className="size-3.5" strokeWidth={2.25} />
+        </button>
       </HoverCardTrigger>
       <HoverCardContent align="start" className="w-72 text-xs">
         <div className="space-y-2">
           <div className="font-medium">渠道熔断</div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
             <dt className="text-muted-foreground">状态</dt>
-            <dd>{stateLabel(breaker.state)}</dd>
+            <dd>{stateLabel(status.state)}</dd>
             {isOpen ? (
               <>
                 <dt className="text-muted-foreground">打开剩余</dt>
@@ -97,36 +125,44 @@ export function ChannelCircuitBreakerBadge({
                 </dd>
               </>
             ) : null}
-            {breaker.state === "half_open" ? (
+            {isHalfOpen ? (
               <>
                 <dt className="text-muted-foreground">探测中</dt>
-                <dd>{breaker.half_open_in_flight ? "是（已有探测在飞）" : "否（等待探测）"}</dd>
+                <dd>
+                  {status.half_open_in_flight ? "是（已有探测在飞）" : "否（等待探测）"}
+                </dd>
               </>
             ) : null}
             <dt className="text-muted-foreground">窗口样本</dt>
             <dd>
-              成功 {breaker.successes} / 失败 {breaker.failures}
-              {breaker.successes + breaker.failures > 0
+              成功 {status.successes} / 失败 {status.failures}
+              {status.successes + status.failures > 0
                 ? `（失败率 ${(
-                    (breaker.failures / (breaker.successes + breaker.failures)) *
+                    (status.failures / (status.successes + status.failures)) *
                     100
                   ).toFixed(0)}%）`
-                : "（跳闸后计数已清零）"}
+                : status.state === "open" || status.state === "half_open"
+                  ? "（跳闸后计数已清零）"
+                  : "（暂无样本）"}
             </dd>
-            {breaker.opened_at ? (
+            {status.opened_at ? (
               <>
                 <dt className="text-muted-foreground">打开于</dt>
-                <dd>{formatDateTime(breaker.opened_at)}</dd>
+                <dd>{formatDateTime(status.opened_at)}</dd>
               </>
             ) : null}
-            <dt className="text-muted-foreground">快照时间</dt>
-            <dd>{formatDateTime(breaker.observed_at)}</dd>
+            {status.observed_at ? (
+              <>
+                <dt className="text-muted-foreground">快照时间</dt>
+                <dd>{formatDateTime(status.observed_at)}</dd>
+              </>
+            ) : null}
           </dl>
-          {breaker.instances && breaker.instances.length > 1 ? (
+          {status.instances && status.instances.length > 1 ? (
             <div className="border-t pt-2">
               <div className="text-muted-foreground mb-1">各实例</div>
               <ul className="space-y-1">
-                {breaker.instances.map((inst) => (
+                {status.instances.map((inst) => (
                   <li key={inst.id} className="flex justify-between gap-2 font-mono">
                     <span className="truncate">{inst.id}</span>
                     <span className="shrink-0">{stateLabel(inst.state)}</span>

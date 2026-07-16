@@ -1,9 +1,16 @@
 import type { ReactNode } from "react";
-import type { ChannelOpsDetail } from "@/lib/api/channelsOps";
+import type {
+  ChannelCircuitBreakerStatus,
+  ChannelOpsDetail,
+} from "@/lib/api/channelsOps";
 import type { BreakdownRow } from "@/lib/api/dashboard";
 import { formatInt, formatRelativeTime } from "@/lib/format";
 import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
 import { ChannelSuccessRateCell } from "@/components/common/ChannelSuccessRateCell";
+import {
+  ChannelCircuitBreakerBadge,
+  circuitBreakerStateLabel,
+} from "@/components/channels/ChannelCircuitBreakerBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -32,8 +39,11 @@ export function ChannelOverviewStats({
   /** 概览「表现 → 渠道」中该渠道那一行，原样驱动成功率列 */
   breakdownRow?: BreakdownRow;
 }) {
+  const breaker = detail.circuit_breaker;
+  const breakerState = breaker?.state ?? "closed";
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
       <div className="min-w-0 overflow-hidden rounded-md border bg-card p-2.5">
         <div className="text-muted-foreground text-xs">成功率</div>
         <div className="mt-1.5 min-w-0 overflow-hidden">
@@ -64,16 +74,40 @@ export function ChannelOverviewStats({
         label="最近失败"
         value={detail.last_failure_at ? formatRelativeTime(detail.last_failure_at) : "—"}
       />
+      <Stat
+        label="熔断"
+        value={
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <ChannelCircuitBreakerBadge breaker={breaker} />
+            <span className="text-sm">{circuitBreakerStateLabel(breakerState)}</span>
+          </span>
+        }
+      />
     </div>
   );
 }
 
 export function ChannelOverviewStatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, i) => (
         <Skeleton key={i} className="h-[62px] w-full rounded-md" />
       ))}
     </div>
+  );
+}
+
+/** 供概览侧栏等复用的熔断状态展示（图标 + 文案）。 */
+export function ChannelCircuitBreakerSummary({
+  breaker,
+}: {
+  breaker?: ChannelCircuitBreakerStatus | null;
+}) {
+  const state = breaker?.state ?? "closed";
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <ChannelCircuitBreakerBadge breaker={breaker} />
+      <span>{circuitBreakerStateLabel(state)}</span>
+    </span>
   );
 }

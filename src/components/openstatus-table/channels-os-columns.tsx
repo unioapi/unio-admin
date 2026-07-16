@@ -35,7 +35,6 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { ColumnHeader } from "./column-header";
-import { TruncateCell } from "./truncate-cell";
 import { formatRouteRatioInput } from "@/components/routes/route-pricing";
 import type { FacetOption } from "./types";
 
@@ -477,25 +476,25 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       meta: {
         autoSizeValue: (row: ChannelOpsRow) => {
           const provider = row.provider_name ? ` ${row.provider_name}` : "";
-          const badge =
-            row.circuit_breaker?.state === "open"
-              ? "熔断 0:00 "
-              : row.circuit_breaker?.state === "half_open"
-                ? "半开 "
-                : "";
-          return `${badge}${row.name}${provider}`;
+          return `${row.name} ⚡${provider}`;
         },
       },
       cell: ({ row }) => (
-        <div className="flex min-w-0 items-start gap-1.5">
-          {row.original.circuit_breaker ? (
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1">
+            <div className="min-w-0 truncate font-medium" title={row.original.name}>
+              {row.original.name}
+            </div>
             <ChannelCircuitBreakerBadge breaker={row.original.circuit_breaker} />
+          </div>
+          {row.original.provider_name ? (
+            <div
+              className="text-muted-foreground truncate text-xs"
+              title={row.original.provider_name}
+            >
+              {row.original.provider_name}
+            </div>
           ) : null}
-          <TruncateCell
-            text={row.original.name}
-            subtext={row.original.provider_name || undefined}
-            className="font-medium"
-          />
         </div>
       ),
     },

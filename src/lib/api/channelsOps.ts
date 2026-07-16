@@ -42,7 +42,7 @@ export interface ChannelOpsRow {
   cost_multiplier_overrides: number;
   // 当前生效的充值倍率；null=未配置（结算按 1.0）。
   recharge_factor: string | null;
-  // gateway 进程内熔断快照；仅 open / half_open 时出现（列表名前列徽章）。
+  // gateway 进程内熔断快照；缺省时前端按闭合（绿）常驻显示。
   circuit_breaker?: ChannelCircuitBreakerStatus | null;
 }
 
@@ -91,6 +91,8 @@ export interface ChannelOpsDetail {
   latency: LatencyStats;
   last_success_at: string | null;
   last_failure_at: string | null;
+  /** gateway 熔断快照；缺省时前端按闭合显示。 */
+  circuit_breaker?: ChannelCircuitBreakerStatus | null;
 }
 
 export interface ChannelOpsPerfPoint {

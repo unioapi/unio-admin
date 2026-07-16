@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 
 // FieldHint 是字段标签旁的「圆圈问号」,悬浮显示该字段说明(把冗长 description 收进 tooltip,表单只留标签+输入)。
-function FieldHint({ text }: { text: string }) {
+export function FieldHint({ text }: { text: ReactNode }) {
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
@@ -37,7 +37,7 @@ export function HintLabel({
   children,
 }: {
   htmlFor?: string;
-  hint: string;
+  hint: ReactNode;
   children: ReactNode;
 }) {
   return (

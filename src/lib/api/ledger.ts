@@ -6,6 +6,8 @@ import type { ListMeta, Page } from "@/lib/api/types";
 export interface LedgerEntry {
   id: number;
   user_id: number;
+  user_display_name: string;
+  user_email: string;
   request_record_id: number | null;
   entry_type: string;
   amount: string;
@@ -21,7 +23,10 @@ export interface LedgerEntry {
 export interface BillingException {
   id: number;
   user_id: number;
+  user_display_name: string;
+  user_email: string;
   request_record_id: number;
+  request_id: string;
   reservation_id: number;
   event_type: string;
   actual_amount: string | null;

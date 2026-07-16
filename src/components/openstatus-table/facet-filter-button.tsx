@@ -162,7 +162,10 @@ function SingleFacetFilterButton({
           )}
         </Button>
       </HoverDropdownMenuTrigger>
-      <HoverDropdownMenuContent align="start" className="min-w-40">
+      <HoverDropdownMenuContent
+        align="start"
+        className="w-auto min-w-56 max-w-md"
+      >
         <DropdownMenuRadioGroup
           value={radioValue}
           onValueChange={(next) => {
@@ -174,7 +177,11 @@ function SingleFacetFilterButton({
             <DropdownMenuRadioItem value={ALL_VALUE}>{allOption}</DropdownMenuRadioItem>
           ) : null}
           {options.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value}>
+            <DropdownMenuRadioItem
+              key={option.value}
+              value={option.value}
+              className="items-start whitespace-normal"
+            >
               {option.render ? option.render() : option.label}
             </DropdownMenuRadioItem>
           ))}

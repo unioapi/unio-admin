@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { getChannel, type Channel } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
-import type { ChannelOpsRow } from "@/lib/api/channelsOps";
+import type { ChannelOpsRow, ChannelCircuitBreakerStatus } from "@/lib/api/channelsOps";
 import {
   getChannelOpsErrors,
   getChannelOpsModels,
@@ -55,18 +55,26 @@ export function ChannelDetailContent({
   channel,
   range,
   opsRow,
+  circuitBreaker,
 }: {
   channelId: number;
   channel: Channel;
   range: RangeQuery;
   opsRow?: ChannelOpsRow | null;
+  circuitBreaker?: ChannelCircuitBreakerStatus | null;
 }) {
   const sections = useMemo(
     () => [
       {
         id: "overview",
         label: "概览",
-        content: <ChannelOverviewSection channel={channel} opsRow={opsRow} />,
+        content: (
+          <ChannelOverviewSection
+            channel={channel}
+            opsRow={opsRow}
+            circuitBreaker={circuitBreaker}
+          />
+        ),
       },
       {
         id: "test",
@@ -104,7 +112,7 @@ export function ChannelDetailContent({
         content: <AuditSection />,
       },
     ],
-    [channelId, channel, range, opsRow],
+    [channelId, channel, range, opsRow, circuitBreaker],
   );
 
   return <DetailSideNav sections={sections} defaultSectionId="overview" />;
