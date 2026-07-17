@@ -9,6 +9,8 @@ export type DataTableColumnMeta = {
   align?: TableColumnAlign;
   /** 固定宽度（如 Badge 列），不参与剩余空间比例分配 */
   fixedWidth?: boolean;
+  /** content 模式下吸收剩余宽度（表拉满容器时，其它列仍贴合内容） */
+  fillWidth?: boolean;
   /** 按行估算列内容宽度（用于动态 minWidth）；各列按自身行类型定义，故此处用 any 逃生舱。 */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   autoSizeValue?: (row: any) => unknown;
@@ -18,11 +20,14 @@ const DEFAULT_SIZE = 120;
 const DEFAULT_MIN = 72;
 const DEFAULT_MAX = 480;
 const DEFAULT_AUTOSIZE_PADDING = 44;
+/** content 模式：贴合内容，减少「看起来每列都很空」。 */
+const COMPACT_AUTOSIZE_PADDING = 18;
 const DEFAULT_AUTOSIZE_SAMPLE_SIZE = 80;
 /** 与 DataTable 表头/单元格 pl-6 拖拽留白一致。 */
 const TABLE_HEAD_GUTTER_PX = 24;
-const CONTENT_MIN_FLOOR = 48;
-const ACTION_COLUMN_MIN = 88;
+const COMPACT_HEAD_GUTTER_PX = 12;
+const CONTENT_MIN_FLOOR = 40;
+const ACTION_COLUMN_MIN = 72;
 /** 凭证列复制按钮占位（与 icon-sm 按钮 + gap 对齐）。 */
 const CREDENTIAL_COPY_BTN_PX = 32;
 
@@ -129,12 +134,26 @@ export function isFixedWidthColumn<TData>(
   return meta?.fixedWidth === true;
 }
 
-/** 参与比例分配的列 minSize 之和（排除 fixedWidth / action 列）。 */
+export function isFillWidthColumn<TData>(
+  header: { column: { columnDef: ColumnDef<TData, unknown> } },
+): boolean {
+  const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined;
+  return meta?.fillWidth === true;
+}
+
+/** 参与比例分配的列 minSize 之和。
+ * - proportional：排除 fixedWidth / action
+ * - content：全部列按内容宽度参与（含操作列），比例之和 = 100%
+ */
 export function sumFlexHeadersMinWidth<TData>(
   headers: { column: { id: string; columnDef: ColumnDef<TData, unknown> } }[],
   contentMinWidths?: Record<string, number>,
+  mode: "proportional" | "equal" | "content" = "proportional",
 ): number {
   return headers.reduce((sum, header) => {
+    if (mode === "content") {
+      return sum + resolveColumnMinWidth(header, contentMinWidths);
+    }
     if (isFixedWidthColumn(header) || isActionColumn(header)) return sum;
     return sum + resolveColumnMinWidth(header, contentMinWidths);
   }, 0);
@@ -164,15 +183,26 @@ function equalColumnStyle(
   };
 }
 
-export type ColumnFlexMode = "proportional" | "equal";
+/** 按内容贴合：列宽锁死为估算值（仅 table-fixed 路径使用）。 */
+function contentColumnStyle(minWidth: number): {
+  width: number;
+  minWidth: number;
+  maxWidth: number;
+} {
+  return { width: minWidth, minWidth, maxWidth: minWidth };
+}
+
+export type ColumnFlexMode = "proportional" | "equal" | "content";
 
 export function countFlexColumns<TData>(
   headers: { column: { columnDef: ColumnDef<TData, unknown> } }[],
   mode: ColumnFlexMode,
 ): number {
   return headers.reduce((count, header) => {
+    // content：所有列都按内容比例参与
+    if (mode === "content") return count + 1;
+    if (isActionColumn(header)) return count;
     if (isFixedWidthColumn(header)) return count;
-    if (mode === "proportional" && isActionColumn(header)) return count;
     return count + 1;
   }, 0);
 }
@@ -194,17 +224,20 @@ export function isActionColumn<TData>(
   return id === "action";
 }
 
-/** 渲染层是否锁死列宽（equal 模式下 action 也参与等分）。 */
+/** 渲染层是否锁死列宽（不参与拉伸 / 截断弹性）。 */
 export function isLayoutFixedColumn<TData>(
   header: { column: { id?: string; columnDef: ColumnDef<TData, unknown> } },
   mode: ColumnFlexMode,
 ): boolean {
+  // content：全部按内容比例分满，不锁死
+  if (mode === "content") return false;
+  if (isActionColumn(header)) return true;
   if (isFixedWidthColumn(header)) return true;
   if (mode === "equal") return false;
-  return isActionColumn(header);
+  return false;
 }
 
-/** 单列 col 宽度：fixedWidth 列锁死 minSize；其余按 proportional 或 equal 分配。 */
+/** 单列 col 宽度。content = 按内容估算宽度比例分满整表。 */
 export function headerColStyle<TData>(
   header: { column: { id: string; columnDef: ColumnDef<TData, unknown> } },
   flexMinTotal: number,
@@ -217,17 +250,18 @@ export function headerColStyle<TData>(
   const minWidth = resolveColumnMinWidth(header, options?.contentMinWidths);
   const mode = options?.mode ?? "proportional";
 
-  if (isFixedWidthColumn(header)) {
-    return { width: minWidth, minWidth, maxWidth: minWidth };
+  // 根据内容比例分满：宽列多占、短列少占，合计 100%
+  if (mode === "content") {
+    return proportionalColumnStyle(minWidth, flexMinTotal);
+  }
+
+  if (isActionColumn(header) || isFixedWidthColumn(header)) {
+    return contentColumnStyle(minWidth);
   }
 
   if (mode === "equal") {
     const flexColumnCount = options?.flexColumnCount ?? 1;
     return equalColumnStyle(minWidth, flexColumnCount);
-  }
-
-  if (isActionColumn(header)) {
-    return { width: minWidth, minWidth, maxWidth: minWidth };
   }
 
   return proportionalColumnStyle(minWidth, flexMinTotal);
@@ -427,8 +461,23 @@ export function computeContentMinWidths<TData>(
   data: TData[],
   labels: Record<string, string>,
   getAutoSizeValue?: (row: TData, columnId: string) => unknown,
-  sampleSize = DEFAULT_AUTOSIZE_SAMPLE_SIZE,
+  sampleSizeOrOptions:
+    | number
+    | {
+        sampleSize?: number;
+        /** compact：更贴合内容（content 布局模式用） */
+        density?: "default" | "compact";
+      } = DEFAULT_AUTOSIZE_SAMPLE_SIZE,
 ): Record<string, number> {
+  const options =
+    typeof sampleSizeOrOptions === "number"
+      ? { sampleSize: sampleSizeOrOptions, density: "default" as const }
+      : sampleSizeOrOptions;
+  const sampleSize = options.sampleSize ?? DEFAULT_AUTOSIZE_SAMPLE_SIZE;
+  const compact = options.density === "compact";
+  const padding = compact ? COMPACT_AUTOSIZE_PADDING : DEFAULT_AUTOSIZE_PADDING;
+  const gutter = compact ? COMPACT_HEAD_GUTTER_PX : TABLE_HEAD_GUTTER_PX;
+
   const rows = data.slice(0, sampleSize);
   const result: Record<string, number> = {};
 
@@ -437,7 +486,7 @@ export function computeContentMinWidths<TData>(
     if (!id) continue;
 
     const { max, fallback } = columnBounds(col);
-    let width = estimateTextWidth(labels[id] ?? id) + DEFAULT_AUTOSIZE_PADDING;
+    let width = estimateTextWidth(labels[id] ?? id) + padding;
 
     if (isActionColumnId(id)) {
       width = Math.max(width, ACTION_COLUMN_MIN);
@@ -447,11 +496,11 @@ export function computeContentMinWidths<TData>(
           getAutoSizeValue?.(row, id) ?? getCellAutoSizeValue(col, row, id);
         width = Math.max(
           width,
-          estimateTextWidth(formatAutoSizeValue(raw)) + DEFAULT_AUTOSIZE_PADDING,
+          estimateTextWidth(formatAutoSizeValue(raw)) + padding,
         );
       }
       if (columnUsesHeadGutter(col)) {
-        width += TABLE_HEAD_GUTTER_PX;
+        width += gutter;
       }
     }
 

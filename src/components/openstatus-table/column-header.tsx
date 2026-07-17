@@ -23,7 +23,7 @@ export function ColumnHeader<TData, TValue>({
       type="button"
       onClick={() => column.toggleSorting(undefined)}
       className={cn(
-        "group/sort flex h-7 w-full items-center gap-1.5 text-left text-muted-foreground transition-colors hover:text-foreground",
+        "group/sort inline-flex h-7 max-w-full items-center gap-1.5 text-left text-muted-foreground transition-colors hover:text-foreground",
         sorted && "text-foreground",
         className,
       )}

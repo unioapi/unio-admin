@@ -45,7 +45,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-/** 表头/表体统一左侧留白，拖拽手柄独占此区域，不与文字重叠。 */
+/** 表头/表体左侧留白：拖拽手柄区域。 */
 const HEAD_GUTTER = "pl-6";
 
 function DraggableTableHead<TData>({
@@ -87,7 +87,7 @@ function DraggableTableHead<TData>({
       }}
       className={cn(
         "group/head relative select-none pr-2 align-middle",
-        !fixed && "overflow-hidden truncate",
+        // 表头也不在 th 上 truncate，避免「用户/Ke」这类被裁成残字
         useGutter && HEAD_GUTTER,
         tableAlignClass(meta?.align),
         isDragging && "z-10 bg-muted/80 opacity-90",
@@ -111,8 +111,7 @@ function DraggableTableHead<TData>({
           </button>
         </span>
       ) : null}
-      <span className={cn("min-w-0", !fixed && "truncate")}>
-        {header.isPlaceholder
+      <span className="min-w-0">{header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
       </span>
@@ -134,7 +133,7 @@ export function DataTable<TData>({
   columnOrder: ColumnOrderState;
   onColumnOrderChange: (order: ColumnOrderState) => void;
   pinnedColumnId?: string | null;
-  /** proportional：按 minSize 比例；equal：弹性列等分容器宽度 */
+  /** proportional：按 minSize 比例；equal：各列等分；content：按当前页内容宽度比例分满整表 */
   columnFlexMode?: ColumnFlexMode;
   /** 按当前数据估算的列 minWidth；未传则回退列定义 minSize */
   contentMinWidths?: Record<string, number>;
@@ -169,8 +168,8 @@ export function DataTable<TData>({
     [contentMinWidths, headers],
   );
   const flexMinTotal = useMemo(
-    () => sumFlexHeadersMinWidth(headers, contentMinWidths),
-    [contentMinWidths, headers],
+    () => sumFlexHeadersMinWidth(headers, contentMinWidths, columnFlexMode),
+    [columnFlexMode, contentMinWidths, headers],
   );
   const flexColumnCount = useMemo(
     () => countFlexColumns(headers, columnFlexMode),
@@ -187,9 +186,8 @@ export function DataTable<TData>({
       collisionDetection={closestCenter}
       onDragEnd={onDragEnd}
     >
-      {/* 窄屏时撑开至列 minWidth 之和，触发外层 overflow-x-auto 出横向滚动条 */}
       <div className="w-full" style={{ minWidth: totalMinWidth }}>
-        <table className="w-full caption-bottom text-sm table-fixed">
+        <table className="w-full table-fixed caption-bottom text-sm">
           <colgroup>
             {headers.map((header) => (
               <col
@@ -211,14 +209,14 @@ export function DataTable<TData>({
                       header={header}
                       columnFlexMode={columnFlexMode}
                       contentMinWidths={contentMinWidths}
-                    canReorder={
-                      pinnedColumnId == null
-                        ? header.column.id !== "action" &&
-                          !isFixedWidthColumn(header)
-                        : header.column.id !== pinnedColumnId &&
-                          header.column.id !== "action" &&
-                          !isFixedWidthColumn(header)
-                    }
+                      canReorder={
+                        pinnedColumnId == null
+                          ? header.column.id !== "action" &&
+                            !isFixedWidthColumn(header)
+                          : header.column.id !== pinnedColumnId &&
+                            header.column.id !== "action" &&
+                            !isFixedWidthColumn(header)
+                      }
                     />
                   ))}
                 </SortableContext>
@@ -273,11 +271,13 @@ export function DataTable<TData>({
                         key={cell.id}
                         style={{
                           minWidth,
-                          ...(fixed && minWidth != null ? { maxWidth: minWidth } : null),
+                          ...(fixed && minWidth != null
+                            ? { maxWidth: minWidth }
+                            : null),
                         }}
                         className={cn(
-                          !isAction && "overflow-hidden",
-                          !fixed && "truncate",
+                          !isAction && "min-w-0 overflow-hidden",
+                          // truncate 放在 td 上会让 Badge 旁冒出省略号「.»；长文本由单元格内部自己截断。
                           useGutter && HEAD_GUTTER,
                           tableAlignClass(meta?.align),
                         )}

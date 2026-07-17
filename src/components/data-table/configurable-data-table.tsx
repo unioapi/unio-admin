@@ -29,7 +29,7 @@ export type ConfigurableDataTableProps<TData> = {
   columnLabels?: Record<string, string>;
   /** 不参与拖拽的列 id；默认 `name`；传 null 则全部可拖 */
   pinnedColumnId?: string | null;
-  /** proportional：按 minSize 比例；equal：各列等分（默认） */
+  /** proportional：按 minSize 比例；equal：各列等分；content：按当前页内容宽度比例分满整表 */
   columnFlexMode?: ColumnFlexMode;
   defaultLayout?: TableLayoutPrefs;
   /** `fixed` 维持定义列宽；`content` 按当前数据估算默认列宽。 */
@@ -122,8 +122,11 @@ export function ConfigurableDataTable<TData>({
   }, [columnLabels, columns, data, defaultLayoutProp, getAutoSizeValue, layoutMode]);
 
   const contentMinWidths = useMemo(
-    () => computeContentMinWidths(columns, data, columnLabels, getAutoSizeValue),
-    [columnLabels, columns, data, getAutoSizeValue],
+    () =>
+      computeContentMinWidths(columns, data, columnLabels, getAutoSizeValue, {
+        density: columnFlexMode === "content" ? "compact" : "default",
+      }),
+    [columnFlexMode, columnLabels, columns, data, getAutoSizeValue],
   );
 
   const sanitizePrefs = useCallback(

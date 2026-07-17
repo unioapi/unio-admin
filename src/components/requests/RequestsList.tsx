@@ -3,6 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ActivityIcon } from "lucide-react";
 import { listRequests, type RequestListItem } from "@/lib/api/requests";
+import {
+  formatLatencyMs,
+  formatTokenScale,
+  formatUSDPrecise,
+} from "@/lib/format";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
@@ -27,16 +32,70 @@ import { RequestDetailDialog } from "@/components/requests/RequestDetailDialog";
 
 const PAGE_SIZE = 20;
 
-const REQUEST_AUTOSIZE: Record<string, (r: RequestListItem) => string> = {
-  user_id: (r) => r.api_key_name || `Key #${r.api_key_id}`,
-  tokens: () => "↓999.99K / ↑99.99K",
-  timing: () => "12.34s  首字 9999ms · 999 t/s",
-  cost: () => "$0.000000",
-  request_id: () => "req_0123456789abcd…",
-};
-
+/** 按当前行真实展示文案估算列宽（避免假最长样本把列撑开）。 */
 function requestAutoSizeValue(row: RequestListItem, columnId: string): unknown {
-  return REQUEST_AUTOSIZE[columnId]?.(row);
+  switch (columnId) {
+    case "status": {
+      const map: Record<string, string> = {
+        succeeded: "成功",
+        failed: "失败",
+        running: "进行中",
+        pending: "待处理",
+        canceled: "已取消",
+      };
+      return map[row.status] ?? row.status;
+    }
+    case "stream":
+      return row.stream ? "流式" : "非流式";
+    case "user_id":
+      return row.api_key_name || `Key #${row.api_key_id}`;
+    case "tokens": {
+      const total =
+        row.uncached_input_tokens +
+        row.cache_read_input_tokens +
+        row.cache_write_5m_input_tokens +
+        row.cache_write_1h_input_tokens +
+        row.cache_write_30m_input_tokens +
+        row.output_tokens;
+      if (total === 0) return "—";
+      // 主行决定列宽；副行更小字号，不参与撑宽。
+      return `↓${formatTokenScale(row.uncached_input_tokens)} / ↑${formatTokenScale(row.output_tokens)}`;
+    }
+    case "timing": {
+      // 只按主行总耗时估宽。副行「首字 · t/s」是 10px，按正文估会把列撑太宽，挤占线路。
+      if (row.latency_ms == null && row.ttft_ms == null && row.tps == null) return "—";
+      return row.latency_ms != null ? formatLatencyMs(row.latency_ms) : "—";
+    }
+    case "cost":
+      return row.user_charge_usd == null ? "—" : formatUSDPrecise(row.user_charge_usd);
+    case "request_id": {
+      const id = row.request_id;
+      return id.length > 14 ? `${id.slice(0, 14)}…` : id;
+    }
+    case "model":
+      return row.requested_model_id;
+    case "route": {
+      const name = row.route_name || "—";
+      const chain = row.channel_chain || "";
+      const channelCount = chain
+        ? chain.split(" → ").filter(Boolean).length
+        : row.final_channel_name
+          ? 1
+          : 0;
+      // 渠道数徽章占位，避免线路名被截断后徽章还在。
+      return channelCount > 0 ? `${name}  ${channelCount}` : name;
+    }
+    case "reasoning":
+      return !row.reasoning_effort || row.reasoning_effort === "none"
+        ? "—"
+        : row.reasoning_effort.toUpperCase();
+    case "endpoint":
+      return row.operation || row.ingress_protocol || "—";
+    case "ip":
+      return row.client_ip || "—";
+    default:
+      return undefined;
+  }
 }
 
 export interface RequestsListProps {
@@ -198,6 +257,7 @@ export function RequestsList({
           data={items}
           columnLabels={REQUEST_OS_COLUMN_LABELS}
           getAutoSizeValue={requestAutoSizeValue}
+          columnFlexMode="content"
           total={total}
           page={page}
           pageCount={pageCount}

@@ -53,7 +53,7 @@ export interface ServerDataTableProps<TData> {
   onClearChips?: () => void;
   /** 不参与拖拽的列 id；默认从列定义推断 */
   pinnedColumnId?: string | null;
-  /** proportional：按 minSize 比例；equal：各列等分容器宽度（默认） */
+  /** proportional：按 minSize 比例；equal：各列等分；content：按当前页内容宽度比例分满整表 */
   columnFlexMode?: ColumnFlexMode;
   /** 覆盖单列内容宽度估算 */
   getAutoSizeValue?: (row: TData, columnId: string) => unknown;
@@ -150,8 +150,11 @@ export function ServerDataTable<TData>({
 
   const labels = useMemo(() => columnLabels, [columnLabels]);
   const contentMinWidths = useMemo(
-    () => computeContentMinWidths(columns, data, labels, getAutoSizeValue),
-    [columns, data, getAutoSizeValue, labels],
+    () =>
+      computeContentMinWidths(columns, data, labels, getAutoSizeValue, {
+        density: columnFlexMode === "content" ? "compact" : "default",
+      }),
+    [columnFlexMode, columns, data, getAutoSizeValue, labels],
   );
   const rows = table.getRowModel().rows;
   const showEmpty = !loading && rows.length === 0;

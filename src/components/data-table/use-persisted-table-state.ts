@@ -61,7 +61,10 @@ function loadPrefs(
         ? defaults.columnSizing
         : { ...defaults.columnSizing, ...parsed.columnSizing };
     const merged: TableLayoutPrefs = {
-      columnOrder: mergeColumnOrder(parsed.columnOrder, defaults.columnOrder),
+      // 列默认顺序变了（layoutKey 变）时跟新默认，避免旧拖拽顺序盖住产品调整。
+      columnOrder: structureChanged
+        ? pinActionLast(defaults.columnOrder)
+        : mergeColumnOrder(parsed.columnOrder, defaults.columnOrder),
       columnVisibility: {
         ...defaults.columnVisibility,
         ...parsed.columnVisibility,

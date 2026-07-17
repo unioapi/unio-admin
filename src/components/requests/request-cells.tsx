@@ -64,12 +64,12 @@ export function RequestUserKeyCell({ row }: { row: RequestListItem }) {
   const name = row.api_key_name || (row.api_key_prefix ? `${row.api_key_prefix}…` : `Key #${row.api_key_id}`);
   const full = row.api_key_plaintext;
   return (
-    <div className="flex flex-col gap-1 py-0.5" onClick={(e) => e.stopPropagation()}>
+    <div className="flex min-w-0 flex-col gap-1 py-0.5" onClick={(e) => e.stopPropagation()}>
       {full ? (
         <button
           type="button"
           title="点击复制完整 API Key"
-          className="max-w-[10rem] truncate text-left font-medium underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+          className="min-w-0 truncate text-left font-medium underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
           onClick={() =>
             copySecretToClipboard(full, { success: "已复制完整 API Key", empty: "无可复制的 Key" })
           }
@@ -77,7 +77,7 @@ export function RequestUserKeyCell({ row }: { row: RequestListItem }) {
           {name}
         </button>
       ) : (
-        <span className="max-w-[10rem] truncate font-medium">{name}</span>
+        <span className="min-w-0 truncate font-medium">{name}</span>
       )}
       <span className="text-muted-foreground text-[10px] tabular-nums">#{row.user_id}</span>
     </div>
@@ -101,7 +101,7 @@ export function RequestModelCell({ row }: { row: RequestListItem }) {
   return (
     <HoverCard openDelay={120} closeDelay={80}>
       <HoverCardTrigger asChild>
-        <button type="button" className="flex max-w-[12rem] flex-col gap-0.5 py-0.5 text-left">
+        <button type="button" className="flex min-w-0 max-w-full flex-col gap-0.5 py-0.5 text-left">
           <span className="truncate font-medium underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
             {req}
           </span>
@@ -396,24 +396,42 @@ export function RequestReasoningCell({ row }: { row: RequestListItem }) {
   );
 }
 
-/** 线路：线路名（悬浮显示 策略 / 倍率 / 经过渠道 / 命中渠道）。 */
+/** 线路：线路名 + 经过渠道数徽章（悬浮显示 策略 / 倍率 / 经过渠道 / 命中渠道）。 */
 export function RequestRouteCell({ row }: { row: RequestListItem }) {
   const route = row.route_name;
-  const chain = row.channel_chain || row.final_channel_name || "";
+  const chain = row.channel_chain || "";
+  const channelCount = chain
+    ? chain.split(" → ").filter(Boolean).length
+    : row.final_channel_name
+      ? 1
+      : 0;
 
-  if (!route && !chain) return <Dash />;
+  if (!route && !chain && !row.final_channel_name) return <Dash />;
 
   const modeLabel = row.route_mode ? ROUTE_MODE_LABEL[row.route_mode] ?? row.route_mode : null;
   const ratio = row.route_price_ratio;
+  const chainDisplay = chain || row.final_channel_name || "";
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className="max-w-[9rem] cursor-default truncate py-0.5 text-left underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+          className="flex min-w-0 max-w-full cursor-default items-center gap-1 py-0.5 text-left"
         >
-          {route ?? "—"}
+          <span className="min-w-0 truncate underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
+            {route ?? "—"}
+          </span>
+          {channelCount > 0 ? (
+            <Badge
+              variant="secondary"
+              className="h-4 shrink-0 px-1 text-[10px] tabular-nums font-medium"
+              title={`经过 ${channelCount} 个渠道`}
+              aria-label={`经过 ${channelCount} 个渠道`}
+            >
+              {channelCount}
+            </Badge>
+          ) : null}
         </button>
       </HoverCardTrigger>
       <TipHoverCardContent align="start" className="w-72">
@@ -423,10 +441,11 @@ export function RequestRouteCell({ row }: { row: RequestListItem }) {
             {modeLabel && <Field label="策略" value={modeLabel} />}
             {ratio && <Field label="倍率" value={`× ${trimDecimal(ratio)}`} />}
             {row.final_channel_name && <Field label="命中渠道" value={row.final_channel_name} />}
+            {channelCount > 0 && <Field label="经过渠道数" value={String(channelCount)} />}
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-muted-foreground">经过渠道</span>
-            <span className="break-words leading-relaxed">{chain || "—"}</span>
+            <span className="break-words leading-relaxed">{chainDisplay || "—"}</span>
           </div>
         </div>
       </TipHoverCardContent>
@@ -434,7 +453,7 @@ export function RequestRouteCell({ row }: { row: RequestListItem }) {
   );
 }
 
-/** 请求 ID：只显前缀 + 复制按钮（悬浮查看完整 ID）。 */
+/** 请求 ID：截断展示 + 复制（悬浮看全文）。 */
 export function RequestIdCell({ row }: { row: RequestListItem }) {
   const id = row.request_id;
   return (

@@ -29,12 +29,12 @@ export const REQUEST_OS_COLUMN_LABELS: Record<string, string> = {
   created_at: "时间",
   status: "状态",
   user_id: "用户/Key",
+  route: "线路",
   model: "模型",
+  reasoning: "推理强度",
   stream: "类型",
   endpoint: "端点",
   ip: "IP",
-  route: "线路",
-  reasoning: "推理强度",
   timing: "耗时",
   tokens: "Tokens",
   cost: "费用",
@@ -75,10 +75,25 @@ export function requestOsColumns(
       cell: ({ row }) => <RequestUserKeyCell row={row.original} />,
     },
     {
+      id: "route",
+      accessorKey: "route_name",
+      header: ({ column }) => <ColumnHeader column={column} title="线路" />,
+      enableSorting: false,
+      minSize: 140,
+      cell: ({ row }) => <RequestRouteCell row={row.original} />,
+    },
+    {
       id: "model",
       accessorKey: "requested_model_id",
       header: ({ column }) => <ColumnHeader column={column} title="模型" />,
       cell: ({ row }) => <RequestModelCell row={row.original} />,
+    },
+    {
+      id: "reasoning",
+      accessorKey: "reasoning_effort",
+      header: ({ column }) => <ColumnHeader column={column} title="推理强度" />,
+      enableSorting: false,
+      cell: ({ row }) => <RequestReasoningCell row={row.original} />,
     },
     {
       id: "stream",
@@ -113,23 +128,11 @@ export function requestOsColumns(
       ),
     },
     {
-      id: "route",
-      accessorKey: "route_name",
-      header: ({ column }) => <ColumnHeader column={column} title="线路" />,
-      enableSorting: false,
-      cell: ({ row }) => <RequestRouteCell row={row.original} />,
-    },
-    {
-      id: "reasoning",
-      accessorKey: "reasoning_effort",
-      header: ({ column }) => <ColumnHeader column={column} title="推理强度" />,
-      enableSorting: false,
-      cell: ({ row }) => <RequestReasoningCell row={row.original} />,
-    },
-    {
       id: "timing",
       header: () => <span className="text-muted-foreground">耗时</span>,
       enableSorting: false,
+      // 副行小字不参与撑宽；封顶后余量让给线路等文本列。
+      maxSize: 128,
       cell: ({ row }) => <RequestTimingCell row={row.original} />,
     },
     {
@@ -156,6 +159,7 @@ export function requestOsColumns(
       header: () => <span className="text-muted-foreground">操作</span>,
       enableSorting: false,
       enableHiding: false,
+      meta: { fixedWidth: true },
       cell: ({ row }) => (
         <div onClick={(e) => e.stopPropagation()}>
           <Button
