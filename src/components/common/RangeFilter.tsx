@@ -82,12 +82,18 @@ export function RangeFilter({
   refreshedAt,
   onRefresh,
   className,
+  showTrigger = true,
+  showRefresh = true,
 }: {
   value: RangeValue;
   onChange: (next: RangeValue) => void;
   refreshedAt?: number;
   onRefresh?: () => void;
   className?: string;
+  /** 是否渲染时间区间触发按钮，默认 true。 */
+  showTrigger?: boolean;
+  /** 是否渲染「最后刷新」区域，默认 true。 */
+  showRefresh?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState<Date | undefined>();
@@ -127,60 +133,62 @@ export function RangeFilter({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "flex h-7 items-center gap-1 rounded-md border bg-background px-2 text-xs whitespace-nowrap transition-colors outline-none select-none",
-              "hover:bg-muted/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40",
-              open ? "border-foreground/25 bg-muted/40" : "border-input",
-            )}
-          >
-            <CalendarIcon className="text-muted-foreground size-3 shrink-0" />
-            <span>{triggerLabel}</span>
-            <ChevronDownIcon className="text-muted-foreground size-3 shrink-0 opacity-70" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={6} className="w-[17.5rem] gap-0 p-2">
-          <div className="grid grid-cols-2 gap-0.5">
-            {RANGE_PRESETS.map((p) => {
-              const active = value.preset === p.value;
-              return (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => pickPreset(p.value)}
-                  className={cn(
-                    "h-7 rounded-md px-1.5 text-xs transition-colors",
-                    active
-                      ? "bg-foreground text-background font-medium"
-                      : "text-foreground/80 hover:bg-muted",
-                  )}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="bg-border/80 my-2 h-px" />
-
-          <div className="flex items-end gap-1.5">
-            <DateField label="开始" value={draftFrom} onChange={setDraftFrom} />
-            <ArrowRightIcon className="text-muted-foreground mb-2 size-3 shrink-0 opacity-50" />
-            <DateField label="结束" value={draftTo} onChange={setDraftTo} />
-          </div>
-
-          <div className="mt-2 flex justify-end">
-            <Button size="xs" disabled={!draftFrom || !draftTo} onClick={applyCustom}>
-              应用
+      {showTrigger ? (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                "font-normal",
+                open && "border-foreground/25 bg-muted/40",
+              )}
+            >
+              <CalendarIcon className="text-muted-foreground" />
+              <span>{triggerLabel}</span>
+              <ChevronDownIcon className="text-muted-foreground opacity-70" />
             </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+          </PopoverTrigger>
+          <PopoverContent align="start" sideOffset={6} className="w-[17.5rem] gap-0 p-2">
+            <div className="grid grid-cols-2 gap-0.5">
+              {RANGE_PRESETS.map((p) => {
+                const active = value.preset === p.value;
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => pickPreset(p.value)}
+                    className={cn(
+                      "h-7 rounded-md px-1.5 text-xs transition-colors",
+                      active
+                        ? "bg-foreground text-background font-medium"
+                        : "text-foreground/80 hover:bg-muted",
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
 
-      {onRefresh ? (
+            <div className="bg-border/80 my-2 h-px" />
+
+            <div className="flex items-end gap-1.5">
+              <DateField label="开始" value={draftFrom} onChange={setDraftFrom} />
+              <ArrowRightIcon className="text-muted-foreground mb-2 size-3 shrink-0 opacity-50" />
+              <DateField label="结束" value={draftTo} onChange={setDraftTo} />
+            </div>
+
+            <div className="mt-2 flex justify-end">
+              <Button size="xs" disabled={!draftFrom || !draftTo} onClick={applyCustom}>
+                应用
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+
+      {showRefresh && onRefresh ? (
         <div className="text-muted-foreground ml-auto flex items-center gap-1.5 text-[11px] tabular-nums">
           {refreshedAt ? <span>最后刷新 {formatClock(refreshedAt)}</span> : null}
           <Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="刷新">

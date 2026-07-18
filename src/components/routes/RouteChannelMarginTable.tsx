@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { listChannelModels } from "@/lib/api/channelModels";
 import { listChannelPrices } from "@/lib/api/channelPrices";
 import { listChannelCostMultipliers } from "@/lib/api/channelCostMultipliers";
 import {
@@ -50,6 +51,8 @@ type MarginRow = {
 };
 
 type ChannelCostBundle = {
+  /** 该渠道已启用绑定的模型内部 id；未加载完成时为 null。 */
+  boundModelIds: Set<number> | null;
   prices: Awaited<ReturnType<typeof listChannelPrices>>;
   multipliers: Awaited<ReturnType<typeof listChannelCostMultipliers>>;
   rechargeFactor: string | null;
@@ -76,14 +79,18 @@ function buildMarginRows(
   ratio: number | null,
 ): MarginRow[] {
   const channelMap = Object.fromEntries(channels.map((c) => [c.id, c.name]));
+  const modelById = new Map(models.map((m) => [m.id, m]));
   const rows: MarginRow[] = [];
 
   channelIds.forEach((channelId, idx) => {
     const bundle = bundles[idx];
-    if (!bundle) return;
+    if (!bundle?.boundModelIds) return;
     const channelName = channelMap[channelId] ?? `渠道 #${channelId}`;
 
-    for (const model of models) {
+    for (const modelId of bundle.boundModelIds) {
+      const model = modelById.get(modelId);
+      if (!model) continue;
+
       const cost = resolveChannelIOCost({
         modelId: model.id,
         absolutePrices: bundle.prices,
@@ -164,12 +171,18 @@ export function RouteChannelMarginTable({
     queries: channelIds.map((channelId) => ({
       queryKey: ["channel-cost-bundle", channelId, "route-margin-table"],
       queryFn: async (): Promise<ChannelCostBundle> => {
-        const [prices, multipliers, factors] = await Promise.all([
+        const [boundModels, prices, multipliers, factors] = await Promise.all([
+          listChannelModels(channelId),
           listChannelPrices(channelId),
           listChannelCostMultipliers(channelId),
           listChannelRechargeFactors(channelId),
         ]);
         return {
+          boundModelIds: new Set(
+            boundModels
+              .filter((m) => m.status === "enabled")
+              .map((m) => m.model_id),
+          ),
           prices,
           multipliers,
           rechargeFactor: pickCurrentChannelRechargeFactor(factors)?.factor ?? null,
@@ -191,6 +204,7 @@ export function RouteChannelMarginTable({
         bundles.map(
           (b) =>
             b ?? {
+              boundModelIds: null,
               prices: [],
               multipliers: [],
               rechargeFactor: null,
@@ -245,7 +259,7 @@ export function RouteChannelMarginTable({
           </p>
         ) : rows.length === 0 ? (
           <p className="text-muted-foreground p-4 text-center text-xs">
-            所选渠道暂无已配置成本的模型（需基准价 + 成本倍率，或绝对成本覆盖）
+            所选渠道暂无已绑定且已配置成本的模型（需渠道模型绑定 + 基准价与成本倍率，或绝对成本覆盖）
           </p>
         ) : (
           <Table containerClassName="overflow-visible">

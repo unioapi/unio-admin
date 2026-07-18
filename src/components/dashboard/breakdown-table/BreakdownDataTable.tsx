@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { EyeIcon } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -59,9 +59,27 @@ function autoSizeValue(row: BreakdownRow, columnId: string) {
   }
 }
 
+function BreakdownActionCell({
+  dimension,
+  row,
+}: {
+  dimension: BreakdownDimension;
+  row: BreakdownRow;
+}) {
+  const [searchParams] = useSearchParams();
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <Button asChild variant="ghost" size="icon-sm" aria-label="查看">
+        <Link to={breakdownRowHref(dimension, row, searchParams)}>
+          <EyeIcon />
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
 function breakdownActionColumn(
   dimension: BreakdownDimension,
-  searchParams: URLSearchParams,
 ): ColumnDef<BreakdownRow> {
   return {
     id: "action",
@@ -72,13 +90,7 @@ function breakdownActionColumn(
     enableResizing: false,
     enableHiding: false,
     cell: ({ row }) => (
-      <div onClick={(e) => e.stopPropagation()}>
-        <Button asChild variant="ghost" size="icon-sm" aria-label="查看">
-          <Link to={breakdownRowHref(dimension, row.original, searchParams)}>
-            <EyeIcon />
-          </Link>
-        </Button>
-      </div>
+      <BreakdownActionCell dimension={dimension} row={row.original} />
     ),
   };
 }
@@ -87,14 +99,11 @@ export function BreakdownDataTable({
   dimension,
   range,
   active,
-  toolbarStart,
 }: {
   dimension: BreakdownDimension;
   range: RangeQuery;
   active: boolean;
-  toolbarStart?: ReactNode;
 }) {
-  const [searchParams] = useSearchParams();
   const thresholds = useMetricThresholds();
 
   const q = useQuery({
@@ -109,9 +118,9 @@ export function BreakdownDataTable({
   const columns = useMemo(
     () => [
       ...createBreakdownColumns(dimension, nameLabel, thresholds),
-      breakdownActionColumn(dimension, searchParams),
+      breakdownActionColumn(dimension),
     ],
-    [dimension, nameLabel, searchParams, thresholds],
+    [dimension, nameLabel, thresholds],
   );
   const columnLabels = useMemo(() => {
     const labels = breakdownColumnLabels(dimension, nameLabel);
@@ -145,8 +154,9 @@ export function BreakdownDataTable({
         getAutoSizeValue={autoSizeValue}
         emptyMessage="区间内暂无数据"
         getRowId={(row, i) => `${row.label}-${i}`}
-        toolbarStart={toolbarStart}
         bordered={false}
+        enablePagination={false}
+        showViewOptions={false}
       />
     </div>
   );

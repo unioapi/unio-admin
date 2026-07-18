@@ -17,6 +17,7 @@ const PAGE_SIZE = 20;
 // 记录与触发入口(目录页的同步按钮)同屏,同步完直接看结果)。
 export function CatalogSyncJobsPanel() {
   const { page, setPage, sorting, setSorting, sort } = useServerList({
+    urlKey: "models:catalog-sync-jobs",
     defaultSort: { id: "created_at", desc: true },
   });
 

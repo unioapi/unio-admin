@@ -6,7 +6,6 @@ import { listBillingExceptions, listLedgerEntries } from "@/lib/api/ledger";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
-import type { FilterChip } from "@/components/openstatus-table";
 import {
   billingExceptionOsColumns,
   ledgerEntryOsColumns,
@@ -80,18 +79,13 @@ export function LedgerPage() {
   );
 }
 
-function userChip(userId: number | undefined, onRemove: () => void): FilterChip[] {
-  return userId != null
-    ? [{ id: "user", label: `用户 · ${userId}`, onRemove }]
-    : [];
-}
-
 function EntriesPanel() {
   const [searchParams] = useSearchParams();
   const [userIdInput, setUserIdInput] = useState(
     () => searchParams.get("userId") ?? "",
   );
   const { page, setPage, sorting, setSorting, sort } = useServerList({
+    urlKey: "ledger:entries",
     defaultSort: { id: "created_at", desc: true },
   });
   const userId = useDebouncedValue(parsePositiveInt(userIdInput), 300);
@@ -128,14 +122,6 @@ function EntriesPanel() {
       loading={query.isPending}
       refetching={query.isFetching && !query.isPending}
       emptyContent={<PanelEmpty label="账本流水" />}
-      chips={userChip(userId, () => {
-        setUserIdInput("");
-        setPage(1);
-      })}
-      onClearChips={() => {
-        setUserIdInput("");
-        setPage(1);
-      }}
       toolbarFilters={
         <Input
           placeholder="用户 ID"
@@ -170,6 +156,7 @@ function ExceptionsPanel() {
     );
   };
   const { page, setPage, sorting, setSorting, sort } = useServerList({
+    urlKey: "ledger:exceptions",
     defaultSort: { id: "created_at", desc: true },
   });
   const userId = useDebouncedValue(parsePositiveInt(userIdInput), 300);
@@ -198,14 +185,6 @@ function ExceptionsPanel() {
 
   if (query.isError) return <ErrorAlert message={query.error.message} />;
 
-  const chips: FilterChip[] = [
-    ...userChip(userId, () => {
-      setUserIdInput("");
-      setPage(1);
-    }),
-  ];
-  // 类型 / 原因码已在 FacetFilterButton 内展示，不再单独出 chip。
-
   return (
     <ServerDataTable
       storageKey="ledger:exceptions"
@@ -222,13 +201,6 @@ function ExceptionsPanel() {
       loading={query.isPending}
       refetching={query.isFetching && !query.isPending}
       emptyContent={<PanelEmpty label="计费异常" />}
-      chips={chips}
-      onClearChips={() => {
-        setUserIdInput("");
-        setEventType("");
-        setReasonCode("");
-        setPage(1);
-      }}
       toolbarFilters={
         <>
           <FacetFilterButton

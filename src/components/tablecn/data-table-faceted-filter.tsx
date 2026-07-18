@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import type { Column } from "@tanstack/react-table";
 import { Check, PlusCircle, XCircle } from "lucide-react";
+import * as React from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,80 +20,76 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type { FacetOption } from "./types";
+import type { Option } from "@/components/tablecn/types/data-table";
 
-/**
- * 受控 facet 筛选（server 表格用），视觉对齐请求中心 `DataTableFacetedFilter`：
- * 虚线描边 + PlusCircle / XCircle + Command 列表 + 已选 Badge。
- */
-export function FacetFilterButton({
-  label,
-  value,
-  options,
-  onChange,
-  multiple = false,
-}: {
-  label: string;
-  value: string[];
-  options: FacetOption[];
-  onChange: (next: string[]) => void;
+interface DataTableFacetedFilterProps<TData, TValue> {
+  column?: Column<TData, TValue>;
+  title?: string;
+  options: Option[];
   multiple?: boolean;
-  /** @deprecated 保留以免破坏调用方；清除用 × /「全部」 */
-  allOption?: string | false;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedValues = new Set(value);
+}
 
-  const clear = useCallback(() => {
-    onChange([]);
-    setOpen(false);
-  }, [onChange]);
+export function DataTableFacetedFilter<TData, TValue>({
+  column,
+  title,
+  options,
+  multiple,
+}: DataTableFacetedFilterProps<TData, TValue>) {
+  const [open, setOpen] = React.useState(false);
 
-  const onItemSelect = useCallback(
-    (option: FacetOption, isSelected: boolean) => {
-      if (multiple) {
-        const next = new Set(selectedValues);
-        if (isSelected) next.delete(option.value);
-        else next.add(option.value);
-        onChange(Array.from(next));
-        return;
-      }
-      if (isSelected) {
-        clear();
-        return;
-      }
-      onChange([option.value]);
-      setOpen(false);
-    },
-    [clear, multiple, onChange, selectedValues],
+  const columnFilterValue = column?.getFilterValue();
+  const selectedValues = new Set(
+    Array.isArray(columnFilterValue) ? columnFilterValue : [],
   );
 
-  /** 阻止事件冒泡到 PopoverTrigger，否则点 × 只会打开菜单、清不掉。 */
-  const stopTrigger = (event: React.SyntheticEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
+  const onItemSelect = React.useCallback(
+    (option: Option, isSelected: boolean) => {
+      if (!column) return;
+
+      if (multiple) {
+        const newSelectedValues = new Set(selectedValues);
+        if (isSelected) {
+          newSelectedValues.delete(option.value);
+        } else {
+          newSelectedValues.add(option.value);
+        }
+        const filterValues = Array.from(newSelectedValues);
+        column.setFilterValue(filterValues.length ? filterValues : undefined);
+      } else {
+        column.setFilterValue(isSelected ? undefined : [option.value]);
+        setOpen(false);
+      }
+    },
+    [column, multiple, selectedValues],
+  );
+
+  const onReset = React.useCallback(
+    (event?: React.SyntheticEvent) => {
+      event?.preventDefault();
+      event?.stopPropagation();
+      column?.setFilterValue(undefined);
+      setOpen(false);
+    },
+    [column],
+  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="border-dashed font-normal">
-          {selectedValues.size > 0 ? (
+          {selectedValues?.size > 0 ? (
             <span
               role="button"
-              aria-label={`清除${label}筛选`}
+              aria-label={`清除${title ?? ""}筛选`}
               tabIndex={0}
               className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              onPointerDown={stopTrigger}
-              onClick={(event) => {
-                stopTrigger(event);
-                clear();
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
               }}
+              onClick={onReset}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  stopTrigger(event);
-                  clear();
-                }
+                if (event.key === "Enter" || event.key === " ") onReset(event);
               }}
             >
               <XCircle />
@@ -99,8 +97,8 @@ export function FacetFilterButton({
           ) : (
             <PlusCircle />
           )}
-          {label}
-          {selectedValues.size > 0 ? (
+          {title}
+          {selectedValues?.size > 0 && (
             <>
               <Separator
                 orientation="vertical"
@@ -127,7 +125,7 @@ export function FacetFilterButton({
                       <Badge
                         variant="secondary"
                         key={option.value}
-                        className="max-w-28 truncate rounded-sm px-1 font-normal"
+                        className="rounded-sm px-1 font-normal"
                       >
                         {option.label}
                       </Badge>
@@ -135,35 +133,18 @@ export function FacetFilterButton({
                 )}
               </div>
             </>
-          ) : null}
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-50 p-0" align="start">
         <Command>
-          <CommandInput placeholder={label} />
+          <CommandInput placeholder={title} />
           <CommandList className="max-h-full">
             <CommandEmpty>无匹配项</CommandEmpty>
             <CommandGroup className="max-h-[300px] scroll-py-1 overflow-y-auto overflow-x-hidden">
-              {!multiple ? (
-                <CommandItem
-                  className="[&>svg:last-child]:hidden"
-                  onSelect={() => clear()}
-                >
-                  <div
-                    className={cn(
-                      "flex size-4 items-center justify-center rounded-sm border border-primary",
-                      selectedValues.size === 0
-                        ? "bg-primary text-primary-foreground"
-                        : "opacity-50 [&_svg]:invisible",
-                    )}
-                  >
-                    <Check />
-                  </div>
-                  <span className="truncate">全部</span>
-                </CommandItem>
-              ) : null}
               {options.map((option) => {
                 const isSelected = selectedValues.has(option.value);
+
                 return (
                   <CommandItem
                     key={option.value}
@@ -180,34 +161,33 @@ export function FacetFilterButton({
                     >
                       <Check />
                     </div>
-                    <OptionLabel option={option} />
+                    {option.icon && <option.icon />}
+                    <span className="truncate">{option.label}</span>
+                    {option.count && (
+                      <span className="ml-auto font-mono text-xs">
+                        {option.count}
+                      </span>
+                    )}
                   </CommandItem>
                 );
               })}
             </CommandGroup>
-            {selectedValues.size > 0 ? (
+            {selectedValues.size > 0 && (
               <>
                 <CommandSeparator />
                 <CommandGroup>
                   <CommandItem
-                    onSelect={() => clear()}
+                    onSelect={() => onReset()}
                     className="justify-center text-center"
                   >
                     清除筛选
                   </CommandItem>
                 </CommandGroup>
               </>
-            ) : null}
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
   );
-}
-
-function OptionLabel({ option }: { option: FacetOption }) {
-  if (option.render) {
-    return <span className="min-w-0 flex-1 truncate">{option.render()}</span>;
-  }
-  return <span className="truncate">{option.label}</span>;
 }

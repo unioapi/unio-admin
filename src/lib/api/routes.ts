@@ -22,6 +22,8 @@ export interface Route {
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
+  // 会话粘性路由开关：null=继承系统设置默认，true/false=线路显式覆盖。
+  sticky_enabled: boolean | null;
   description: string | null;
   channels: RouteChannel[];
   created_at: string;
@@ -49,6 +51,8 @@ export interface CreateRouteInput {
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
+  // 会话粘性路由开关：null=继承系统设置默认。
+  sticky_enabled: boolean | null;
   description: string | null;
   channel_ids: number[];
 }

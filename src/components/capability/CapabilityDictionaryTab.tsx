@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { parseAsString, useQueryState } from "nuqs";
 import { toast } from "sonner";
 import { PlusIcon } from "lucide-react";
 import {
@@ -21,7 +22,6 @@ import {
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
-import type { FilterChip } from "@/components/openstatus-table";
 import {
   CAPABILITY_KEY_OS_COLUMN_LABELS,
   capabilityKeyOsColumns,
@@ -96,14 +96,35 @@ export function CapabilityDictionaryTab() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CapabilityKeyDef | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CapabilityKeyDef | null>(null);
-  const [protocolScope, setProtocolScope] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const search = useDebouncedValue(searchInput.trim(), 300);
 
-  const { page, setPage, sorting, setSorting } = useServerList({
+  const { page, setPage, sorting, setSorting, urlKeys } = useServerList({
+    urlKey: "capability:dictionary",
     pageSize: PAGE_SIZE,
     defaultSort: { id: "sort_order", desc: false },
   });
+
+  const scopeKey = urlKeys.scope;
+  const [protocolScope, setProtocolScope] = useQueryState(
+    scopeKey,
+    parseAsString.withOptions({ history: "replace", shallow: true }).withDefault(""),
+  );
+  const [searchFromUrl, setSearchUrl] = useQueryState(
+    urlKeys.q,
+    parseAsString.withOptions({ history: "replace", shallow: true }).withDefault(""),
+  );
+  const [searchInput, setSearchInput] = useState(searchFromUrl);
+  const search = useDebouncedValue(searchInput.trim(), 300);
+
+  useEffect(() => {
+    setSearchInput(searchFromUrl);
+  }, [searchFromUrl]);
+
+  useEffect(() => {
+    const next = search || null;
+    if ((searchFromUrl || "") !== (search || "")) {
+      void setSearchUrl(next);
+    }
+  }, [search, searchFromUrl, setSearchUrl]);
 
   const keysQuery = useQuery({
     queryKey: ["capability-keys", "v2"],
@@ -150,22 +171,6 @@ export function CapabilityDictionaryTab() {
     return filteredRows.slice(start, start + PAGE_SIZE);
   }, [filteredRows, page]);
 
-  const chips = useMemo((): FilterChip[] => {
-    const out: FilterChip[] = [];
-    // 协议归属已在 FacetFilterButton 内展示，不再单独出 chip。
-    if (search) {
-      out.push({
-        id: "search",
-        label: `搜索 · ${search}`,
-        onRemove: () => {
-          setSearchInput("");
-          setPage(1);
-        },
-      });
-    }
-    return out;
-  }, [search, setPage]);
-
   const deleteMutation = useMutation({
     mutationFn: deleteCapabilityKey,
     onSuccess: () => {
@@ -204,12 +209,6 @@ export function CapabilityDictionaryTab() {
     if (!open) setEditing(null);
   }
 
-  function resetFilters() {
-    setProtocolScope("");
-    setSearchInput("");
-    setPage(1);
-  }
-
   if (keysQuery.isError) {
     return (
       <Alert variant="destructive">
@@ -243,8 +242,6 @@ export function CapabilityDictionaryTab() {
           setPage(1);
         }}
         searchPlaceholder="搜索 key / 展示名 / 描述"
-        chips={chips}
-        onClearChips={resetFilters}
         pinnedColumnId="key"
         toolbarLeading={
           <Button size="sm" onClick={openCreate}>
@@ -259,7 +256,7 @@ export function CapabilityDictionaryTab() {
             value={protocolScope ? [protocolScope] : []}
             options={PROTOCOL_SCOPE_OPTIONS}
             onChange={(v) => {
-              setProtocolScope(v[0] ?? "");
+              void setProtocolScope(v[0] ?? null);
               setPage(1);
             }}
           />

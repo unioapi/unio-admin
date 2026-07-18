@@ -46,8 +46,6 @@ export function ProvidersPage() {
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索名称 / slug"
-          chips={table.chips}
-          onClearChips={table.resetFilters}
           toolbarLeading={
             <ProviderFormDialog>
               <Button size="sm">

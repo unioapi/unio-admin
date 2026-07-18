@@ -17,6 +17,7 @@ import {
   getRouteOpsRequests,
 } from "@/lib/api/routesOps";
 import type { RangeQuery } from "@/lib/api/dashboard";
+import { useServerList } from "@/hooks/useServerList";
 import { ConfigurableDataTable } from "@/components/data-table";
 import { ServerDataTable } from "@/components/openstatus-table";
 import {
@@ -318,11 +319,14 @@ function BindingsSection({ routeId }: { routeId: number }) {
 }
 
 function RequestsSection({ routeId, range }: { routeId: number; range: RangeQuery }) {
-  const [page, setPage] = useState(1);
+  const { page, setPage } = useServerList({
+    urlKey: `route:${routeId}:requests`,
+    pageSize: PAGE_SIZE,
+  });
 
   useEffect(() => {
     setPage(1);
-  }, [range]);
+  }, [range, setPage]);
 
   const q = useQuery({
     queryKey: ["route", routeId, "ops-requests", range, page],
@@ -330,11 +334,12 @@ function RequestsSection({ routeId, range }: { routeId: number; range: RangeQuer
     placeholderData: keepPreviousData,
   });
 
-  const pageCount = Math.max(1, Math.ceil((q.data?.total ?? 0) / PAGE_SIZE));
+  const total = q.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (q.isPending && !q.data) return <TableSkeleton rows={6} cols={6} />;
   if (q.isError) return <ErrorBox message={(q.error as Error).message} />;
-  if (q.data.items.length === 0) {
+  if (total === 0) {
     return (
       <SectionEmpty
         icon={ScrollTextIcon}
@@ -348,13 +353,14 @@ function RequestsSection({ routeId, range }: { routeId: number; range: RangeQuer
     <ServerDataTable
       storageKey={`route:${routeId}:requests`}
       columns={routeOpsRequestColumns()}
-      data={q.data.items}
+      data={q.data?.items ?? []}
       columnLabels={ROUTE_OPS_REQUEST_COLUMN_LABELS}
-      total={q.data.total}
+      total={total}
       page={page}
       pageCount={pageCount}
       onPageChange={setPage}
       bordered={false}
+      showViewOptions={false}
       refetching={q.isFetching && !q.isPending}
       pinnedColumnId="at"
       getRowId={(row) => row.request_id}

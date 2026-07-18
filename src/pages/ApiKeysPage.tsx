@@ -188,8 +188,6 @@ export function ApiKeysPage() {
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索 Key 名称 / 前缀"
-          chips={table.chips}
-          onClearChips={table.resetFilters}
         />
       )}
 

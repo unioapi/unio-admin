@@ -1,45 +1,65 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type PaginationState,
+  type SortingState,
+  type Updater,
+  type VisibilityState,
 } from "@tanstack/react-table";
+import { parseAsInteger, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
-import { DataTable } from "./data-table";
-import { DataTableViewOptions } from "./data-table-view-options";
 import {
-  autoSizeTableLayout,
-  clampColumnSizing,
-  columnLabelsFromDefs,
-  computeContentMinWidths,
-  defaultTableLayout,
-  type ColumnFlexMode,
-} from "./helpers";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { DataTableSkeleton } from "@/components/tablecn/data-table-skeleton";
+import { DataTablePagination } from "@/components/tablecn/data-table-pagination";
+import { DataTableViewOptions } from "@/components/tablecn/data-table-view-options";
+import { getSortingStateParser } from "@/components/tablecn/lib/parsers";
+import { getColumnPinningStyle } from "@/components/tablecn/lib/data-table";
 import {
-  usePersistedTableState,
-  type TableLayoutPrefs,
-} from "./use-persisted-table-state";
+  deriveTableUrlKeys,
+  sanitizeTableUrlNamespace,
+} from "@/lib/table-url-keys";
+import type { TableLayoutPrefs } from "./use-persisted-table-state";
+
+const DEFAULT_PAGE_SIZE = 20;
+
+const QUERY_STATE_OPTIONS = {
+  history: "replace" as const,
+  shallow: true,
+};
 
 export type ConfigurableDataTableProps<TData> = {
-  /** localStorage 键（不含前缀），如 `providers:ops-table` */
+  /** localStorage / URL 命名空间键，如 `providers:ops-table` */
   storageKey: string;
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
   columnLabels?: Record<string, string>;
-  /** 不参与拖拽的列 id；默认 `name`；传 null 则全部可拖 */
+  /** @deprecated tablecn 版不支持列固定 */
   pinnedColumnId?: string | null;
-  /** proportional：按 minSize 比例；equal：各列等分；content：按当前页内容宽度比例分满整表 */
-  columnFlexMode?: ColumnFlexMode;
+  /** @deprecated tablecn 版不使用弹性列宽 */
+  columnFlexMode?: "proportional" | "equal" | "content";
+  /** @deprecated 保留 API；列可见性由 View 选项控制 */
   defaultLayout?: TableLayoutPrefs;
-  /** `fixed` 维持定义列宽；`content` 按当前数据估算默认列宽。 */
+  /** @deprecated 保留 API */
   layoutMode?: "fixed" | "content";
+  /** @deprecated 保留 API */
   getAutoSizeValue?: (row: TData, columnId: string) => unknown;
+  /** @deprecated 保留 API */
   sanitizeLayout?: (prefs: TableLayoutPrefs) => TableLayoutPrefs;
   toolbarStart?: ReactNode;
   toolbarEnd?: ReactNode;
   emptyMessage?: string;
-  /** 自定义空状态（替代 emptyMessage 文案） */
   emptyContent?: ReactNode;
   getRowId?: (row: TData, index: number) => string;
   onRowClick?: (row: TData) => void;
@@ -50,52 +70,44 @@ export type ConfigurableDataTableProps<TData> = {
   /** 表格容器额外 class（如 refetch 时 opacity-60） */
   tableClassName?: string;
   className?: string;
+  /** 每页条数；默认 20 */
+  pageSize?: number;
+  /**
+   * 是否启用分页；默认 false。
+   * 详情/仪表盘嵌套表一次展全；主列表若需分页再显式打开。
+   */
+  enablePagination?: boolean;
+  /** 是否显示列显隐 View；默认 false（嵌套表不需要） */
+  showViewOptions?: boolean;
 };
 
-function TableToolbar({
-  toolbarStart,
-  toolbarEnd,
-  table,
-  columnLabels,
-  onReset,
-}: {
-  toolbarStart?: ReactNode;
-  toolbarEnd?: ReactNode;
-  table: ReturnType<typeof useReactTable<unknown>>;
-  columnLabels: Record<string, string>;
-  onReset: () => void;
-}) {
+function columnIdOf<TData>(col: ColumnDef<TData, unknown>): string {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        {toolbarStart}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {toolbarEnd}
-        <DataTableViewOptions
-          table={table}
-          labels={columnLabels}
-          onReset={onReset}
-        />
-      </div>
-    </div>
+    col.id ??
+    ((col as { accessorKey?: string }).accessorKey as string | undefined) ??
+    ""
   );
 }
 
+function columnLabelsFromDefs<TData>(
+  columns: ColumnDef<TData, unknown>[],
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const col of columns) {
+    const id = columnIdOf(col);
+    if (id) out[id] = col.meta?.label ?? id;
+  }
+  return out;
+}
+
 /**
- * 可配置运维列表：列显隐 / 列宽 / 列顺序 + localStorage 持久化。
+ * 客户端数据表：分页 / 排序同步 URL（tablecn 风格）。
  */
 export function ConfigurableDataTable<TData>({
   storageKey,
   data,
-  columns,
+  columns: columnsProp,
   columnLabels: columnLabelsProp,
-  pinnedColumnId = "name",
-  columnFlexMode = "equal",
-  defaultLayout: defaultLayoutProp,
-  layoutMode = "fixed",
-  getAutoSizeValue,
-  sanitizeLayout,
   toolbarStart,
   toolbarEnd,
   emptyMessage = "暂无数据",
@@ -107,88 +119,138 @@ export function ConfigurableDataTable<TData>({
   bordered = true,
   tableClassName,
   className,
+  pageSize: pageSizeProp = DEFAULT_PAGE_SIZE,
+  enablePagination = false,
+  showViewOptions = false,
 }: ConfigurableDataTableProps<TData>) {
+  const namespace = sanitizeTableUrlNamespace(storageKey);
+  const keys = deriveTableUrlKeys(namespace);
+
   const columnLabels = useMemo(
-    () => columnLabelsProp ?? columnLabelsFromDefs(columns),
-    [columnLabelsProp, columns],
+    () => columnLabelsProp ?? columnLabelsFromDefs(columnsProp),
+    [columnLabelsProp, columnsProp],
   );
 
-  const defaultLayout = useMemo(() => {
-    if (defaultLayoutProp) return defaultLayoutProp;
-    if (layoutMode === "content") {
-      return autoSizeTableLayout(columns, data, columnLabels, getAutoSizeValue);
-    }
-    return defaultTableLayout(columns);
-  }, [columnLabels, columns, data, defaultLayoutProp, getAutoSizeValue, layoutMode]);
-
-  const contentMinWidths = useMemo(
+  const columns = useMemo(
     () =>
-      computeContentMinWidths(columns, data, columnLabels, getAutoSizeValue, {
-        density: columnFlexMode === "content" ? "compact" : "default",
+      columnsProp.map((col) => {
+        const id = columnIdOf(col);
+        const label = columnLabels[id] ?? col.meta?.label ?? id;
+        return {
+          ...col,
+          id: id || col.id,
+          meta: { ...col.meta, label },
+        };
       }),
-    [columnFlexMode, columnLabels, columns, data, getAutoSizeValue],
+    [columnLabels, columnsProp],
   );
 
-  const sanitizePrefs = useCallback(
-    (prefs: TableLayoutPrefs) => {
-      const clamped: TableLayoutPrefs = {
-        ...prefs,
-        columnSizing: clampColumnSizing(
-          prefs.columnSizing,
-          columns as ColumnDef<unknown, unknown>[],
-        ),
-      };
-      return sanitizeLayout ? sanitizeLayout(clamped) : clamped;
+  // Stable string key so nuqs parser identity doesn't thrash on Set recreation.
+  const columnIdsKey = useMemo(
+    () =>
+      columns
+        .map((c) => c.id)
+        .filter(Boolean)
+        .join("\0"),
+    [columns],
+  );
+  const columnIds = useMemo(
+    () => new Set(columnIdsKey ? columnIdsKey.split("\0") : []),
+    [columnIdsKey],
+  );
+
+  const [page, setPage] = useQueryState(
+    keys.page,
+    parseAsInteger.withOptions(QUERY_STATE_OPTIONS).withDefault(1),
+  );
+  const [perPage, setPerPage] = useQueryState(
+    keys.perPage,
+    parseAsInteger.withOptions(QUERY_STATE_OPTIONS).withDefault(pageSizeProp),
+  );
+  const [sorting, setSortingRaw] = useQueryState(
+    keys.sort,
+    getSortingStateParser(columnIds)
+      .withOptions(QUERY_STATE_OPTIONS)
+      .withDefault([]),
+  );
+
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+
+  const pageSize = enablePagination
+    ? Math.max(1, perPage || pageSizeProp || DEFAULT_PAGE_SIZE)
+    : Math.max(data.length, 1);
+  const pageCount = Math.max(1, Math.ceil(Math.max(data.length, 1) / pageSize));
+  // Clamp before render — OOB pageIndex makes getPaginationRowModel return 0 rows.
+  const safePage = Math.min(Math.max(1, page || 1), pageCount);
+
+  useEffect(() => {
+    if (enablePagination && page !== safePage) void setPage(safePage);
+  }, [enablePagination, page, safePage, setPage]);
+
+  const pagination: PaginationState = useMemo(
+    () => ({ pageIndex: safePage - 1, pageSize }),
+    [safePage, pageSize],
+  );
+
+  const sortingState: SortingState = sorting ?? [];
+
+  const onPaginationChange = useCallback(
+    (updater: Updater<PaginationState>) => {
+      if (!enablePagination) return;
+      const next = typeof updater === "function" ? updater(pagination) : updater;
+      void setPage(next.pageIndex + 1);
+      void setPerPage(Math.max(1, next.pageSize));
     },
-    [columns, sanitizeLayout],
+    [enablePagination, pagination, setPage, setPerPage],
   );
 
-  const {
-    columnOrder,
-    columnVisibility,
-    columnSizing,
-    setColumnOrder,
-    setColumnVisibility,
-    setColumnSizing,
-    resetLayout,
-  } = usePersistedTableState(storageKey, defaultLayout, sanitizePrefs);
+  const onSortingChange = useCallback(
+    (updater: Updater<SortingState>) => {
+      const next =
+        typeof updater === "function" ? updater(sortingState) : updater;
+      void setSortingRaw(next.length > 0 ? next : null);
+      if (enablePagination) void setPage(1);
+    },
+    [enablePagination, setPage, setSortingRaw, sortingState],
+  );
 
   const table = useReactTable({
     data,
     columns,
-    state: { columnOrder, columnVisibility, columnSizing },
-    onColumnOrderChange: setColumnOrder,
+    state: { columnVisibility, sorting: sortingState, pagination },
     onColumnVisibilityChange: setColumnVisibility,
-    onColumnSizingChange: setColumnSizing,
+    onSortingChange,
+    onPaginationChange,
     getCoreRowModel: getCoreRowModel(),
-    columnResizeMode: "onChange",
-    enableColumnResizing: true,
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getRowId,
+    autoResetPageIndex: false,
   });
 
-  const borderWrap = bordered
-    ? "table-scroll-x min-w-0 rounded-lg border"
-    : "table-scroll-x min-w-0";
-
-  const toolbar = (
-    <TableToolbar
-      toolbarStart={toolbarStart}
-      toolbarEnd={toolbarEnd}
-      table={table as ReturnType<typeof useReactTable<unknown>>}
-      columnLabels={columnLabels}
-      onReset={resetLayout}
-    />
-  );
+  const showToolbar =
+    Boolean(toolbarStart) || Boolean(toolbarEnd) || showViewOptions;
+  const toolbar = showToolbar ? (
+    <div className="mb-1 flex flex-wrap items-center gap-2 p-1">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        {toolbarStart}
+      </div>
+      {toolbarEnd || showViewOptions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {toolbarEnd}
+          {showViewOptions ? (
+            <DataTableViewOptions table={table} align="end" />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
 
   if (loading) {
     return (
       <div className={className}>
         {toolbar}
-        <div className={cn(borderWrap, "p-3")}>
-          {Array.from({ length: loadingRows }).map((_, i) => (
-            <Skeleton key={i} className={cn("h-8 w-full", i < loadingRows - 1 && "mb-2")} />
-          ))}
-        </div>
+        <DataTableSkeleton columnCount={columns.length} rowCount={loadingRows} />
       </div>
     );
   }
@@ -204,20 +266,90 @@ export function ConfigurableDataTable<TData>({
     );
   }
 
+  const rows = table.getRowModel().rows;
+
   return (
     <div className={className}>
       {toolbar}
-      <div className={cn(borderWrap, tableClassName)}>
-        <DataTable
-          table={table}
-          columnOrder={columnOrder}
-          onColumnOrderChange={setColumnOrder}
-          pinnedColumnId={pinnedColumnId}
-          columnFlexMode={columnFlexMode}
-          contentMinWidths={contentMinWidths}
-          emptyMessage={emptyMessage}
-          onRowClick={onRowClick}
-        />
+      <div
+        className={cn(
+          "flex w-full flex-col gap-2.5 overflow-auto",
+          tableClassName,
+        )}
+      >
+        <div
+          className={cn(
+            "overflow-hidden rounded-md",
+            bordered && "border",
+          )}
+        >
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      style={{
+                        ...getColumnPinningStyle({ column: header.column }),
+                      }}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {rows.length ? (
+                rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className={cn(
+                      onRowClick &&
+                        "cursor-pointer transition-colors hover:bg-accent/50",
+                    )}
+                    onClick={
+                      onRowClick ? () => onRowClick(row.original) : undefined
+                    }
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        style={{
+                          ...getColumnPinningStyle({ column: cell.column }),
+                        }}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={table.getAllColumns().length}
+                    className="text-muted-foreground h-24 text-center"
+                  >
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        {enablePagination && pageCount > 1 ? (
+          <DataTablePagination table={table} pageSizeOptions={[10, 20, 30, 50]} />
+        ) : null}
       </div>
     </div>
   );

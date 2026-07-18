@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { parseAsString, useQueryState } from "nuqs";
 import { ActivityIcon } from "lucide-react";
 import { listRecoveryJobs } from "@/lib/api/system";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
-import type { FilterChip } from "@/components/openstatus-table";
 import {
   recoveryJobOsColumns,
   RECOVERY_OS_COLUMN_LABELS,
@@ -27,11 +27,15 @@ const PAGE_SIZE = 20;
 // 任务语义：上游已成功且有可靠 usage、但 settlement 确认前失败的持久化补偿队列;
 // dead(死信)= 自动重试耗尽,已由 worker 收口(释放冻结+记风险敞口),需人工关注。
 export function RecoveryJobsPanel() {
-  const [status, setStatus] = useState("");
   const [userIdInput, setUserIdInput] = useState("");
-  const { page, setPage, sorting, setSorting, sort } = useServerList({
+  const { page, setPage, sorting, setSorting, sort, urlKeys } = useServerList({
+    urlKey: "ledger:recovery-jobs",
     defaultSort: { id: "created_at", desc: true },
   });
+  const [status, setStatus] = useQueryState(
+    urlKeys.status,
+    parseAsString.withOptions({ history: "replace", shallow: true }).withDefault(""),
+  );
   const userId = useDebouncedValue(parsePositiveInt(userIdInput), 300);
 
   const query = useQuery({
@@ -55,16 +59,14 @@ export function RecoveryJobsPanel() {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount, setPage]);
 
-  function reset<T>(setter: (v: T) => void) {
-    return (value: T) => {
-      setter(value);
-      setPage(1);
-    };
+  function resetStatus(v: string) {
+    void setStatus(v || null);
+    setPage(1);
   }
 
-  const chips: FilterChip[] = [];
-  if (userId != null) {
-    chips.push({ id: "user", label: `用户 · ${userId}`, onRemove: () => reset(setUserIdInput)("") });
+  function resetUserId(v: string) {
+    setUserIdInput(v);
+    setPage(1);
   }
 
   return (
@@ -90,12 +92,6 @@ export function RecoveryJobsPanel() {
           loading={query.isPending}
           refetching={query.isFetching && !query.isPending}
           emptyContent={<RecoveryEmpty />}
-          chips={chips}
-          onClearChips={() => {
-            setStatus("");
-            setUserIdInput("");
-            setPage(1);
-          }}
           toolbarFilters={
             <>
               <FacetFilterButton
@@ -103,12 +99,12 @@ export function RecoveryJobsPanel() {
                 multiple={false}
                 value={status ? [status] : []}
                 options={[...RECOVERY_STATUS_OPTIONS]}
-                onChange={(v) => reset(setStatus)(v[0] ?? "")}
+                onChange={(v) => resetStatus(v[0] ?? "")}
               />
               <Input
                 placeholder="用户 ID"
                 value={userIdInput}
-                onChange={(e) => reset(setUserIdInput)(e.target.value)}
+                onChange={(e) => resetUserId(e.target.value)}
                 inputMode="numeric"
                 className="h-8 w-28"
               />

@@ -1,27 +1,28 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  flexRender,
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type PaginationState,
   type SortingState,
+  type Updater,
+  type VisibilityState,
 } from "@tanstack/react-table";
-import { SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
-  DataTable,
-  DataTableViewOptions,
-  clampColumnSizing,
-  computeContentMinWidths,
-  defaultTableLayout,
-  ensureResizableColumns,
-  pinnedColumnIdFromDefs,
-  usePersistedTableState,
-  type ColumnFlexMode,
-} from "@/components/data-table";
-import { FilterChips, type FilterChip } from "./filter-chips";
-import { TablePagination } from "@/components/common/TablePagination";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { DataTableSkeleton } from "@/components/tablecn/data-table-skeleton";
+import { DataTablePagination } from "@/components/tablecn/data-table-pagination";
+import { DataTableViewOptions } from "@/components/tablecn/data-table-view-options";
+import { getColumnPinningStyle } from "@/components/tablecn/lib/data-table";
 
 export interface ServerDataTableProps<TData> {
   storageKey: string;
@@ -49,13 +50,13 @@ export interface ServerDataTableProps<TData> {
   searchValue?: string;
   onSearchChange?: (v: string) => void;
   searchPlaceholder?: string;
-  chips?: FilterChip[];
-  onClearChips?: () => void;
-  /** 不参与拖拽的列 id；默认从列定义推断 */
+  /** 列显隐 View；主列表默认 true，详情嵌套表传 false */
+  showViewOptions?: boolean;
+  /** @deprecated tablecn 版不使用列拖拽；保留 API 兼容 */
   pinnedColumnId?: string | null;
-  /** proportional：按 minSize 比例；equal：各列等分；content：按当前页内容宽度比例分满整表 */
-  columnFlexMode?: ColumnFlexMode;
-  /** 覆盖单列内容宽度估算 */
+  /** @deprecated tablecn 版不使用弹性列宽 */
+  columnFlexMode?: "proportional" | "equal" | "content";
+  /** @deprecated tablecn 版不使用内容宽度估算 */
   getAutoSizeValue?: (row: TData, columnId: string) => unknown;
   onRowClick?: (row: TData) => void;
   /** 表格外框圆角边框；详情内嵌表可传 false */
@@ -63,11 +64,9 @@ export interface ServerDataTableProps<TData> {
 }
 
 export function ServerDataTable<TData>({
-  storageKey,
   columns: columnsProp,
   data,
   columnLabels,
-  total,
   page,
   pageCount,
   onPageChange,
@@ -85,157 +84,198 @@ export function ServerDataTable<TData>({
   searchValue,
   onSearchChange,
   searchPlaceholder = "搜索",
-  chips = [],
-  onClearChips,
-  pinnedColumnId: pinnedColumnIdProp,
-  columnFlexMode = "equal",
-  getAutoSizeValue,
+  showViewOptions = true,
   onRowClick,
   bordered = true,
 }: ServerDataTableProps<TData>) {
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+
   const columns = useMemo(
-    () => ensureResizableColumns(columnsProp),
-    [columnsProp],
+    () =>
+      columnsProp.map((col) => {
+        const id = col.id ?? (col as { accessorKey?: string }).accessorKey ?? "";
+        const label = columnLabels[id] ?? col.meta?.label ?? id;
+        return {
+          ...col,
+          id: id || undefined,
+          meta: { ...col.meta, label },
+        };
+      }),
+    [columnLabels, columnsProp],
   );
 
-  const pinnedColumnId =
-    pinnedColumnIdProp !== undefined
-      ? pinnedColumnIdProp
-      : pinnedColumnIdFromDefs(columns);
+  const safePage = Math.min(Math.max(1, page), Math.max(1, pageCount));
+  useEffect(() => {
+    if (page !== safePage) onPageChange(safePage);
+  }, [onPageChange, page, safePage]);
 
-  const defaultLayout = useMemo(() => defaultTableLayout(columns), [columns]);
-
-  const sanitizePrefs = useCallback(
-    (prefs: ReturnType<typeof defaultTableLayout>) => ({
-      ...prefs,
-      columnSizing: clampColumnSizing(
-        prefs.columnSizing,
-        columns as ColumnDef<unknown, unknown>[],
-      ),
-    }),
-    [columns],
+  const pagination: PaginationState = useMemo(
+    () => ({ pageIndex: safePage - 1, pageSize }),
+    [safePage, pageSize],
   );
 
-  const {
-    columnOrder,
-    columnVisibility,
-    columnSizing,
-    setColumnOrder,
-    setColumnVisibility,
-    setColumnSizing,
-    resetLayout,
-  } = usePersistedTableState(storageKey, defaultLayout, sanitizePrefs);
+  const onPaginationChange = useCallback(
+    (updater: Updater<PaginationState>) => {
+      const next = typeof updater === "function" ? updater(pagination) : updater;
+      onPageChange(next.pageIndex + 1);
+    },
+    [onPageChange, pagination],
+  );
 
   const table = useReactTable({
     data,
     columns,
-    state: { columnVisibility, sorting, columnOrder, columnSizing },
+    state: { columnVisibility, sorting, pagination },
     onColumnVisibilityChange: setColumnVisibility,
-    onColumnOrderChange: setColumnOrder,
-    onColumnSizingChange: setColumnSizing,
     onSortingChange: (updater) => {
       if (!onSortingChange) return;
       const next = typeof updater === "function" ? updater(sorting) : updater;
       onSortingChange(next);
     },
+    onPaginationChange,
     getCoreRowModel: getCoreRowModel(),
     getRowId,
     manualPagination: true,
-    manualFiltering: true,
-    manualSorting: true,
+    manualSorting: Boolean(onSortingChange),
     pageCount,
     enableColumnFilters: false,
-    enableColumnResizing: false,
   });
 
-  const labels = useMemo(() => columnLabels, [columnLabels]);
-  const contentMinWidths = useMemo(
-    () =>
-      computeContentMinWidths(columns, data, labels, getAutoSizeValue, {
-        density: columnFlexMode === "content" ? "compact" : "default",
-      }),
-    [columnFlexMode, columns, data, getAutoSizeValue, labels],
-  );
+  const showToolbar =
+    Boolean(toolbarLeading) ||
+    Boolean(toolbarFilters) ||
+    Boolean(onSearchChange) ||
+    Boolean(toolbarActions) ||
+    showViewOptions;
+
+  // 布局对齐请求中心 DataTableToolbar：筛选/搜索在左，操作与 View 在右
+  const toolbar = showToolbar ? (
+    <div
+      role="toolbar"
+      aria-orientation="horizontal"
+      className="flex w-full items-start justify-between gap-2 p-1"
+    >
+      <div className="flex flex-1 flex-wrap items-center gap-2">
+        {toolbarLeading}
+        {toolbarFilters}
+        {onSearchChange ? (
+          <Input
+            value={searchValue ?? ""}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="h-8 w-40 lg:w-56"
+          />
+        ) : null}
+      </div>
+      {toolbarActions || showViewOptions ? (
+        <div className="flex items-center gap-2">
+          {toolbarActions}
+          {showViewOptions ? (
+            <DataTableViewOptions table={table} align="end" />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
+  if (loading) {
+    return (
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        {toolbar}
+        <DataTableSkeleton columnCount={columns.length} rowCount={8} />
+      </div>
+    );
+  }
+
   const rows = table.getRowModel().rows;
-  const showEmpty = !loading && rows.length === 0;
+  const showEmpty = rows.length === 0;
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {toolbarLeading ? (
-          <div className="flex shrink-0 items-center gap-2">{toolbarLeading}</div>
-        ) : null}
-
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {toolbarFilters}
-
-          {onSearchChange ? (
-            <div className="relative w-52">
-              <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-              <Input
-                value={searchValue ?? ""}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="h-8 pl-8"
-              />
-            </div>
-          ) : null}
-
-          {toolbarActions}
-          <DataTableViewOptions
-            table={table}
-            labels={labels}
-            onReset={() => {
-              onSortingChange?.([]);
-              resetLayout();
-            }}
-          />
-        </div>
-      </div>
-
-      {chips.length > 0 ? (
-        <FilterChips chips={chips} onClearAll={() => onClearChips?.()} />
-      ) : null}
+    <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+      {toolbar}
 
       <div
         className={cn(
-          bordered
-            ? "table-scroll-x min-w-0 rounded-lg border"
-            : "table-scroll-x min-w-0",
+          "flex w-full flex-col gap-2.5 overflow-auto",
           refetching && "opacity-60",
         )}
       >
-        {loading ? (
-          <div className="flex flex-col gap-2 p-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-full" />
-            ))}
-          </div>
-        ) : showEmpty ? (
-          <div className="text-muted-foreground px-3 py-10 text-left text-sm">
-            {emptyContent ?? emptyMessage}
-          </div>
-        ) : (
-          <DataTable
-            table={table}
-            columnOrder={columnOrder}
-            onColumnOrderChange={setColumnOrder}
-            pinnedColumnId={pinnedColumnId}
-            columnFlexMode={columnFlexMode}
-            contentMinWidths={contentMinWidths}
-            emptyMessage={emptyMessage}
-            onRowClick={onRowClick}
-          />
-        )}
-      </div>
+        <div
+          className={cn(
+            "overflow-hidden rounded-md",
+            bordered && "border",
+          )}
+        >
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      style={{
+                        ...getColumnPinningStyle({ column: header.column }),
+                      }}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {showEmpty ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={table.getAllColumns().length}
+                    className="text-muted-foreground h-24 text-center"
+                  >
+                    {emptyContent ?? emptyMessage}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                    className={cn(
+                      onRowClick &&
+                        "cursor-pointer transition-colors hover:bg-accent/50",
+                    )}
+                    onClick={
+                      onRowClick ? () => onRowClick(row.original) : undefined
+                    }
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        style={{
+                          ...getColumnPinningStyle({ column: cell.column }),
+                        }}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
-      <TablePagination
-        total={total}
-        page={page}
-        pageCount={pageCount}
-        pageSize={pageSize}
-        onPageChange={onPageChange}
-      />
+        {!showEmpty ? (
+          <DataTablePagination table={table} pageSizeOptions={[pageSize]} />
+        ) : null}
+      </div>
     </div>
   );
 }

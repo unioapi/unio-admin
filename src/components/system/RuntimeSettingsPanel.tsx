@@ -290,6 +290,8 @@ function SettingEditor({ item }: { item: SettingItem }) {
       return <RateLimitEditor item={item} />;
     case "gateway.channel_ratelimit_cooldown":
       return <CooldownEditor item={item} />;
+    case "gateway.routing_sticky":
+      return <RoutingStickyEditor item={item} />;
     case "gateway.stream_idle_timeout_ms":
     case "gateway.default_channel_timeout_ms":
       return <DurationMsEditor item={item} />;
@@ -423,6 +425,89 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
             熔断打开时长
           </HintLabel>
           <DurationInput value={openDuration} onChange={setOpenDuration} />
+        </div>
+      </div>
+      <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
+    </div>
+  );
+}
+
+// ---- gateway.routing_sticky（会话粘性 + 队首短等）----
+
+interface RoutingStickyValue {
+  enabled_default: boolean;
+  ttl_ms: number;
+  tpm_wait_ms: number;
+  tpm_wait_jitter_ms: number;
+}
+
+function RoutingStickyEditor({ item }: { item: SettingItem }) {
+  const server = item.value as RoutingStickyValue;
+  const [enabledDefault, setEnabledDefault] = useState(server.enabled_default);
+  const [ttl, setTtl] = useState(() => decomposeDurationMs(server.ttl_ms));
+  const [tpmWait, setTpmWait] = useState(() => decomposeDurationMs(server.tpm_wait_ms));
+  const [tpmWaitJitter, setTpmWaitJitter] = useState(() =>
+    decomposeDurationMs(server.tpm_wait_jitter_ms),
+  );
+  const mutation = useSaveSetting(item.key);
+
+  const reset = () => {
+    setEnabledDefault(server.enabled_default);
+    setTtl(decomposeDurationMs(server.ttl_ms));
+    setTpmWait(decomposeDurationMs(server.tpm_wait_ms));
+    setTpmWaitJitter(decomposeDurationMs(server.tpm_wait_jitter_ms));
+  };
+
+  const save = () => {
+    const err =
+      durationError(ttl, false) ??
+      durationError(tpmWait, true) ??
+      durationError(tpmWaitJitter, true);
+    if (err) {
+      toast.error(`时长：${err}（TTL 须 >0；短等/抖动 0=关闭）`);
+      return;
+    }
+    mutation.mutate({
+      enabled_default: enabledDefault,
+      ttl_ms: composeDurationMs(ttl),
+      tpm_wait_ms: composeDurationMs(tpmWait),
+      tpm_wait_jitter_ms: composeDurationMs(tpmWaitJitter),
+    } satisfies RoutingStickyValue);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <HintLabel
+          htmlFor={`${item.key}-enabled`}
+          hint="线路未单独配置时的默认开关。打开后，同会话请求会钉住上次成功渠道，保住上游 prompt cache；粘住渠道故障时仍会自动切换。"
+        >
+          新线路默认开启会话粘性
+        </HintLabel>
+        <Switch
+          id={`${item.key}-enabled`}
+          checked={enabledDefault}
+          onCheckedChange={setEnabledDefault}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="绑定绝对过期时间（命中不刷新）。到期后回到线路策略排序，可能自然回迁更便宜渠道。">
+            粘性 TTL
+          </HintLabel>
+          <DurationInput value={ttl} onChange={setTtl} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="队首候选本地 TPM/并发满时先短等再换渠道。0=不等，满了立刻 failover。">
+            队首短等
+          </HintLabel>
+          <DurationInput value={tpmWait} onChange={setTpmWait} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="加在短等上的随机抖动上限，避免同时醒来打爆同一渠道。0=无抖动。">
+            短等抖动
+          </HintLabel>
+          <DurationInput value={tpmWaitJitter} onChange={setTpmWaitJitter} />
         </div>
       </div>
       <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />

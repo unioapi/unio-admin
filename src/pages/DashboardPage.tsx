@@ -322,6 +322,8 @@ function BadChannelsCard({
             layoutMode="content"
             bordered={false}
             getRowId={(row) => String(row.channel_id)}
+            enablePagination={false}
+            showViewOptions={false}
           />
         )}
       </CardContent>
@@ -1180,6 +1182,8 @@ function TopErrorsSection({ range }: { range: RangeQuery }) {
             pinnedColumnId="code"
             bordered={false}
             getRowId={(e) => e.code}
+            enablePagination={false}
+            showViewOptions={false}
           />
         )}
       </CardContent>

@@ -1,18 +1,17 @@
-import { Fragment, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getChannelTestLogs } from "@/lib/api/channelsOps";
+import type { ColumnDef } from "@tanstack/react-table";
+import { getChannelTestLogs, type ChannelTestLog } from "@/lib/api/channelsOps";
+import { useServerList } from "@/hooks/useServerList";
+import { ServerDataTable } from "@/components/openstatus-table";
 import { formatDateTime, formatLatencySec } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PAGE_SIZE = 10;
 
@@ -22,33 +21,141 @@ const SOURCE_LABEL: Record<string, string> = {
   runtime_401: "运行时 401",
 };
 
+const COLUMN_LABELS: Record<string, string> = {
+  created_at: "时间",
+  source: "来源",
+  success: "结果",
+  message: "说明",
+  latency_ms: "延迟",
+  tested_model: "模型",
+};
+
 function sourceLabel(source: string): string {
   return SOURCE_LABEL[source] ?? source;
 }
 
+function UpstreamErrorButton({ text }: { text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-primary hover:text-primary/80 shrink-0 whitespace-nowrap text-[10px] underline underline-offset-2"
+        >
+          上游原文
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))] p-3">
+        <pre className="text-muted-foreground max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+          {text}
+        </pre>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function testLogColumns(): ColumnDef<ChannelTestLog, unknown>[] {
+  return [
+    {
+      id: "created_at",
+      accessorKey: "created_at",
+      header: "时间",
+      // 不设 size：走表格自动列宽，避免短列被默认 150px 撑开
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs">
+          {formatDateTime(row.original.created_at)}
+        </span>
+      ),
+    },
+    {
+      id: "source",
+      accessorKey: "source",
+      header: "来源",
+      cell: ({ row }) => (
+        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+          {sourceLabel(row.original.source)}
+        </Badge>
+      ),
+    },
+    {
+      id: "success",
+      accessorKey: "success",
+      header: "结果",
+      cell: ({ row }) => (
+        <Badge
+          variant={row.original.success ? "secondary" : "destructive"}
+          className="h-5 px-1.5 text-[10px]"
+        >
+          {row.original.success ? "正常" : "异常"}
+        </Badge>
+      ),
+    },
+    {
+      id: "message",
+      accessorKey: "message",
+      header: "说明",
+      cell: ({ row }) => {
+        const log = row.original;
+        const text = log.success
+          ? log.credential_valid_after
+            ? "凭据有效"
+            : ""
+          : log.message || log.error_code || "异常";
+        return (
+          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+            <span className="truncate">{text}</span>
+            {log.upstream_error ? (
+              <UpstreamErrorButton text={log.upstream_error} />
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      id: "latency_ms",
+      accessorKey: "latency_ms",
+      header: "延迟",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs tabular-nums">
+          {row.original.latency_ms > 0
+            ? formatLatencySec(row.original.latency_ms)
+            : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "tested_model",
+      accessorKey: "tested_model",
+      header: "模型",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground whitespace-nowrap text-xs">
+          {row.original.tested_model || "—"}
+        </span>
+      ),
+    },
+  ];
+}
+
 /** 渠道检测/凭据事件日志（worker 巡检 / 手动检测 / 运行时 401 翻失效）。 */
 export function ChannelTestLogs({ channelId }: { channelId: number }) {
-  const [page, setPage] = useState(1);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const toggleExpanded = (id: number) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const { page, setPage } = useServerList({
+    urlKey: `channel:${channelId}:test-logs`,
+    pageSize: PAGE_SIZE,
+  });
+  const columns = useMemo(() => testLogColumns(), []);
+
   const q = useQuery({
     queryKey: ["channel", channelId, "test-logs", page],
     queryFn: () => getChannelTestLogs(channelId, { page, page_size: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
 
-  const items = q.data?.items ?? [];
   const total = q.data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount, setPage]);
 
   if (q.isPending && !q.data) {
     return <Skeleton className="h-40 w-full rounded-lg" />;
@@ -62,7 +169,7 @@ export function ChannelTestLogs({ channelId }: { channelId: number }) {
     );
   }
 
-  if (items.length === 0) {
+  if (total === 0) {
     return (
       <p className="text-muted-foreground rounded-lg bg-muted/40 px-3 py-2.5 text-sm">
         暂无检测日志。自动巡检失败 / 状态变化，或手动检测后会记录在此。
@@ -71,109 +178,20 @@ export function ChannelTestLogs({ channelId }: { channelId: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>时间</TableHead>
-              <TableHead>来源</TableHead>
-              <TableHead>结果</TableHead>
-              <TableHead>说明</TableHead>
-              <TableHead className="text-right">延迟</TableHead>
-              <TableHead>模型</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((log) => {
-              const isOpen = expanded.has(log.id);
-              return (
-                <Fragment key={log.id}>
-                  <TableRow>
-                    <TableCell className="whitespace-nowrap text-xs">
-                      {formatDateTime(log.created_at)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                        {sourceLabel(log.source)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={log.success ? "secondary" : "destructive"}
-                        className="h-5 px-1.5 text-[10px]"
-                      >
-                        {log.success ? "正常" : "异常"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[280px] text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate">
-                          {log.success
-                            ? log.credential_valid_after
-                              ? "凭据有效"
-                              : ""
-                            : log.message || log.error_code || "异常"}
-                        </span>
-                        {log.upstream_error ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleExpanded(log.id)}
-                            className="text-primary hover:text-primary/80 shrink-0 whitespace-nowrap text-[10px] underline underline-offset-2"
-                          >
-                            {isOpen ? "收起原文" : "上游原文"}
-                          </button>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">
-                      {log.latency_ms > 0 ? formatLatencySec(log.latency_ms) : "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {log.tested_model || "—"}
-                    </TableCell>
-                  </TableRow>
-                  {isOpen && log.upstream_error ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="bg-muted/30">
-                        <pre className="text-muted-foreground max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
-                          {log.upstream_error}
-                        </pre>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-
-      {pageCount > 1 ? (
-        <div className="flex items-center justify-end gap-2 text-xs">
-          <span className="text-muted-foreground">
-            第 {page}/{pageCount} 页 · 共 {total} 条
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-          >
-            上一页
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={page >= pageCount}
-            onClick={() => setPage(page + 1)}
-          >
-            下一页
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    <ServerDataTable
+      storageKey={`channel:${channelId}:test-logs`}
+      columns={columns}
+      data={q.data?.items ?? []}
+      columnLabels={COLUMN_LABELS}
+      total={total}
+      page={page}
+      pageCount={pageCount}
+      pageSize={PAGE_SIZE}
+      onPageChange={setPage}
+      bordered={false}
+      showViewOptions={false}
+      refetching={q.isFetching && !q.isPending}
+      getRowId={(row) => String(row.id)}
+    />
   );
 }

@@ -11,6 +11,7 @@ import {
   getProviderOpsPerformance,
 } from "@/lib/api/providersOps";
 import type { RangeQuery } from "@/lib/api/dashboard";
+import { useServerList } from "@/hooks/useServerList";
 import { ConfigurableDataTable } from "@/components/data-table";
 import { ServerDataTable } from "@/components/openstatus-table";
 import {
@@ -141,11 +142,14 @@ function PerformanceSection({ id, range }: { id: number; range: RangeQuery }) {
 }
 
 function ErrorsSection({ id, range }: { id: number; range: RangeQuery }) {
-  const [page, setPage] = useState(1);
+  const { page, setPage } = useServerList({
+    urlKey: `provider:${id}:errors`,
+    pageSize: PAGE_SIZE,
+  });
 
   useEffect(() => {
     setPage(1);
-  }, [range]);
+  }, [range, setPage]);
 
   const q = useQuery({
     queryKey: ["provider", id, "ops-errors", range, page],
@@ -153,11 +157,13 @@ function ErrorsSection({ id, range }: { id: number; range: RangeQuery }) {
     placeholderData: keepPreviousData,
   });
 
-  const pageCount = Math.max(1, Math.ceil((q.data?.total ?? 0) / PAGE_SIZE));
+  const total = q.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (q.isPending && !q.data) return <TableSkeleton rows={5} cols={5} />;
   if (q.isError) return <ErrorBox message={(q.error as Error).message} />;
-  if (q.data.items.length === 0) {
+  // 用 total 判断空态：页码越界时 items 为空但 total>0，不能当成「暂无错误」
+  if (total === 0) {
     return (
       <SectionEmpty
         icon={CircleCheckIcon}
@@ -171,13 +177,14 @@ function ErrorsSection({ id, range }: { id: number; range: RangeQuery }) {
     <ServerDataTable
       storageKey={`provider:${id}:errors`}
       columns={providerOpsErrorColumns()}
-      data={q.data.items}
+      data={q.data?.items ?? []}
       columnLabels={PROVIDER_OPS_ERROR_COLUMN_LABELS}
-      total={q.data.total}
+      total={total}
       page={page}
       pageCount={pageCount}
       onPageChange={setPage}
       bordered={false}
+      showViewOptions={false}
       refetching={q.isFetching && !q.isPending}
       pinnedColumnId="at"
       getRowId={(row) => row.request_id}

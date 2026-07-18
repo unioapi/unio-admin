@@ -107,6 +107,10 @@ function RouteForm({
   const [rpdLimit, setRpdLimit] = useState<RateLimitFieldValue>(
     decomposeRateLimit(route?.rpd_limit),
   );
+  // 会话粘性：三态（继承系统设置默认 / 开 / 关），后端 null=继承。
+  const [stickyEnabled, setStickyEnabled] = useState<"inherit" | "on" | "off">(
+    route?.sticky_enabled == null ? "inherit" : route.sticky_enabled ? "on" : "off",
+  );
   const [description, setDescription] = useState(route?.description ?? "");
   const [channelIds, setChannelIds] = useState<number[]>(
     route?.channels.map((c) => c.channel_id) ?? [],
@@ -133,6 +137,7 @@ function RouteForm({
         rpm_limit: parseRpmLimit(rpmLimit),
         tpm_limit: composeRateLimit(tpmLimit),
         rpd_limit: composeRateLimit(rpdLimit),
+        sticky_enabled: stickyEnabled === "inherit" ? null : stickyEnabled === "on",
         description: description.trim() || null,
         channel_ids: effectivePool === "all" ? [] : channelIds,
       };
@@ -375,6 +380,28 @@ function RouteForm({
               </Field>
             </div>
           </div>
+        </Field>
+
+        <Field>
+          <HintLabel
+            htmlFor="rt_sticky"
+            hint="同一会话的请求钉住上次成功渠道，保住上游 prompt cache（多轮对话话费大幅降低）。留空继承系统设置的全局默认；粘住渠道故障时仍会自动切换。"
+          >
+            会话粘性
+          </HintLabel>
+          <Select
+            value={stickyEnabled}
+            onValueChange={(v) => setStickyEnabled(v as "inherit" | "on" | "off")}
+          >
+            <SelectTrigger id="rt_sticky" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inherit">继承系统默认</SelectItem>
+              <SelectItem value="on">开启</SelectItem>
+              <SelectItem value="off">关闭</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
 
         <Field>

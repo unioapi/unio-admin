@@ -71,8 +71,6 @@ export function ModelsPage() {
         searchValue={table.searchInput}
         onSearchChange={table.onSearchChange}
         searchPlaceholder="搜索模型 ID / 名称"
-        chips={table.chips}
-        onClearChips={table.resetFilters}
         toolbarLeading={
           <>
             <Button size="sm" onClick={() => setCreateOpen(true)}>

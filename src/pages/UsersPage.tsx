@@ -40,8 +40,6 @@ export function UsersPage() {
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索邮箱 / 昵称 / ID"
-          chips={table.chips}
-          onClearChips={table.resetFilters}
           pinnedColumnId="display_name"
         />
       )}

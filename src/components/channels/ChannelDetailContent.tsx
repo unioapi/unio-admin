@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/channelsOps";
 import type { RangeQuery } from "@/lib/api/dashboard";
 import { formatRelativeTime } from "@/lib/format";
+import { useServerList } from "@/hooks/useServerList";
 import { ConfigurableDataTable } from "@/components/data-table";
 import { ServerDataTable } from "@/components/openstatus-table";
 import {
@@ -161,11 +162,14 @@ function PerformanceSection({
 }
 
 function ErrorsSection({ channelId, range }: { channelId: number; range: RangeQuery }) {
-  const [page, setPage] = useState(1);
+  const { page, setPage } = useServerList({
+    urlKey: `channel:${channelId}:errors`,
+    pageSize: PAGE_SIZE,
+  });
 
   useEffect(() => {
     setPage(1);
-  }, [range]);
+  }, [range, setPage]);
 
   const q = useQuery({
     queryKey: ["channel", channelId, "ops-errors", range, page],
@@ -173,12 +177,12 @@ function ErrorsSection({ channelId, range }: { channelId: number; range: RangeQu
     placeholderData: keepPreviousData,
   });
 
-  const pageCount = Math.max(1, Math.ceil((q.data?.total ?? 0) / PAGE_SIZE));
+  const total = q.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (q.isPending && !q.data) return <TableSkeleton rows={5} cols={5} />;
   if (q.isError) return <ErrorBox message={(q.error as Error).message} />;
-  const errors = q.data;
-  if (!errors || errors.items.length === 0) {
+  if (total === 0) {
     return (
       <SectionEmpty
         icon={CircleCheckIcon}
@@ -192,13 +196,14 @@ function ErrorsSection({ channelId, range }: { channelId: number; range: RangeQu
     <ServerDataTable
       storageKey={`channel:${channelId}:errors`}
       columns={channelOpsErrorColumns()}
-      data={errors.items}
+      data={q.data?.items ?? []}
       columnLabels={CHANNEL_OPS_ERROR_COLUMN_LABELS}
-      total={errors.total}
+      total={total}
       page={page}
       pageCount={pageCount}
       onPageChange={setPage}
       bordered={false}
+      showViewOptions={false}
       refetching={q.isFetching && !q.isPending}
       pinnedColumnId="at"
     />

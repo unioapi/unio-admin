@@ -50,8 +50,6 @@ export function ChannelsPage() {
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索渠道名"
-          chips={table.chips}
-          onClearChips={table.resetFilters}
           toolbarLeading={
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <PlusIcon data-icon="inline-start" />

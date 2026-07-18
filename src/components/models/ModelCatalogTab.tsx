@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { parseAsString, useQueryState } from "nuqs";
 import { CloudDownloadIcon, LibraryIcon } from "lucide-react";
 import { listCatalog } from "@/lib/api/modelCatalog";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useServerList } from "@/hooks/useServerList";
 import { ServerDataTable } from "@/components/openstatus-table";
 import {
   MODEL_CATALOG_COLUMN_LABELS,
@@ -23,10 +25,28 @@ const PAGE_SIZE = 20;
 
 /** models.dev 参考目录列表（运行时不读，用于采纳创建运营模型）。 */
 export function ModelCatalogTab() {
-  const [searchInput, setSearchInput] = useState("");
-  const [page, setPage] = useState(1);
+  const { page, setPage, urlKeys } = useServerList({
+    urlKey: "model-catalog",
+    pageSize: PAGE_SIZE,
+  });
 
+  const [searchFromUrl, setSearchUrl] = useQueryState(
+    urlKeys.q,
+    parseAsString.withOptions({ history: "replace", shallow: true }).withDefault(""),
+  );
+  const [searchInput, setSearchInput] = useState(searchFromUrl);
   const search = useDebouncedValue(searchInput.trim(), 300);
+
+  useEffect(() => {
+    setSearchInput(searchFromUrl);
+  }, [searchFromUrl]);
+
+  useEffect(() => {
+    const next = search || null;
+    if ((searchFromUrl || "") !== (search || "")) {
+      void setSearchUrl(next);
+    }
+  }, [search, searchFromUrl, setSearchUrl]);
 
   const query = useQuery({
     queryKey: ["model-catalog", { q: search, page }],
@@ -39,10 +59,8 @@ export function ModelCatalogTab() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
-    if (page > pageCount) {
-      setPage(pageCount);
-    }
-  }, [page, pageCount]);
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount, setPage]);
 
   const columns = useMemo(() => modelCatalogColumns(), []);
 
