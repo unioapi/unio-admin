@@ -163,9 +163,16 @@ export async function deleteChannel(id: number): Promise<void> {
   await api.delete(`/admin/v1/channels/${id}`);
 }
 
-// 归档渠道：从所有线路池移除、置 archived、释放渠道名（追加 __archived_<id> 后缀）；可恢复。
-export async function archiveChannel(id: number): Promise<void> {
-  await api.post(`/admin/v1/channels/${id}/archive`);
+// 归档渠道：可在同一事务中把替代渠道加入受影响线路，避免启用线路空池。
+export async function archiveChannel(
+  id: number,
+  replacementChannelId?: number,
+): Promise<void> {
+  await api.post(`/admin/v1/channels/${id}/archive`,
+    replacementChannelId == null
+      ? {}
+      : { replacement_channel_id: replacementChannelId },
+  );
 }
 
 // 恢复渠道：archived → disabled（护栏：所属服务商归档时后端拦截，需先恢复服务商）。
@@ -199,4 +206,3 @@ export async function testChannel(
   );
   return res.data.data;
 }
-

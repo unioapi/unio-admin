@@ -60,7 +60,7 @@ export function ChannelTestDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         {open && <TestPanel channel={channel} />}
       </DialogContent>
     </Dialog>
@@ -183,14 +183,12 @@ function CurrentResult({ result }: { result: ChannelTestResult }) {
         <p className="text-muted-foreground break-words text-xs leading-relaxed">{result.message}</p>
       ) : null}
       {!result.success && result.upstream_error ? (
-        <details className="mt-0.5">
-          <summary className="text-muted-foreground cursor-pointer text-xs select-none">
-            上游原始错误
-          </summary>
-          <pre className="text-muted-foreground bg-muted/50 mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md p-2 font-mono text-[11px] leading-relaxed">
+        <div className="mt-1">
+          <div className="text-muted-foreground mb-1 text-xs font-medium">上游响应原文</div>
+          <pre className="bg-muted/50 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md p-2 font-mono text-[11px] leading-relaxed">
             {result.upstream_error}
           </pre>
-        </details>
+        </div>
       ) : null}
     </div>
   );

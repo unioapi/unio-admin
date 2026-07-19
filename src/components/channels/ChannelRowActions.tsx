@@ -4,7 +4,6 @@ import { EllipsisIcon, EyeIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  archiveChannel,
   deleteChannel,
   getChannel,
   restoreChannel,
@@ -12,6 +11,7 @@ import {
 } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
+import { ArchiveWithReplacementDialog } from "@/components/common/ArchiveWithReplacementDialog";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
 import { ChannelModelsDialog } from "@/components/channels/ChannelModelsDialog";
 import { ChannelTestDialog } from "@/components/channels/ChannelTestDialog";
@@ -36,6 +36,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
   const [credOpen, setCredOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const needChannel =
     editOpen ||
@@ -44,6 +45,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
     costMultOpen ||
     credOpen ||
     testOpen ||
+    archiveOpen ||
     menuOpen ||
     statusConfirmOpen;
   const channelQ = useQuery({
@@ -67,21 +69,15 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
 
   const archived = channel?.status === "archived";
   const lifecycleMutation = useMutation({
-    mutationFn: (action: "archive" | "restore" | "delete") =>
-      action === "archive"
-        ? archiveChannel(channelId)
-        : action === "restore"
-          ? restoreChannel(channelId)
-          : deleteChannel(channelId),
+    mutationFn: (action: "restore" | "delete") =>
+      action === "restore" ? restoreChannel(channelId) : deleteChannel(channelId),
     onSuccess: (_, action) => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
       queryClient.invalidateQueries({ queryKey: ["channel", channelId] });
       toast.success(
-        action === "archive"
-          ? "已归档渠道（已退出所有线路池）"
-          : action === "restore"
-            ? "已恢复渠道为停用（如需路由请重新加入线路并启用）"
-            : "已删除渠道",
+        action === "restore"
+          ? "已恢复渠道为停用（如需路由请重新加入线路并启用）"
+          : "已删除渠道",
       );
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
@@ -91,7 +87,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
     setMenuOpen(false);
     setter(true);
   }
-  function runLifecycle(action: "archive" | "restore" | "delete") {
+  function runLifecycle(action: "restore" | "delete") {
     setMenuOpen(false);
     lifecycleMutation.mutate(action);
   }
@@ -155,7 +151,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
                 <DropdownMenuItem onClick={() => openDialog(setCostMultOpen)}>成本倍率</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(setPricesOpen)}>成本覆盖</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(setCredOpen)}>修改APIKey</DropdownMenuItem>
-                <DropdownMenuItem disabled={!channel} onClick={() => runLifecycle("archive")}>
+                <DropdownMenuItem disabled={!channel} onClick={() => openDialog(setArchiveOpen)}>
                   归档
                 </DropdownMenuItem>
               </>
@@ -180,6 +176,18 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
             enabling={channel.status !== "enabled"}
             pending={statusMutation.isPending}
             onConfirm={confirmStatusChange}
+          />
+          <ArchiveWithReplacementDialog
+            open={archiveOpen}
+            onOpenChange={setArchiveOpen}
+            target={{ kind: "channel", id: channel.id, name: channel.name }}
+            onArchived={() => {
+              queryClient.invalidateQueries({ queryKey: ["channels"] });
+              queryClient.invalidateQueries({ queryKey: ["channel", channelId] });
+              queryClient.invalidateQueries({ queryKey: ["routes"] });
+              queryClient.invalidateQueries({ queryKey: ["route"] });
+              toast.success("已归档渠道，线路池替换已原子提交");
+            }}
           />
         </>
       ) : null}

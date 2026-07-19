@@ -52,6 +52,7 @@ export const MODEL_OS_COLUMN_LABELS: Record<string, string> = {
   action: "操作",
 };
 
+// 文案与顺序对齐 ModelPricesDialog / 费用拆分：推理输出置底。
 const BASE_PRICE_BREAKDOWN: {
   key:
     | "base_uncached_input_price"
@@ -63,13 +64,13 @@ const BASE_PRICE_BREAKDOWN: {
     | "base_cache_write_30m_input_price";
   label: string;
 }[] = [
-  { key: "base_uncached_input_price", label: "输入（未缓存）" },
-  { key: "base_cache_read_input_price", label: "缓存读取输入" },
+  { key: "base_uncached_input_price", label: "未缓存输入" },
   { key: "base_output_price", label: "输出" },
-  { key: "base_reasoning_output_price", label: "reasoning 输出" },
-  { key: "base_cache_write_5m_input_price", label: "5 分钟缓存写入 · Anthropic" },
-  { key: "base_cache_write_1h_input_price", label: "1 小时缓存写入 · Anthropic" },
-  { key: "base_cache_write_30m_input_price", label: "30 分钟缓存写入 · OpenAI" },
+  { key: "base_cache_read_input_price", label: "缓存读取" },
+  { key: "base_cache_write_5m_input_price", label: "缓存写入·5m · Anthropic" },
+  { key: "base_cache_write_1h_input_price", label: "缓存写入·1h · Anthropic" },
+  { key: "base_cache_write_30m_input_price", label: "缓存写入·30m · OpenAI" },
+  { key: "base_reasoning_output_price", label: "推理输出" },
 ];
 
 function BasePriceCell({ row }: { row: ModelOpsRow }) {

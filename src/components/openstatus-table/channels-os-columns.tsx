@@ -344,6 +344,7 @@ function ChannelMultipliersCell({
   rechargeFactor: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [observedAt, setObservedAt] = useState(0);
   const multipliersQuery = useQuery({
     queryKey: ["channel-cost-multipliers", channelId],
     queryFn: () => listChannelCostMultipliers(channelId),
@@ -359,11 +360,10 @@ function ChannelMultipliersCell({
   const rechargeLabel = formatMultiplier(rechargeFactor);
   const summary = `${costLabel} / ${rechargeLabel}`;
 
-  const now = Date.now();
   const activeOverrides = (multipliersQuery.data ?? []).filter((m) => {
     if (m.model_id == null || m.status !== "enabled") return false;
-    if (new Date(m.effective_from).getTime() > now) return false;
-    if (m.effective_to && new Date(m.effective_to).getTime() <= now)
+    if (new Date(m.effective_from).getTime() > observedAt) return false;
+    if (m.effective_to && new Date(m.effective_to).getTime() <= observedAt)
       return false;
     return true;
   });
@@ -374,7 +374,10 @@ function ChannelMultipliersCell({
   return (
     <HoverCard
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setObservedAt(Date.now());
+      }}
       openDelay={120}
       closeDelay={80}
     >

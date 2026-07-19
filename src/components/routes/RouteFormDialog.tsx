@@ -1,7 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { createRoute, updateRoute, type Route } from "@/lib/api/routes";
+import {
+  createRoute,
+  updateRoute,
+  type Route,
+  type RouteMode,
+} from "@/lib/api/routes";
 import { listChannels } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
 import { RoutePriceCalculator } from "@/components/routes/RoutePriceCalculator";
@@ -95,8 +100,7 @@ function RouteForm({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(route?.name ?? "");
-  const [mode, setMode] = useState(route?.mode ?? "cheapest");
-  const [poolKind, setPoolKind] = useState(route?.pool_kind ?? "all");
+  const [mode, setMode] = useState<RouteMode>(route?.mode ?? "balanced");
   const [status, setStatus] = useState(route?.status ?? "enabled");
   const [priceRatio, setPriceRatio] = useState(() => formatRouteRatioInput(route?.price_ratio));
   // 线路级限流（DEC-027）：RPM 量级小用普通输入；TPM/RPD 量级大用「数字+单位 K/M/B」。
@@ -118,12 +122,9 @@ function RouteForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
 
-  const effectivePool = mode === "fixed" ? "explicit" : poolKind;
-
   const channelsQuery = useQuery({
     queryKey: ["channels", "all-for-route"],
     queryFn: () => listChannels({ page: 1, pageSize: 100 }),
-    enabled: effectivePool === "explicit",
   });
 
   const mutation = useMutation({
@@ -131,7 +132,6 @@ function RouteForm({
       const body = {
         name: name.trim(),
         mode,
-        pool_kind: effectivePool,
         status,
         price_ratio: formatRouteRatioInput(priceRatio),
         rpm_limit: parseRpmLimit(rpmLimit),
@@ -139,7 +139,7 @@ function RouteForm({
         rpd_limit: composeRateLimit(rpdLimit),
         sticky_enabled: stickyEnabled === "inherit" ? null : stickyEnabled === "on",
         description: description.trim() || null,
-        channel_ids: effectivePool === "all" ? [] : channelIds,
+        channel_ids: channelIds,
       };
       return route ? updateRoute({ id: route.id, ...body }) : createRoute(body);
     },
@@ -163,12 +163,10 @@ function RouteForm({
     if (tpmErr) next.tpm_limit = tpmErr;
     const rpdErr = rateLimitWithUnitError(rpdLimit);
     if (rpdErr) next.rpd_limit = rpdErr;
-    if (effectivePool === "explicit") {
-      if (mode === "fixed" && channelIds.length !== 1) {
-        next.channels = "固定线路必须恰好选择一条渠道";
-      } else if (channelIds.length === 0) {
-        next.channels = "手挑渠道线路至少选择一条渠道";
-      }
+    if (mode === "fixed" && channelIds.length !== 1) {
+      next.channels = "固定线路必须恰好选择一条渠道";
+    } else if (channelIds.length === 0) {
+      next.channels = "均衡线路至少选择一条渠道";
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -208,7 +206,7 @@ function RouteForm({
         <DialogHeader>
           <DialogTitle>{route ? "编辑线路" : "新建线路"}</DialogTitle>
           <DialogDescription>
-            选择选路策略与候选池。fixed 策略锁定单条渠道（自动使用手挑池）。
+            所有线路使用手动绑定的渠道池；均衡策略按容量和健康度分流，固定策略锁定单条渠道。
           </DialogDescription>
         </DialogHeader>
       </div>
@@ -248,44 +246,32 @@ function RouteForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Field>
+        <Field>
             <HintLabel
               htmlFor="rt_mode"
-              hint="在候选渠道中如何选路：经济=售价最低，稳定=健康优先，固定=锁定单条渠道，随机=随机排序仍支持回退。"
+              hint="均衡策略在线路渠道池内按全局容量和健康度分流；固定策略锁定单条渠道且不跨渠道回退。"
             >
               选路策略
             </HintLabel>
-            <Select value={mode} onValueChange={setMode}>
+            <Select
+              value={mode}
+              onValueChange={(value) => {
+                const next = value as RouteMode;
+                setMode(next);
+                if (next === "fixed") {
+                  setChannelIds((current) => current.slice(0, 1));
+                }
+              }}
+            >
               <SelectTrigger id="rt_mode" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cheapest">经济（售价最低）</SelectItem>
-                <SelectItem value="stable">稳定（健康优先）</SelectItem>
+                <SelectItem value="balanced">均衡（容量与健康度）</SelectItem>
                 <SelectItem value="fixed">固定（锁定单渠道）</SelectItem>
-                <SelectItem value="random">随机（随机分摊）</SelectItem>
               </SelectContent>
             </Select>
-          </Field>
-          <Field>
-            <HintLabel
-              htmlFor="rt_pool"
-              hint="候选渠道范围：全量=该模型所有可用渠道；手挑=仅指定渠道。固定策略固定为手挑池。"
-            >
-              候选池
-            </HintLabel>
-            <Select value={effectivePool} onValueChange={setPoolKind} disabled={mode === "fixed"}>
-              <SelectTrigger id="rt_pool" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全量动态</SelectItem>
-                <SelectItem value="explicit">手挑渠道</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
+        </Field>
 
         <Field data-invalid={!!errors.price_ratio}>
           <HintLabel
@@ -306,32 +292,31 @@ function RouteForm({
                 });
               }}
               channelIds={channelIds}
-              poolKind={effectivePool as "all" | "explicit"}
               channelNames={channelNameMap}
             />
           </div>
           <FieldError>{errors.price_ratio}</FieldError>
         </Field>
 
-        {effectivePool === "explicit" && (
-          <Field data-invalid={!!errors.channels}>
-            <HintLabel hint="勾选候选渠道；下方列表实时对比各模型成本、售价与毛利（随倍率变化）。">
-              渠道池
-            </HintLabel>
-            {channelsQuery.isPending ? (
-              <Skeleton className="h-48 w-full" />
-            ) : (
-              <RouteChannelMarginTable
-                channels={orderedChannels}
-                channelIds={channelIds}
-                onToggleChannel={toggleChannel}
-                priceRatio={priceRatio}
-                fixedSingle={mode === "fixed"}
-              />
-            )}
-            <FieldError>{errors.channels}</FieldError>
-          </Field>
-        )}
+        <Field data-invalid={!!errors.channels}>
+          <HintLabel hint="线路只能使用这里手动绑定的渠道；下方列表实时对比各模型成本、售价与毛利。">
+            渠道池
+          </HintLabel>
+          {channelsQuery.isPending ? (
+            <Skeleton className="h-48 w-full" />
+          ) : channelsQuery.isError ? (
+            <FieldError>渠道加载失败：{apiErrorMessage(channelsQuery.error)}</FieldError>
+          ) : (
+            <RouteChannelMarginTable
+              channels={orderedChannels}
+              channelIds={channelIds}
+              onToggleChannel={toggleChannel}
+              priceRatio={priceRatio}
+              fixedSingle={mode === "fixed"}
+            />
+          )}
+          <FieldError>{errors.channels}</FieldError>
+        </Field>
 
         <Field>
           <HintLabel hint="线路级限流：绑定该线路的每个用户合计生效（多建 Key 不放大配额），不同用户各自独立。留空=继承全局默认，0=不限；TPM、RPD 可带单位 K/M/B。">

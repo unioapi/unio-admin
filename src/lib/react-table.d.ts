@@ -14,7 +14,7 @@ declare module "@tanstack/react-table" {
     };
   }
 
-  interface ColumnMeta<TData extends RowData = RowData, TValue = unknown> {
+  interface ColumnMeta<_TData extends RowData = RowData, _TValue = unknown> {
     headerClassName?: string;
     cellClassName?: string;
     label?: string;
@@ -24,7 +24,6 @@ declare module "@tanstack/react-table" {
     /** content 模式下吸收剩余宽度 */
     fillWidth?: boolean;
     /** 按行估算列内容宽度（用于动态 minWidth） */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     autoSizeValue?: (row: any) => unknown;
     /** tablecn Data Table 筛选 */
     placeholder?: string;
@@ -49,9 +48,7 @@ declare module "@tanstack/react-table" {
   }
 
   interface FilterFns {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     inDateRange?: FilterFn<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     arrSome?: FilterFn<any>;
   }
 

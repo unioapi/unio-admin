@@ -5,7 +5,7 @@ import { RouteChannelsCell } from "@/components/routes/RouteChannelsCell";
 import { RouteModelsCountCell } from "@/components/routes/RouteModelsCountCell";
 import { RouteRowActions } from "@/components/routes/RouteRowActions";
 import { formatRouteRatioInput } from "@/components/routes/route-pricing";
-import { ROUTE_MODE_LABEL, routePoolKindLabel } from "@/lib/routes/display";
+import { ROUTE_MODE_LABEL } from "@/lib/routes/display";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ColumnHeader } from "./column-header";
@@ -30,7 +30,6 @@ export const ROUTE_OS_COLUMN_LABELS: Record<string, string> = {
   status: "状态",
   mode: "策略",
   rate_limit: "限流",
-  pool_kind: "候选池",
   channels: "渠道",
   price_ratio: "倍率",
   models: "模型",
@@ -92,17 +91,6 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
       ),
     },
     {
-      id: "pool_kind",
-      accessorFn: (r) => routePoolKindLabel(r.pool_kind, r.mode),
-      header: () => <span className="text-muted-foreground">候选池</span>,
-      enableSorting: false,
-      cell: ({ row }) => (
-        <span className="text-xs">
-          {routePoolKindLabel(row.original.pool_kind, row.original.mode)}
-        </span>
-      ),
-    },
-    {
       id: "channels",
       accessorFn: (r) => r.pool_channels,
       header: () => <span className="text-muted-foreground">渠道</span>,
@@ -110,7 +98,6 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
       cell: ({ row }) => (
         <RouteChannelsCell
           routeId={row.original.id}
-          poolKind={row.original.pool_kind}
           count={row.original.pool_channels}
         />
       ),

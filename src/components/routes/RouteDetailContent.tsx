@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
@@ -7,7 +7,6 @@ import {
   LayersIcon,
   ScrollTextIcon,
 } from "lucide-react";
-import { listChannels } from "@/lib/api/channels";
 import { getRoute } from "@/lib/api/routes";
 import {
   getRouteOpsBindings,
@@ -31,6 +30,7 @@ import {
   routeOpsRequestColumns,
 } from "@/components/detail-tables/route-detail-columns";
 import { RouteChannelMarginTable } from "@/components/routes/RouteChannelMarginTable";
+import { RouteRuntimeSection } from "@/components/routes/RouteRuntimeSection";
 import { formatRouteRatioInput } from "@/components/routes/route-pricing";
 import { DetailSideNav } from "@/components/common/DetailSideNav";
 import {
@@ -54,6 +54,11 @@ export function RouteDetailContent({
 }) {
   const sections = useMemo(
     () => [
+      {
+        id: "runtime",
+        label: "实时路由",
+        content: <RouteRuntimeSection routeId={routeId} />,
+      },
       {
         id: "performance",
         label: "性能",
@@ -83,7 +88,7 @@ export function RouteDetailContent({
     [routeId, range],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="performance" />;
+  return <DetailSideNav sections={sections} defaultSectionId="runtime" />;
 }
 
 function PerformanceSection({
@@ -133,37 +138,22 @@ function PoolSection({ routeId }: { routeId: number }) {
     queryKey: ["route", routeId],
     queryFn: () => getRoute(routeId),
   });
-  const allChannelsQ = useQuery({
-    queryKey: ["channels", "all-for-route-pool-detail"],
-    queryFn: () => listChannels({ page: 1, pageSize: 200 }),
-    enabled: routeQ.data?.pool_kind === "all",
-  });
   const poolQ = useQuery({
     queryKey: ["route", routeId, "ops-pool"],
     queryFn: () => getRouteOpsChannelPool(routeId),
-    enabled: routeQ.data?.pool_kind === "explicit",
   });
 
   const route = routeQ.data;
-  const isAllPool = route?.pool_kind === "all";
 
   const marginChannels = useMemo(() => {
     if (!route) return [];
-    if (isAllPool) {
-      return (allChannelsQ.data?.items ?? []).map((c) => ({
-        id: c.id,
-        name: c.name,
-        provider_name: c.provider_name ?? "",
-        protocol: c.protocol,
-      }));
-    }
     return route.channels.map((c) => ({
       id: c.channel_id,
       name: c.channel_name,
       provider_name: c.provider_slug,
       protocol: "",
     }));
-  }, [route, isAllPool, allChannelsQ.data?.items]);
+  }, [route]);
 
   const marginChannelIds = useMemo(
     () => marginChannels.map((c) => c.id),
@@ -174,7 +164,7 @@ function PoolSection({ routeId }: { routeId: number }) {
   if (routeQ.isError) return <ErrorBox message={(routeQ.error as Error).message} />;
   if (!route) return null;
 
-  if (!isAllPool && route.channels.length === 0) {
+  if (route.channels.length === 0) {
     return (
       <SectionEmpty
         icon={CableIcon}
@@ -184,24 +174,13 @@ function PoolSection({ routeId }: { routeId: number }) {
     );
   }
 
-  if (isAllPool && allChannelsQ.isPending) {
-    return <TableSkeleton rows={6} cols={7} />;
-  }
-  if (isAllPool && allChannelsQ.isError) {
-    return <ErrorBox message={(allChannelsQ.error as Error).message} />;
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <SectionFrame className="p-4">
         <div className="mb-3 flex flex-col gap-1">
-          <div className="text-sm font-medium">
-            {isAllPool ? "全量动态 · 成本与售价" : "渠道池 · 成本与售价"}
-          </div>
+          <div className="text-sm font-medium">渠道池 · 成本与售价</div>
           <p className="text-muted-foreground text-xs">
-            {isAllPool
-              ? "展示全部渠道的模型成本与客户售价（倍率 × 模型基准价）对比。"
-              : `共 ${marginChannelIds.length} 个渠道 · 客户售价 = 模型基准 × ${formatRouteRatioInput(route.price_ratio)} 倍率`}
+            共 {marginChannelIds.length} 个渠道 · 客户售价 = 模型基准 × {formatRouteRatioInput(route.price_ratio)} 倍率
           </p>
         </div>
         <RouteChannelMarginTable
@@ -214,7 +193,7 @@ function PoolSection({ routeId }: { routeId: number }) {
         />
       </SectionFrame>
 
-      {!isAllPool && poolQ.data && poolQ.data.length > 0 ? (
+      {poolQ.data && poolQ.data.length > 0 ? (
         <ConfigurableDataTable
           storageKey={`route:${routeId}:pool-meta`}
           data={poolQ.data}

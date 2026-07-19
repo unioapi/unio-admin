@@ -2,6 +2,7 @@ import { api } from "@/lib/api/client";
 import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
 import type { HealthBucket, LatencyStats, RangeQuery } from "@/lib/api/dashboard";
+import type { RouteMode } from "@/lib/api/routes";
 
 // §3.3 渠道作战台只读运维聚合（与后端 channels_ops DTO 对齐）。
 
@@ -127,8 +128,7 @@ export interface ChannelOpsModel {
 export interface ChannelOpsRoute {
   id: number;
   name: string;
-  mode: string;
-  pool_kind: string;
+  mode: RouteMode;
   status: string;
   price_ratio: string;
 }

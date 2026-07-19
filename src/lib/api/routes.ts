@@ -1,9 +1,9 @@
 import { api } from "@/lib/api/client";
 
-// 与后端 routeDTO 对齐（阶段 15：线路 = 渠道商品）。
-// mode: cheapest | stable | fixed | random；pool_kind: all（动态全量）| explicit（手挑渠道）。
-// channels 仅 explicit 线路有值。
-interface RouteChannel {
+// 与后端 routeDTO 对齐：线路只从显式绑定的渠道池中调度。
+export type RouteMode = "balanced" | "fixed";
+
+export interface RouteChannel {
   channel_id: number;
   channel_name: string;
   provider_id: number;
@@ -13,8 +13,7 @@ interface RouteChannel {
 export interface Route {
   id: number;
   name: string;
-  mode: string;
-  pool_kind: string;
+  mode: RouteMode;
   status: string;
   // price_ratio 客户售价倍率（DEC-026：客户售价 = 模型基准价 × 倍率），十进制字符串。
   price_ratio: string;
@@ -43,8 +42,7 @@ export async function getRoute(id: number): Promise<Route> {
 
 export interface CreateRouteInput {
   name: string;
-  mode: string;
-  pool_kind: string;
+  mode: RouteMode;
   status: string;
   price_ratio: string; // 客户售价倍率（十进制字符串，空=默认 1.0）
   // 线路级限流（DEC-027）：null=继承全局默认，0=不限，>0=具体上限。

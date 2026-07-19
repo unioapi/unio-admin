@@ -74,9 +74,16 @@ export async function deleteProvider(id: number): Promise<void> {
   await api.delete(`/admin/v1/providers/${id}`);
 }
 
-// 归档服务商：级联归档名下渠道并从线路池移除；slug 不变；可恢复。
-export async function archiveProvider(id: number): Promise<void> {
-  await api.post(`/admin/v1/providers/${id}/archive`);
+// 归档服务商：可在同一事务中为受影响线路加入一条外部替代渠道。
+export async function archiveProvider(
+  id: number,
+  replacementChannelId?: number,
+): Promise<void> {
+  await api.post(`/admin/v1/providers/${id}/archive`,
+    replacementChannelId == null
+      ? {}
+      : { replacement_channel_id: replacementChannelId },
+  );
 }
 
 // 恢复服务商：archived → disabled（名下渠道不自动恢复，需逐个恢复）。

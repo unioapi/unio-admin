@@ -68,32 +68,47 @@ const DEFAULT_LONG_CONTEXT = {
 
 // 基准售价分项：六个分项，前两个（未缓存输入/输出）必填。
 // 缓存写入按 TTL 分档（DEC-030）：5m/1h 为 Anthropic，30m 为 OpenAI GPT-5.6+。
+// 文案与请求列表 / 费用拆分对齐：缓存读取、缓存写入·TTL、推理输出。
 const PRICE_FIELDS = [
   { key: "uncached_input", label: "未缓存输入", required: true },
   { key: "output", label: "输出", required: true },
-  { key: "cache_read_input", label: "缓存读取输入", required: false },
-  { key: "reasoning_output", label: "reasoning 输出", required: false },
+  { key: "cache_read_input", label: "缓存读取", required: false },
   {
     key: "cache_write_5m_input",
-    label: "5 分钟缓存写入",
+    label: "缓存写入·5m",
     required: false,
     vendor: "Anthropic",
   },
   {
     key: "cache_write_1h_input",
-    label: "1 小时缓存写入",
+    label: "缓存写入·1h",
     required: false,
     vendor: "Anthropic",
   },
   {
     key: "cache_write_30m_input",
-    label: "30 分钟缓存写入",
+    label: "缓存写入·30m",
     required: false,
     vendor: "OpenAI",
   },
+  { key: "reasoning_output", label: "推理输出", required: false },
 ] as const;
 
 type PriceFieldKey = (typeof PRICE_FIELDS)[number]["key"];
+
+/** 相对未缓存输入的官方缓存倍率（DEC-030 / Anthropic passthrough-audit）。仍落库为绝对价。 */
+const CACHE_RATIO_FROM_UNCACHED = {
+  cache_read_input: 0.1,
+  cache_write_5m_input: 1.25,
+  cache_write_1h_input: 2,
+  cache_write_30m_input: 1.25,
+} as const;
+
+type CacheRatioFieldKey = keyof typeof CACHE_RATIO_FROM_UNCACHED;
+
+const CACHE_RATIO_KEYS = Object.keys(
+  CACHE_RATIO_FROM_UNCACHED,
+) as CacheRatioFieldKey[];
 
 export function ModelPricesDialog({
   open,
@@ -215,16 +230,17 @@ function ModelPriceForm({
   const [effectiveTo, setEffectiveTo] = useState("");
   const [status, setStatus] = useState("enabled");
   const [longContextEnabled, setLongContextEnabled] = useState(false);
-  const [longContextThreshold, setLongContextThreshold] = useState(
+  const [longContextThreshold, setLongContextThreshold] = useState<string>(
     DEFAULT_LONG_CONTEXT.threshold,
   );
-  const [longContextInputMultiplier, setLongContextInputMultiplier] = useState(
+  const [longContextInputMultiplier, setLongContextInputMultiplier] = useState<string>(
     DEFAULT_LONG_CONTEXT.inputMultiplier,
   );
-  const [longContextOutputMultiplier, setLongContextOutputMultiplier] = useState(
+  const [longContextOutputMultiplier, setLongContextOutputMultiplier] = useState<string>(
     DEFAULT_LONG_CONTEXT.outputMultiplier,
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [confirmOverwriteCache, setConfirmOverwriteCache] = useState(false);
 
   const mutation = useMutation({
     mutationFn: (vars: { effectiveFrom: string; effectiveTo: string | null }) =>
@@ -323,6 +339,39 @@ function ModelPriceForm({
     }));
   }
 
+  const uncachedBase = price.uncached_input.trim();
+  const uncachedBaseOk = MONEY_PATTERN.test(uncachedBase);
+  const uncachedBaseNum = uncachedBaseOk ? Number(uncachedBase) : NaN;
+
+  /** 按官方倍率写入缓存分项绝对价；默认只填空，已填需确认后覆盖。 */
+  function fillOfficialCacheRatios(overwrite: boolean) {
+    if (!uncachedBaseOk) {
+      toast.error("请先填写未缓存输入");
+      return;
+    }
+    const emptyKeys = CACHE_RATIO_KEYS.filter((k) => price[k].trim() === "");
+    if (!overwrite && emptyKeys.length === 0) {
+      setConfirmOverwriteCache(true);
+      return;
+    }
+    const targets = overwrite ? CACHE_RATIO_KEYS : emptyKeys;
+    setPrice((s) => {
+      const next = { ...s };
+      for (const key of targets) {
+        next[key] = roundPrice3(
+          Number(s.uncached_input.trim()) * CACHE_RATIO_FROM_UNCACHED[key],
+        );
+      }
+      return next;
+    });
+    setConfirmOverwriteCache(false);
+    toast.success(
+      overwrite
+        ? "已按官方倍率覆盖缓存分项"
+        : `已填入 ${targets.length} 项缓存价（官方倍率）`,
+    );
+  }
+
   // 校验失败时若长上下文字段有错，自动展开折叠区。
   const longContextHasError =
     !!errors.long_context_threshold ||
@@ -368,23 +417,62 @@ function ModelPriceForm({
           </div>
         ) : null}
 
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
+          <span className="text-muted-foreground">
+            缓存分项可按未缓存输入 × 官方倍率推算：缓存读取 0.1 / 写入·5m·30m 1.25 / 写入·1h 2（仅填空项）
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-7"
+            disabled={!uncachedBaseOk}
+            onClick={() => fillOfficialCacheRatios(false)}
+          >
+            按官方倍率填入
+          </Button>
+        </div>
+
         <div className="overflow-hidden rounded-md border">
           <div className="bg-muted/40 text-muted-foreground grid grid-cols-[1.4fr_1fr] gap-2 px-3 py-1.5 text-xs font-medium">
             <div>分项</div>
             <div>基准价</div>
           </div>
-          {PRICE_FIELDS.map((f) => (
-            <PriceRow
-              key={f.key}
-              label={f.label}
-              required={f.required}
-              vendor={"vendor" in f ? f.vendor : undefined}
-              price={price[f.key]}
-              priceError={errors[`price_${f.key}`]}
-              onPrice={(v) => setPrice((s) => ({ ...s, [f.key]: v }))}
-            />
-          ))}
+          {PRICE_FIELDS.map((f) => {
+            const ratio =
+              f.key in CACHE_RATIO_FROM_UNCACHED
+                ? CACHE_RATIO_FROM_UNCACHED[f.key as CacheRatioFieldKey]
+                : undefined;
+            const suggested =
+              ratio != null && uncachedBaseOk
+                ? roundPrice3(uncachedBaseNum * ratio)
+                : undefined;
+            return (
+              <PriceRow
+                key={f.key}
+                label={f.label}
+                required={f.required}
+                vendor={"vendor" in f ? f.vendor : undefined}
+                ratioHint={
+                  ratio != null ? `${trimDecimal(String(ratio))}×` : undefined
+                }
+                price={price[f.key]}
+                priceError={errors[`price_${f.key}`]}
+                placeholder={suggested}
+                onPrice={(v) => setPrice((s) => ({ ...s, [f.key]: v }))}
+              />
+            );
+          })}
         </div>
+
+        <ConfirmActionDialog
+          open={confirmOverwriteCache}
+          onOpenChange={setConfirmOverwriteCache}
+          title="覆盖已填的缓存价？"
+          description="缓存读取与各档缓存写入均已有值。确认后将全部按当前未缓存输入 × 官方倍率重算覆盖。"
+          confirmLabel="确认覆盖"
+          onConfirm={() => fillOfficialCacheRatios(true)}
+        />
 
         <LongContextSection
           enabled={longContextEnabled}
@@ -479,15 +567,21 @@ function PriceRow({
   label,
   required,
   vendor,
+  ratioHint,
   price,
   priceError,
+  placeholder,
   onPrice,
 }: {
   label: string;
   required: boolean;
   vendor?: "Anthropic" | "OpenAI";
+  /** 官方倍率提示，如「0.1×」，展示在分项标签旁。 */
+  ratioHint?: string;
   price: string;
   priceError?: string;
+  /** 有未缓存输入时可推算的占位值；否则回退必填 0.00 / 选填 —。 */
+  placeholder?: string;
   onPrice: (v: string) => void;
 }) {
   return (
@@ -502,12 +596,17 @@ function PriceRow({
             {vendor}
           </Badge>
         )}
+        {ratioHint && (
+          <span className="text-muted-foreground text-[11px] tabular-nums">
+            {ratioHint}
+          </span>
+        )}
       </div>
       <div>
         <Input
           value={price}
           onChange={(e) => onPrice(e.target.value)}
-          placeholder={required ? "0.00" : "—"}
+          placeholder={placeholder ?? (required ? "0.00" : "—")}
           inputMode="decimal"
           aria-invalid={!!priceError}
           className="h-8"
@@ -761,7 +860,7 @@ function LongContextSection({
               <Field data-invalid={!!errors.long_context_input_multiplier}>
                 <HintLabel
                   htmlFor="mp_lc_in"
-                  hint="触发后，所有输入侧分项单价乘以该倍率（含未缓存 / cache read / cache write）。"
+                  hint="触发后，所有输入侧分项单价乘以该倍率（含未缓存输入 / 缓存读取 / 缓存写入）。"
                 >
                   输入倍率
                 </HintLabel>
@@ -784,7 +883,7 @@ function LongContextSection({
               <Field data-invalid={!!errors.long_context_output_multiplier}>
                 <HintLabel
                   htmlFor="mp_lc_out"
-                  hint="触发后，输出与 reasoning 输出单价乘以该倍率。"
+                  hint="触发后，输出与推理输出单价乘以该倍率。"
                 >
                   输出倍率
                 </HintLabel>

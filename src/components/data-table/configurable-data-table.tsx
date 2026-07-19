@@ -131,16 +131,16 @@ export function ConfigurableDataTable<TData>({
     [columnLabelsProp, columnsProp],
   );
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<TData, unknown>[]>(
     () =>
-      columnsProp.map((col) => {
+      columnsProp.map((col): ColumnDef<TData, unknown> => {
         const id = columnIdOf(col);
         const label = columnLabels[id] ?? col.meta?.label ?? id;
         return {
           ...col,
           id: id || col.id,
           meta: { ...col.meta, label },
-        };
+        } as ColumnDef<TData, unknown>;
       }),
     [columnLabels, columnsProp],
   );
@@ -192,7 +192,7 @@ export function ConfigurableDataTable<TData>({
     [safePage, pageSize],
   );
 
-  const sortingState: SortingState = sorting ?? [];
+  const sortingState: SortingState = useMemo(() => sorting ?? [], [sorting]);
 
   const onPaginationChange = useCallback(
     (updater: Updater<PaginationState>) => {

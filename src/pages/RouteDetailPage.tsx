@@ -11,7 +11,7 @@ import {
   RouteOverviewStatsSkeleton,
 } from "@/components/routes/RouteOverviewStats";
 import { RouteDetailActions } from "@/components/routes/RouteDetailActions";
-import { ROUTE_MODE_LABEL, routePoolKindLabel } from "@/lib/routes/display";
+import { ROUTE_MODE_LABEL } from "@/lib/routes/display";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -55,8 +55,7 @@ export function RouteDetailPage() {
 
   const subtitle = route ? (
     <>
-      {ROUTE_MODE_LABEL[route.mode] ?? route.mode} ·{" "}
-      {routePoolKindLabel(route.pool_kind, route.mode)}
+      {ROUTE_MODE_LABEL[route.mode] ?? route.mode} · {route.channels.length} 个绑定渠道
       {route.description ? ` · ${route.description}` : ""}
     </>
   ) : null;

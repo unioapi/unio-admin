@@ -90,16 +90,16 @@ export function ServerDataTable<TData>({
 }: ServerDataTableProps<TData>) {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<TData, unknown>[]>(
     () =>
-      columnsProp.map((col) => {
+      columnsProp.map((col): ColumnDef<TData, unknown> => {
         const id = col.id ?? (col as { accessorKey?: string }).accessorKey ?? "";
         const label = columnLabels[id] ?? col.meta?.label ?? id;
         return {
           ...col,
           id: id || undefined,
           meta: { ...col.meta, label },
-        };
+        } as ColumnDef<TData, unknown>;
       }),
     [columnLabels, columnsProp],
   );

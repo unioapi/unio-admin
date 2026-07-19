@@ -59,12 +59,18 @@ function Field({ label, value, mono }: { label: string; value: ReactNode; mono?:
   );
 }
 
-/** 用户/Key：key 名（点击复制完整明文 key）+ 次行 #用户ID。 */
+/** 用户/Key：一行显示 #用户ID + key 名（点击复制完整明文 key）。 */
 export function RequestUserKeyCell({ row }: { row: RequestListItem }) {
   const name = row.api_key_name || (row.api_key_prefix ? `${row.api_key_prefix}…` : `Key #${row.api_key_id}`);
   const full = row.api_key_plaintext;
   return (
-    <div className="flex min-w-0 flex-col gap-1 py-0.5" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="flex min-w-0 items-center gap-1.5 py-0.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="text-muted-foreground shrink-0 text-[10px] tabular-nums">
+        #{row.user_id}
+      </span>
       {full ? (
         <button
           type="button"
@@ -79,7 +85,6 @@ export function RequestUserKeyCell({ row }: { row: RequestListItem }) {
       ) : (
         <span className="min-w-0 truncate font-medium">{name}</span>
       )}
-      <span className="text-muted-foreground text-[10px] tabular-nums">#{row.user_id}</span>
     </div>
   );
 }

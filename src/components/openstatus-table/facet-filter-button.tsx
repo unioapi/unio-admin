@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Check, PlusCircle, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function FacetFilterButton({
   allOption?: string | false;
 }) {
   const [open, setOpen] = useState(false);
-  const selectedValues = new Set(value);
+  const selectedValues = useMemo(() => new Set(value), [value]);
 
   const clear = useCallback(() => {
     onChange([]);

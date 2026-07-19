@@ -11,6 +11,7 @@ import { formatChartTs, formatCompact } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { ROUTE_MODE_LABEL } from "@/lib/routes/display";
 
 export const CHANNEL_OPS_ERROR_COLUMN_LABELS: Record<string, string> = {
   at: "时间",
@@ -33,7 +34,6 @@ export const CHANNEL_OPS_MODEL_COLUMN_LABELS: Record<string, string> = {
 export const CHANNEL_OPS_ROUTE_COLUMN_LABELS: Record<string, string> = {
   name: "线路",
   mode: "策略",
-  pool_kind: "池",
   status: "状态",
   action: "操作",
 };
@@ -175,13 +175,11 @@ export function channelOpsRouteColumns(): ColumnDef<ChannelOpsRoute, unknown>[] 
       header: "策略",
       size: 100,
       minSize: 72,
-      cell: ({ row }) => <span className="text-xs">{row.original.mode}</span>,
-    }),
-    resizableColumn<ChannelOpsRoute>("pool_kind", {
-      header: "池",
-      size: 100,
-      minSize: 72,
-      cell: ({ row }) => <span className="text-xs">{row.original.pool_kind}</span>,
+      cell: ({ row }) => (
+        <span className="text-xs">
+          {ROUTE_MODE_LABEL[row.original.mode] ?? row.original.mode}
+        </span>
+      ),
     }),
     resizableColumn<ChannelOpsRoute>("status", {
       header: "状态",

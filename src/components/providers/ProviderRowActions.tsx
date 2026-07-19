@@ -4,11 +4,11 @@ import { EllipsisIcon, EyeIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  archiveProvider,
   restoreProvider,
   type Provider,
 } from "@/lib/api/providers";
 import { apiErrorMessage } from "@/lib/api/client";
+import { ArchiveWithReplacementDialog } from "@/components/common/ArchiveWithReplacementDialog";
 import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
 import { Button } from "@/components/ui/button";
@@ -23,17 +23,10 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const queryClient = useQueryClient();
   const archived = provider.status === "archived";
 
-  const archiveMutation = useMutation({
-    mutationFn: () => archiveProvider(provider.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["providers"] });
-      toast.success(`已归档服务商「${provider.name}」（名下渠道已一并归档）`);
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  });
   const restoreMutation = useMutation({
     mutationFn: () => restoreProvider(provider.id),
     onSuccess: () => {
@@ -82,7 +75,7 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
                 </DropdownMenuItem>
               </>
             ) : (
-              <DropdownMenuItem onClick={() => runAndClose(() => archiveMutation.mutate())}>
+              <DropdownMenuItem onClick={() => openDialog(setArchiveOpen)}>
                 归档
               </DropdownMenuItem>
             )}
@@ -92,6 +85,18 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
 
       <ProviderFormDialog provider={provider} open={editOpen} onOpenChange={setEditOpen} />
       <DeleteProviderDialog provider={provider} open={deleteOpen} onOpenChange={setDeleteOpen} />
+      <ArchiveWithReplacementDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        target={{ kind: "provider", id: provider.id, name: provider.name }}
+        onArchived={() => {
+          queryClient.invalidateQueries({ queryKey: ["providers"] });
+          queryClient.invalidateQueries({ queryKey: ["channels"] });
+          queryClient.invalidateQueries({ queryKey: ["routes"] });
+          queryClient.invalidateQueries({ queryKey: ["route"] });
+          toast.success(`已归档服务商「${provider.name}」，线路池替换已原子提交`);
+        }}
+      />
     </>
   );
 }

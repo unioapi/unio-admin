@@ -85,7 +85,6 @@ const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: number }> =
   user: { size: 140, minSize: 100 },
   source: { size: 120, minSize: 88 },
   mode: { size: 100, minSize: 72 },
-  pool_kind: { size: 100, minSize: 72 },
   strategy: { size: 100, minSize: 72 },
   vendor: { size: 120, minSize: 88 },
   key: { size: 180, minSize: 120 },

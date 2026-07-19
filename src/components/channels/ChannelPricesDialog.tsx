@@ -61,28 +61,29 @@ const MONEY_PATTERN = /^\d+(\.\d+)?$/;
 // 成本分项：六个分项，前两个（未缓存输入/输出）成本必填（DEC-026：渠道只录成本）。
 // 缓存写入按 TTL 分档（DEC-030）：5m/1h 为 Anthropic，30m 为 OpenAI GPT-5.6+。
 const COST_FIELDS = [
+  // 文案与请求列表 / 费用拆分 / 模型基准售价对齐。
   { key: "uncached_input", label: "未缓存输入", required: true },
   { key: "output", label: "输出", required: true },
-  { key: "cache_read_input", label: "缓存读取输入", required: false },
-  { key: "reasoning_output", label: "reasoning 输出", required: false },
+  { key: "cache_read_input", label: "缓存读取", required: false },
   {
     key: "cache_write_5m_input",
-    label: "5 分钟缓存写入",
+    label: "缓存写入·5m",
     required: false,
     vendor: "Anthropic",
   },
   {
     key: "cache_write_1h_input",
-    label: "1 小时缓存写入",
+    label: "缓存写入·1h",
     required: false,
     vendor: "Anthropic",
   },
   {
     key: "cache_write_30m_input",
-    label: "30 分钟缓存写入",
+    label: "缓存写入·30m",
     required: false,
     vendor: "OpenAI",
   },
+  { key: "reasoning_output", label: "推理输出", required: false },
 ] as const;
 
 type CostFieldKey = (typeof COST_FIELDS)[number]["key"];

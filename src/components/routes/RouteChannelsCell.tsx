@@ -8,37 +8,18 @@ import { cn } from "@/lib/utils";
 
 export function RouteChannelsCell({
   routeId,
-  poolKind,
   count,
 }: {
   routeId: number;
-  poolKind: string;
   count: number;
 }) {
   const [open, setOpen] = useState(false);
   const poolQuery = useQuery({
     queryKey: ["route", routeId, "ops-pool", "list-cell"],
     queryFn: () => getRouteOpsChannelPool(routeId),
-    enabled: open && poolKind === "explicit",
+    enabled: open,
     staleTime: 5 * 60_000,
   });
-
-  if (poolKind === "all") {
-    return (
-      <HoverCard openDelay={120} closeDelay={80}>
-        <HoverCardTrigger asChild>
-          <span className="text-muted-foreground cursor-default text-xs underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
-            动态
-          </span>
-        </HoverCardTrigger>
-        <TipHoverCardContent align="start" className="w-72">
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            全量动态：按模型自动纳入全部可用渠道，无固定渠道池。
-          </p>
-        </TipHoverCardContent>
-      </HoverCard>
-    );
-  }
 
   if (count === 0) {
     return <span className="text-muted-foreground">—</span>;

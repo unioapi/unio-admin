@@ -244,12 +244,10 @@ function ChannelMarginRow({
 function RoutePriceCalculatorPanel({
   priceRatio,
   channelIds,
-  poolKind,
   channelNames,
 }: {
   priceRatio: string;
   channelIds: number[];
-  poolKind: "all" | "explicit";
   channelNames?: Record<number, string>;
 }) {
   const ratio = parseRatio(priceRatio);
@@ -277,7 +275,7 @@ function RoutePriceCalculatorPanel({
           rechargeFactor: pickCurrentChannelRechargeFactor(factors)?.factor ?? null,
         };
       },
-      enabled: poolKind === "explicit" && channelIds.length > 0,
+      enabled: channelIds.length > 0,
     })),
   });
 
@@ -314,9 +312,9 @@ function RoutePriceCalculatorPanel({
   }, [models, previewModelId]);
 
   const channelCosts = useMemo(() => {
-    if (!previewModel || poolKind !== "explicit" || channelIds.length === 0) return [];
+    if (!previewModel || channelIds.length === 0) return [];
     return listChannelCosts(previewModel, channelIds, channelNames, bundles);
-  }, [previewModel, poolKind, channelIds, channelNames, bundles]);
+  }, [previewModel, channelIds, channelNames, bundles]);
 
   const baseIn =
     previewModel?.base_uncached_input_price != null
@@ -336,8 +334,7 @@ function RoutePriceCalculatorPanel({
     });
   }, [models, channelIds, channelNames, bundles, ratio]);
 
-  const channelsLoading =
-    poolKind === "explicit" && channelIds.length > 0 && channelCostQueries.some((q) => q.isPending);
+  const channelsLoading = channelIds.length > 0 && channelCostQueries.some((q) => q.isPending);
 
   return (
     <div className="flex flex-col gap-4">
@@ -373,11 +370,7 @@ function RoutePriceCalculatorPanel({
             ratio={ratio}
           />
 
-          {poolKind === "all" ? (
-            <p className="text-muted-foreground rounded-md bg-muted/40 px-2.5 py-2 text-[11px] leading-relaxed">
-              全量动态池运行时才确定渠道；选手挑渠道后可逐条对比各渠道成本与毛利。
-            </p>
-          ) : channelIds.length === 0 ? (
+          {channelIds.length === 0 ? (
             <p className="text-muted-foreground rounded-md bg-muted/40 px-2.5 py-2 text-[11px] leading-relaxed">
               请在线路表单中勾选渠道，此处会列出每个渠道的成本与毛利。
             </p>
@@ -472,13 +465,11 @@ export function RoutePriceCalculator({
   priceRatio,
   onChange,
   channelIds,
-  poolKind,
   channelNames,
 }: {
   priceRatio: string;
   onChange: (priceRatio: string) => void;
   channelIds: number[];
-  poolKind: "all" | "explicit";
   channelNames?: Record<number, string>;
 }) {
   const [open, setOpen] = useState(false);
@@ -573,7 +564,6 @@ export function RoutePriceCalculator({
             <RoutePriceCalculatorPanel
               priceRatio={priceRatio}
               channelIds={channelIds}
-              poolKind={poolKind}
               channelNames={channelNames}
             />
           </SheetMain>
