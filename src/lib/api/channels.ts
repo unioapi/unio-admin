@@ -7,20 +7,25 @@ export interface Channel {
   id: number;
   provider_id: number;
   provider_name: string;
+  provider_endpoint_id: number;
+  provider_endpoint_name: string;
+  provider_endpoint_status: string;
   name: string;
   protocol: string;
   adapter_key: string;
   base_url: string;
+  config_revision: number;
+  admission_limits_revision: number;
   // 明文上游 API key（产品决策：明文存储，管理端可查看/复制/编辑）。
   credential: string;
   status: string;
   priority: number;
   timeout_ms: number | null;
-  // 渠道级限流（P2-8）：null=继承全局默认，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
+  // 渠道级限流（P2-8）：null=继承渠道默认限流，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
-  // 在途并发上限（DEC-029）：同时进行中的上游调用数（含整段流式传输）。null=继承全局默认，0=不限。
+  // 在途并发上限（DEC-029）：同时进行中的上游调用数（含整段流式传输）。null=继承并发默认 channel_limit，0=不限。
   concurrency_limit: number | null;
   // 上游「断开仍计费」标记（bill-on-cancel 中转，如 sub2api）：true 时失败/取消会记平台成本敞口。
   upstream_bills_on_disconnect: boolean;
@@ -34,7 +39,7 @@ export interface Channel {
   last_test_error: string | null;
 }
 
-// 限流入参（P2-8 + DEC-029 并发）：null=继承全局默认，0=不限，>0=具体上限。
+// 限流入参：三维 rate 的 null=继承渠道默认限流；并发的 null=继承并发默认 channel_limit；0=不限。
 interface RateLimitsInput {
   rpm: number | null;
   tpm: number | null;
@@ -74,15 +79,15 @@ export async function getChannel(id: number): Promise<Channel> {
 // 创建入参与后端 createChannelRequest 对齐；credential 为明文，后端加密落库。
 export interface CreateChannelInput {
   provider_id: number;
+  provider_endpoint_id: number;
   name: string;
   protocol: string;
   adapter_key: string;
-  base_url: string;
   credential: string;
   status: string;
   priority: number;
   timeout_ms: number | null;
-  // 可选渠道级限流；省略表示三维全继承全局默认。
+  // 可选渠道级限流；省略表示三维全继承渠道默认限流。
   rateLimits?: RateLimitsInput;
   // 上游「断开仍计费」标记；省略=false。
   billsOnDisconnect?: boolean;
@@ -121,7 +126,7 @@ export async function listAdapterKeys(): Promise<AdapterKeyOption[]> {
 export interface UpdateChannelInput {
   id: number;
   name: string;
-  base_url: string;
+  provider_endpoint_id: number;
   status: string;
   priority: number;
   timeout_ms: number | null;
@@ -145,17 +150,46 @@ export async function updateChannel({
   return res.data.data;
 }
 
-// 轮换凭据：只写不回，成功返回 204 无响应体。
+// 轮换凭据：后端原子保存并同步验证，统一返回不含密钥的结构化结果。
 export interface RotateCredentialInput {
   id: number;
   credential: string;
 }
 
+export type CredentialVerificationState =
+  | "passed"
+  | "failed"
+  | "stale"
+  | "execution_failed"
+  | "not_required";
+
+export interface CredentialVerification {
+  state: CredentialVerificationState;
+  tested_endpoint_base_url_revision: number | null;
+  tested_endpoint_status_revision: number | null;
+  tested_config_revision: number | null;
+  state_change_applied: boolean;
+  credential_valid_after: boolean;
+  result: ChannelTestResult | null;
+}
+
+export interface RotateCredentialResult {
+  credential_saved: true;
+  credential_changed: boolean;
+  saved_config_revision: number;
+  verification: CredentialVerification;
+  current_config_revision: number;
+}
+
 export async function rotateChannelCredential({
   id,
   credential,
-}: RotateCredentialInput): Promise<void> {
-  await api.put(`/admin/v1/channels/${id}/credential`, { credential });
+}: RotateCredentialInput): Promise<RotateCredentialResult> {
+  const res = await api.put<{ data: RotateCredentialResult }>(
+    `/admin/v1/channels/${id}/credential`,
+    { credential },
+  );
+  return res.data.data;
 }
 
 // 删除渠道：仅允许删除已归档且无历史引用的渠道（后端「先归档才能删」闸门）。
@@ -181,7 +215,7 @@ export async function restoreChannel(id: number): Promise<void> {
 }
 
 // 与后端 channelTestResultDTO 对齐：一次渠道检测结果。
-// 始终代表「检测已执行」（HTTP 200）；success 表达渠道是否健康，error_code 成功时为 null。
+// 始终代表「检测已执行」（HTTP 200）；success 表达本次上游调用是否成功，error_code 成功时为 null。
 export interface ChannelTestResult {
   success: boolean;
   latency_ms: number;

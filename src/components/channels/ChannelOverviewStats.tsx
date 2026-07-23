@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
 import type {
-  ChannelCircuitBreakerStatus,
+  ChannelBreakerSnapshot,
   ChannelOpsDetail,
+  ChannelRuntime,
 } from "@/lib/api/channelsOps";
+import type { RuntimeSyncState } from "@/lib/api/runtime";
 import type { BreakdownRow } from "@/lib/api/dashboard";
 import { formatInt, formatRelativeTime } from "@/lib/format";
 import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
 import { ChannelSuccessRateCell } from "@/components/common/ChannelSuccessRateCell";
 import {
   ChannelCircuitBreakerBadge,
+  channelRuntimeStateLabel,
   circuitBreakerStateLabel,
 } from "@/components/channels/ChannelCircuitBreakerBadge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,13 +37,19 @@ function Stat({
 export function ChannelOverviewStats({
   detail,
   breakdownRow,
+  runtime,
+  runtimeSyncState,
 }: {
   detail: ChannelOpsDetail;
   /** 概览「表现 → 渠道」中该渠道那一行，原样驱动成功率列 */
   breakdownRow?: BreakdownRow;
+  runtime?: ChannelRuntime | null;
+  runtimeSyncState?: RuntimeSyncState;
 }) {
-  const breaker = detail.circuit_breaker;
-  const breakerState = breaker?.state ?? "closed";
+  const breaker = runtime?.breaker;
+  const breakerState =
+    channelRuntimeStateLabel(runtimeSyncState) ??
+    (breaker?.exists ? circuitBreakerStateLabel(breaker.state) : "无运行样本");
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -78,8 +87,11 @@ export function ChannelOverviewStats({
         label="熔断"
         value={
           <span className="inline-flex items-center gap-1.5 font-semibold">
-            <ChannelCircuitBreakerBadge breaker={breaker} />
-            <span className="text-sm">{circuitBreakerStateLabel(breakerState)}</span>
+            <ChannelCircuitBreakerBadge
+              breaker={breaker}
+              runtimeSyncState={runtimeSyncState}
+            />
+            <span className="text-sm">{breakerState}</span>
           </span>
         }
       />
@@ -100,14 +112,21 @@ export function ChannelOverviewStatsSkeleton() {
 /** 供概览侧栏等复用的熔断状态展示（图标 + 文案）。 */
 export function ChannelCircuitBreakerSummary({
   breaker,
+  runtimeSyncState,
 }: {
-  breaker?: ChannelCircuitBreakerStatus | null;
+  breaker?: ChannelBreakerSnapshot | null;
+  runtimeSyncState?: RuntimeSyncState;
 }) {
-  const state = breaker?.state ?? "closed";
+  const label =
+    channelRuntimeStateLabel(runtimeSyncState) ??
+    (breaker?.exists ? circuitBreakerStateLabel(breaker.state) : "无运行样本");
   return (
     <span className="inline-flex items-center gap-1.5">
-      <ChannelCircuitBreakerBadge breaker={breaker} />
-      <span>{circuitBreakerStateLabel(state)}</span>
+      <ChannelCircuitBreakerBadge
+        breaker={breaker}
+        runtimeSyncState={runtimeSyncState}
+      />
+      <span>{label}</span>
     </span>
   );
 }

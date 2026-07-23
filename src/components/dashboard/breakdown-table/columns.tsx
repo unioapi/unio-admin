@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import type {
   BreakdownDimension,
   BreakdownRow,
-  HealthBucket,
 } from "@/lib/api/dashboard";
 import {
   formatCompact,
@@ -34,23 +33,6 @@ import {
   requestsCountLabel,
   type BreakdownColumnId,
 } from "./constants";
-
-const HEALTH_LABEL: Record<HealthBucket, string> = {
-  healthy: "健康",
-  degraded: "降级",
-  unhealthy: "不健康",
-  no_data: "无数据",
-};
-
-const HEALTH_VARIANT: Record<
-  HealthBucket,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  healthy: "default",
-  degraded: "secondary",
-  unhealthy: "destructive",
-  no_data: "outline",
-};
 
 type StatIntent = "default" | "success" | "warning" | "danger";
 
@@ -117,19 +99,6 @@ export function createBreakdownColumns(
       accessorKey: "status",
       header: "状态",
       cell: ({ row }) => breakdownStatusBadge(row.original.status),
-    },
-    health: {
-      ...columnMeta("health"),
-      accessorKey: "health_bucket",
-      header: "健康",
-      cell: ({ row }) => {
-        const bucket = row.original.health_bucket || "no_data";
-        return (
-          <Badge variant={HEALTH_VARIANT[bucket] ?? "outline"}>
-            {HEALTH_LABEL[bucket] ?? "无数据"}
-          </Badge>
-        );
-      },
     },
     requests: {
       ...columnMeta("requests"),

@@ -4,7 +4,10 @@ import { AlertTriangleIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { archiveChannel, listChannels, type Channel } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
-import { archiveProvider } from "@/lib/api/providers";
+import {
+  archiveProvider,
+  type ProviderStatusChangeResult,
+} from "@/lib/api/providers";
 import { getProviderOpsRouteCatalog } from "@/lib/api/providersOps";
 import { getRoute, type Route } from "@/lib/api/routes";
 import { getChannelOpsRoutes } from "@/lib/api/channelsOps";
@@ -82,7 +85,7 @@ export function ArchiveWithReplacementDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: ArchiveTarget;
-  onArchived: () => void;
+  onArchived: (result?: ProviderStatusChangeResult) => void;
 }) {
   const [replacementId, setReplacementId] = useState("");
 
@@ -104,16 +107,18 @@ export function ArchiveWithReplacementDialog({
   const needsReplacement = (impactQuery.data?.emptiedRoutes.length ?? 0) > 0;
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async (): Promise<ProviderStatusChangeResult | undefined> => {
       const replacement = needsReplacement ? Number(replacementId) : undefined;
-      return target.kind === "channel"
-        ? archiveChannel(target.id, replacement)
-        : archiveProvider(target.id, replacement);
+      if (target.kind === "channel") {
+        await archiveChannel(target.id, replacement);
+        return undefined;
+      }
+      return archiveProvider(target.id, replacement);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setReplacementId("");
       onOpenChange(false);
-      onArchived();
+      onArchived(result);
     },
   });
 

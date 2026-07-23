@@ -8,8 +8,6 @@ export interface TokenStats {
   total: number;
 }
 
-export type HealthBucket = "healthy" | "degraded" | "unhealthy" | "no_data";
-
 export type TimeseriesMetric = "requests" | "tokens" | "spend" | "cost";
 export type TimeseriesInterval = "minute" | "hour" | "day";
 
@@ -134,8 +132,8 @@ export interface RadarBadChannel {
   status: string;
   attempt_total: number;
   attempt_succeeded: number;
+  attempt_failed: number;
   success_rate: number;
-  bucket: HealthBucket;
   recent_error_code: string;
 }
 
@@ -179,7 +177,6 @@ export interface BreakdownRow {
   avg_tps: number;
   /** provider/channel 维度：完整延迟画像 */
   latency?: LatencyStats;
-  health_bucket: HealthBucket;
   recent_error: string;
   /** 服务商维度：命中渠道数 */
   channel_count: number;

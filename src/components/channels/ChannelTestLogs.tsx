@@ -19,6 +19,7 @@ const SOURCE_LABEL: Record<string, string> = {
   worker: "自动巡检",
   manual: "手动检测",
   runtime_401: "运行时 401",
+  credential_rotate: "凭据轮换",
 };
 
 const COLUMN_LABELS: Record<string, string> = {

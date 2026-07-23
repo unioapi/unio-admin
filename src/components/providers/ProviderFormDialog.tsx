@@ -83,10 +83,13 @@ export function ProviderFormDialog({
       // 新建不影响已有渠道，无需刷。
       if (isEdit) {
         queryClient.invalidateQueries({ queryKey: ["channels"] });
+        queryClient.invalidateQueries({ queryKey: ["provider-endpoints"] });
       }
-      toast.success(
-        isEdit ? `已保存「${saved.name}」` : `已创建服务商「${saved.name}」`,
-      );
+      toast.success(saved.runtime_sync_pending
+        ? "已保存，运行态同步中"
+        : isEdit
+          ? `已保存「${saved.name}」`
+          : `已创建服务商「${saved.name}」`);
       setOpen(false);
     },
     onError: (err) => {

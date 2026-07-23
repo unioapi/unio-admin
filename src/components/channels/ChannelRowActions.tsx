@@ -104,7 +104,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
     statusMutation.mutate({
       id: channel.id,
       name: channel.name,
-      base_url: channel.base_url,
+      provider_endpoint_id: channel.provider_endpoint_id,
       status: enabling ? "enabled" : "disabled",
       priority: channel.priority,
       timeout_ms: channel.timeout_ms,

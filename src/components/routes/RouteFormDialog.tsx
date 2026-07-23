@@ -64,7 +64,9 @@ function rpmLimitError(raw: string): string | undefined {
   const t = raw.trim();
   if (t === "") return undefined;
   const n = Number(t);
-  if (!Number.isInteger(n) || n < 0) return "需为 ≥ 0 的整数（0=不限，留空=继承默认）";
+  if (!Number.isInteger(n) || n < 0) {
+    return "需为 ≥ 0 的整数（0=不限，留空=继承线路默认限流）";
+  }
   return undefined;
 }
 
@@ -159,9 +161,9 @@ function RouteForm({
     }
     const rpmErr = rpmLimitError(rpmLimit);
     if (rpmErr) next.rpm_limit = rpmErr;
-    const tpmErr = rateLimitWithUnitError(tpmLimit);
+    const tpmErr = rateLimitWithUnitError(tpmLimit, "继承线路默认限流");
     if (tpmErr) next.tpm_limit = tpmErr;
-    const rpdErr = rateLimitWithUnitError(rpdLimit);
+    const rpdErr = rateLimitWithUnitError(rpdLimit, "继承线路默认限流");
     if (rpdErr) next.rpd_limit = rpdErr;
     if (mode === "fixed" && channelIds.length !== 1) {
       next.channels = "固定线路必须恰好选择一条渠道";
@@ -206,7 +208,7 @@ function RouteForm({
         <DialogHeader>
           <DialogTitle>{route ? "编辑线路" : "新建线路"}</DialogTitle>
           <DialogDescription>
-            所有线路使用手动绑定的渠道池；均衡策略按容量和健康度分流，固定策略锁定单条渠道。
+            所有线路使用手动绑定的渠道池；均衡策略按容量、错误率、流式首字和渠道成本分流，固定策略锁定单条渠道。
           </DialogDescription>
         </DialogHeader>
       </div>
@@ -249,7 +251,7 @@ function RouteForm({
         <Field>
             <HintLabel
               htmlFor="rt_mode"
-              hint="均衡策略在线路渠道池内按全局容量和健康度分流；固定策略锁定单条渠道且不跨渠道回退。"
+              hint="均衡策略在线路渠道池内按容量、错误率、流式首字和渠道成本动态分流；固定策略锁定单条渠道且不跨渠道回退。"
             >
               选路策略
             </HintLabel>
@@ -267,7 +269,7 @@ function RouteForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="balanced">均衡（容量与健康度）</SelectItem>
+                <SelectItem value="balanced">均衡（容量、错误率、首字与成本）</SelectItem>
                 <SelectItem value="fixed">固定（锁定单渠道）</SelectItem>
               </SelectContent>
             </Select>
@@ -319,7 +321,7 @@ function RouteForm({
         </Field>
 
         <Field>
-          <HintLabel hint="线路级限流：绑定该线路的每个用户合计生效（多建 Key 不放大配额），不同用户各自独立。留空=继承全局默认，0=不限；TPM、RPD 可带单位 K/M/B。">
+          <HintLabel hint="线路级限流：绑定该线路的每个用户合计生效（多建 Key 不放大配额），不同用户各自独立。留空=继承线路默认限流，0=不限；TPM、RPD 可带单位 K/M/B。">
             线路级限流
           </HintLabel>
           <div className="rounded-lg border bg-muted/30 p-3">
@@ -334,7 +336,7 @@ function RouteForm({
                   min={0}
                   value={rpmLimit}
                   onChange={(e) => setRpmLimit(e.target.value)}
-                  placeholder="继承默认"
+                  placeholder="继承线路默认限流"
                   aria-invalid={!!errors.rpm_limit}
                 />
                 <FieldError>{errors.rpm_limit}</FieldError>
@@ -348,6 +350,7 @@ function RouteForm({
                   value={tpmLimit}
                   onChange={setTpmLimit}
                   ariaInvalid={!!errors.tpm_limit}
+                  placeholder="继承线路默认限流"
                 />
                 <FieldError>{errors.tpm_limit}</FieldError>
               </Field>
@@ -360,6 +363,7 @@ function RouteForm({
                   value={rpdLimit}
                   onChange={setRpdLimit}
                   ariaInvalid={!!errors.rpd_limit}
+                  placeholder="继承线路默认限流"
                 />
                 <FieldError>{errors.rpd_limit}</FieldError>
               </Field>

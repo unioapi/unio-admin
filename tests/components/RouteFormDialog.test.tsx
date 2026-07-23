@@ -67,6 +67,7 @@ describe("RouteFormDialog", () => {
         <RouteFormDialog open onOpenChange={vi.fn()} route={null} onSaved={vi.fn()} />
       </TestProviders>,
     );
+    expect(screen.getAllByPlaceholderText("继承线路默认限流")).toHaveLength(3);
 
     await user.type(screen.getByRole("textbox", { name: /线路名/ }), "balanced-route");
     await user.click(screen.getByRole("button", { name: "创建" }));

@@ -4,7 +4,6 @@ import { ArrowUpRightIcon } from "lucide-react";
 import type { ModelOpsChannel, ModelOpsRequest } from "@/lib/api/modelsOps";
 import { resizableColumn } from "@/components/data-table";
 import { requestIdLinkColumn } from "./shared-columns";
-import { HEALTH_LABEL, HEALTH_VARIANT, healthBucketOf } from "@/components/channels/health";
 import { AttemptSuccessRateCell } from "@/components/table-cells/AttemptSuccessRateCell";
 import { formatChartTs, formatCompact, formatLatencyMs } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +11,6 @@ import { Button } from "@/components/ui/button";
 
 export const MODEL_OPS_CHANNEL_COLUMN_LABELS: Record<string, string> = {
   channel: "渠道",
-  health: "健康",
   attempt_total: "尝试",
   success_rate: "成功率",
   latency_p95: "P95",
@@ -40,17 +38,6 @@ export function modelOpsChannelColumns(): ColumnDef<ModelOpsChannel, unknown>[] 
           <div className="text-muted-foreground truncate text-xs">{row.original.upstream_model}</div>
         </div>
       ),
-    }),
-    resizableColumn<ModelOpsChannel>("health", {
-      header: "健康",
-      size: 88,
-      minSize: 72,
-      cell: ({ row }) => {
-        const bucket = healthBucketOf(row.original.attempt_succeeded, row.original.attempt_total);
-        return (
-          <Badge variant={HEALTH_VARIANT[bucket]}>{HEALTH_LABEL[bucket]}</Badge>
-        );
-      },
     }),
     resizableColumn<ModelOpsChannel>("attempt_total", {
       header: "尝试",

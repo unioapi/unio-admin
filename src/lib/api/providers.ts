@@ -9,6 +9,13 @@ export interface Provider {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
+  runtime_sync_pending: boolean;
+  affected_endpoint_count: number;
+}
+
+export interface ProviderStatusChangeResult {
+  runtime_sync_pending: boolean;
+  affected_endpoint_count: number;
 }
 
 // 服务端分页：把 page/page_size/status/q 作为 query 传给后端，拆出 items + total。
@@ -78,15 +85,20 @@ export async function deleteProvider(id: number): Promise<void> {
 export async function archiveProvider(
   id: number,
   replacementChannelId?: number,
-): Promise<void> {
-  await api.post(`/admin/v1/providers/${id}/archive`,
+): Promise<ProviderStatusChangeResult> {
+  const res = await api.post<{ data: ProviderStatusChangeResult }>(
+    `/admin/v1/providers/${id}/archive`,
     replacementChannelId == null
       ? {}
       : { replacement_channel_id: replacementChannelId },
   );
+  return res.data.data;
 }
 
 // 恢复服务商：archived → disabled（名下渠道不自动恢复，需逐个恢复）。
-export async function restoreProvider(id: number): Promise<void> {
-  await api.post(`/admin/v1/providers/${id}/restore`);
+export async function restoreProvider(id: number): Promise<ProviderStatusChangeResult> {
+  const res = await api.post<{ data: ProviderStatusChangeResult }>(
+    `/admin/v1/providers/${id}/restore`,
+  );
+  return res.data.data;
 }

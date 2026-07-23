@@ -32,8 +32,6 @@ function autoSizeValue(row: BreakdownRow, columnId: string) {
       return row.label;
     case "status":
       return row.status === "enabled" ? "启用" : row.status === "disabled" ? "停用" : row.status;
-    case "health":
-      return row.health_bucket;
     case "requests":
       return formatCompact(row.terminal);
     case "succeeded":

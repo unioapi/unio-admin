@@ -17,7 +17,6 @@ import {
   ChannelLastTestCell,
   channelLastTestAutoSizeLabel,
 } from "@/components/channels/ChannelLastTest";
-import { ChannelCircuitBreakerBadge } from "@/components/channels/ChannelCircuitBreakerBadge";
 import { RateLimitSummaryCell } from "@/components/rate-limit/RateLimitSummaryCell";
 import { ChannelRowActions } from "@/components/channels/ChannelRowActions";
 import { SecretCopyCell } from "@/components/common/SecretCopyCell";
@@ -314,6 +313,7 @@ function ChannelRateLimitCell({
       tpm={tpm}
       rpd={rpd}
       scopeLabel="渠道级限流"
+      defaultScope="渠道"
     />
   );
 }
@@ -488,7 +488,6 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
             <div className="min-w-0 truncate font-medium" title={row.original.name}>
               {row.original.name}
             </div>
-            <ChannelCircuitBreakerBadge breaker={row.original.circuit_breaker} />
           </div>
           {row.original.provider_name ? (
             <div

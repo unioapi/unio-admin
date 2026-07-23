@@ -1,6 +1,7 @@
 import { api } from "@/lib/api/client";
 import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
+import type { RuntimeSyncState } from "@/lib/api/runtime";
 
 // 与后端 M8 system handler DTO 对齐。
 // settlement recovery job：上游成功且已有可靠 usage、但 settlement 确认前的持久化补偿任务。
@@ -133,6 +134,35 @@ export async function getSystemConfig(): Promise<SystemConfig> {
   return res.data.data;
 }
 
+export interface RuntimeOperationSummary {
+  nonterminal_count: number;
+  oldest_age_seconds: number | null;
+}
+
+// 维护诊断只保留脱敏事实：类型中不得加入随机 epoch、operation token 或 hash。
+export interface RuntimeDiagnostics {
+  readiness: {
+    ready: boolean;
+    reason: string;
+  };
+  runtime_state_epoch: {
+    state: string;
+    revision: number;
+    match: boolean;
+  };
+  operations: {
+    endpoint_routing: RuntimeOperationSummary;
+    runtime_control: RuntimeOperationSummary;
+  };
+}
+
+export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
+  const res = await api.get<{ data: RuntimeDiagnostics }>(
+    "/admin/v1/system/runtime-diagnostics",
+  );
+  return res.data.data;
+}
+
 // Provider 全局设置（可编辑）：Anthropic beta 转发策略。与后端 anthropicBetaPolicyDTO 对齐。
 // mode：passthrough（全透传）/ filter（黑名单）/ whitelist（白名单）。
 // list：filter 当黑名单、whitelist 当白名单；passthrough 忽略。
@@ -174,6 +204,18 @@ export interface SettingItem {
   default: unknown;
   value: unknown;
   source: "redis" | "db" | "default" | "";
+  revision: number;
+  runtime_active_revision?: number;
+  runtime_pending_revision?: number;
+  runtime_sync_state?: RuntimeSyncState;
+}
+
+export interface SettingWriteResult {
+  key: string;
+  revision: number;
+  state: "saved" | "active" | "runtime_sync_pending";
+  active_revision: number;
+  pending_revision: number;
 }
 
 export async function listSettings(): Promise<SettingItem[]> {
@@ -182,9 +224,33 @@ export async function listSettings(): Promise<SettingItem[]> {
 }
 
 // 通用运行时配置写入：body 即该 key 的 JSON 值（后端按注册表校验，非法值 400）。
-// 写 DB + Redis，gateway 约 5s 内热生效（settingsApplier 周期推送）。
-export async function updateSetting(key: string, value: unknown): Promise<void> {
-  await api.put(`/admin/v1/settings/${encodeURIComponent(key)}`, value, {
+// 五个关键运行态控制通过 durable Redis control 激活；其余 gateway 设置由 settingsApplier 热更新。
+export async function updateSetting(
+  key: string,
+  value: unknown,
+): Promise<SettingWriteResult> {
+  const res = await api.put<{
+    data:
+      | SettingWriteResult
+      | {
+          Key: string;
+          Revision: number;
+          State: SettingWriteResult["state"];
+          ActiveRevision: number;
+          PendingRevision: number;
+        };
+  }>(`/admin/v1/settings/${encodeURIComponent(key)}`, value, {
     headers: { "Content-Type": "application/json" },
   });
+  const result = res.data.data;
+  if ("Key" in result) {
+    return {
+      key: result.Key,
+      revision: result.Revision,
+      state: result.State,
+      active_revision: result.ActiveRevision,
+      pending_revision: result.PendingRevision,
+    };
+  }
+  return result;
 }

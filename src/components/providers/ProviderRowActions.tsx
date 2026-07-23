@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { EllipsisIcon, EyeIcon } from "lucide-react";
+import { EllipsisIcon, EyeIcon, PlusIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -10,9 +10,14 @@ import {
 import { apiErrorMessage } from "@/lib/api/client";
 import { ArchiveWithReplacementDialog } from "@/components/common/ArchiveWithReplacementDialog";
 import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
+import { ProviderEndpointFormDialog } from "@/components/providers/ProviderEndpointsSection";
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
 import { Button } from "@/components/ui/button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   HoverDropdownMenu,
   HoverDropdownMenuContent,
@@ -21,6 +26,7 @@ import {
 
 export function ProviderRowActions({ provider }: { provider: Provider }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [endpointOpen, setEndpointOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -29,9 +35,12 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
 
   const restoreMutation = useMutation({
     mutationFn: () => restoreProvider(provider.id),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
-      toast.success(`已恢复服务商「${provider.name}」为停用（名下渠道需单独恢复）`);
+      queryClient.invalidateQueries({ queryKey: ["provider-endpoints"] });
+      toast.success(result.runtime_sync_pending
+        ? "已保存，运行态同步中"
+        : `已恢复服务商「${provider.name}」为停用（名下渠道需单独恢复）`);
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
@@ -60,10 +69,20 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
               <EllipsisIcon />
             </Button>
           </HoverDropdownMenuTrigger>
-          <HoverDropdownMenuContent align="end" className="min-w-32">
-            <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
-            {archived ? (
-              <>
+          <HoverDropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuGroup>
+              {!archived ? (
+                <DropdownMenuItem onClick={() => openDialog(setEndpointOpen)}>
+                  <PlusIcon />
+                  新建端点
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              {archived ? (
+                <>
                 <DropdownMenuItem onClick={() => runAndClose(() => restoreMutation.mutate())}>
                   恢复
                 </DropdownMenuItem>
@@ -73,28 +92,37 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
                 >
                   删除
                 </DropdownMenuItem>
-              </>
-            ) : (
-              <DropdownMenuItem onClick={() => openDialog(setArchiveOpen)}>
-                归档
-              </DropdownMenuItem>
-            )}
+                </>
+              ) : (
+                <DropdownMenuItem onClick={() => openDialog(setArchiveOpen)}>
+                  归档
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuGroup>
           </HoverDropdownMenuContent>
         </HoverDropdownMenu>
       </div>
 
+      <ProviderEndpointFormDialog
+        providerId={provider.id}
+        open={endpointOpen}
+        onOpenChange={setEndpointOpen}
+      />
       <ProviderFormDialog provider={provider} open={editOpen} onOpenChange={setEditOpen} />
       <DeleteProviderDialog provider={provider} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ArchiveWithReplacementDialog
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
         target={{ kind: "provider", id: provider.id, name: provider.name }}
-        onArchived={() => {
+        onArchived={(result) => {
           queryClient.invalidateQueries({ queryKey: ["providers"] });
+          queryClient.invalidateQueries({ queryKey: ["provider-endpoints"] });
           queryClient.invalidateQueries({ queryKey: ["channels"] });
           queryClient.invalidateQueries({ queryKey: ["routes"] });
           queryClient.invalidateQueries({ queryKey: ["route"] });
-          toast.success(`已归档服务商「${provider.name}」，线路池替换已原子提交`);
+          toast.success(result?.runtime_sync_pending
+            ? "已保存，运行态同步中"
+            : `已归档服务商「${provider.name}」，线路池替换已原子提交`);
         }}
       />
     </>

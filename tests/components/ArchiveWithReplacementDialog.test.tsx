@@ -12,13 +12,14 @@ const mocks = vi.hoisted(() => ({
   getChannelRoutes: vi.fn(),
   getProviderRoutes: vi.fn(),
   getRoute: vi.fn(),
+  archiveProvider: vi.fn(),
 }));
 
 vi.mock("@/lib/api/channels", () => ({
   archiveChannel: mocks.archiveChannel,
   listChannels: mocks.listChannels,
 }));
-vi.mock("@/lib/api/providers", () => ({ archiveProvider: vi.fn() }));
+vi.mock("@/lib/api/providers", () => ({ archiveProvider: mocks.archiveProvider }));
 vi.mock("@/lib/api/channelsOps", () => ({ getChannelOpsRoutes: mocks.getChannelRoutes }));
 vi.mock("@/lib/api/providersOps", () => ({
   getProviderOpsRouteCatalog: mocks.getProviderRoutes,
@@ -64,6 +65,10 @@ describe("ArchiveWithReplacementDialog", () => {
       ],
     });
     mocks.archiveChannel.mockResolvedValue(undefined);
+    mocks.archiveProvider.mockResolvedValue({
+      runtime_sync_pending: false,
+      affected_endpoint_count: 0,
+    });
   });
 
   it("requires and submits a replacement when an enabled route would be emptied", async () => {
@@ -88,5 +93,33 @@ describe("ArchiveWithReplacementDialog", () => {
     await user.click(screen.getByRole("button", { name: "替换并归档" }));
 
     await waitFor(() => expect(mocks.archiveChannel).toHaveBeenCalledWith(5, 9));
+  });
+
+  it("forwards the Provider runtime-sync summary to its caller", async () => {
+    const user = userEvent.setup();
+    const onArchived = vi.fn();
+    const pending = {
+      runtime_sync_pending: true,
+      affected_endpoint_count: 2,
+    };
+    mocks.getProviderRoutes.mockResolvedValue([]);
+    mocks.archiveProvider.mockResolvedValue(pending);
+
+    render(
+      <TestProviders>
+        <ArchiveWithReplacementDialog
+          open
+          onOpenChange={vi.fn()}
+          target={{ kind: "provider", id: 7, name: "Provider A" }}
+          onArchived={onArchived}
+        />
+      </TestProviders>,
+    );
+
+    await screen.findByText("当前操作不会清空启用线路，可直接归档。");
+    await user.click(screen.getByRole("button", { name: "确认归档" }));
+
+    await waitFor(() => expect(mocks.archiveProvider).toHaveBeenCalledWith(7, undefined));
+    expect(onArchived).toHaveBeenCalledWith(pending);
   });
 });

@@ -1,8 +1,9 @@
 import { api } from "@/lib/api/client";
 import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
-import type { HealthBucket, LatencyStats, RangeQuery } from "@/lib/api/dashboard";
+import type { LatencyStats, RangeQuery } from "@/lib/api/dashboard";
 import type { RouteMode } from "@/lib/api/routes";
+import type { BreakerState, RuntimeSyncState } from "@/lib/api/runtime";
 
 // §3.3 渠道作战台只读运维聚合（与后端 channels_ops DTO 对齐）。
 
@@ -23,11 +24,10 @@ export interface ChannelOpsRow {
   success_rate: number;
   timeout_total: number;
   latency: LatencyStats;
-  health: HealthBucket;
   bound_models: number;
   bound_routes: number;
   recent_error_code: string;
-  // 渠道级限流（P2-8）：null=继承全局默认，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
+  // 渠道级限流（P2-8）：null=继承渠道默认限流，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
@@ -43,30 +43,43 @@ export interface ChannelOpsRow {
   cost_multiplier_overrides: number;
   // 当前生效的充值倍率；null=未配置（结算按 1.0）。
   recharge_factor: string | null;
-  // gateway 进程内熔断快照；缺省时前端按闭合（绿）常驻显示。
-  circuit_breaker?: ChannelCircuitBreakerStatus | null;
 }
 
-export interface ChannelCircuitBreakerStatus {
-  state: "open" | "half_open" | "closed" | string;
-  failures: number;
-  successes: number;
-  window_start?: string | null;
-  opened_at?: string | null;
-  open_remaining_ms?: number | null;
-  half_open_in_flight: boolean;
-  health_score: number;
+export interface ChannelBreakerSnapshot {
+  scope: "channel";
+  id: number;
+  exists: boolean;
+  state: BreakerState;
+  open_remaining_ms: number;
+  open_level: number;
+  eligible_successes: number;
+  eligible_failures: number;
+  consecutive_failures: number;
+  error_rate: number;
+  sample_count: number;
+  ttft_ewma_ms: number;
+  ttft_samples: number;
+  ttft_sample_source: "stream_only";
+  // 客户端收到 Redis 快照的时间，仅用于本地倒计时，不属于服务端 DTO。
   observed_at: string;
-  instances?: ChannelCircuitBreakerInstance[];
 }
 
-export interface ChannelCircuitBreakerInstance {
-  id: string;
-  state: string;
-  open_remaining_ms?: number | null;
-  half_open_in_flight: boolean;
-  failures: number;
-  successes: number;
+export interface ChannelRuntime {
+  id: number;
+  provider_endpoint_id: number;
+  endpoint_base_url_revision: number;
+  endpoint_status_revision: number;
+  config_revision: number;
+  admission_limits_revision: number;
+  runtime_sync_state: RuntimeSyncState;
+  runtime_provider_endpoint_id: number | null;
+  runtime_endpoint_base_url_revision: number | null;
+  runtime_endpoint_status_revision: number | null;
+  runtime_config_revision: number | null;
+  runtime_admission_active_revision: number | null;
+  runtime_admission_pending_revision: number | null;
+  admission_payload_matches: boolean;
+  breaker: ChannelBreakerSnapshot | null;
 }
 
 export interface ChannelTestLog {
@@ -92,8 +105,6 @@ export interface ChannelOpsDetail {
   latency: LatencyStats;
   last_success_at: string | null;
   last_failure_at: string | null;
-  /** gateway 熔断快照；缺省时前端按闭合显示。 */
-  circuit_breaker?: ChannelCircuitBreakerStatus | null;
 }
 
 export interface ChannelOpsPerfPoint {
@@ -161,6 +172,35 @@ export async function getChannelOpsDetail(
     { params },
   );
   return res.data.data;
+}
+
+function withObservedAt(runtime: Omit<ChannelRuntime, "breaker"> & {
+  breaker: Omit<ChannelBreakerSnapshot, "observed_at"> | null;
+}): ChannelRuntime {
+  return {
+    ...runtime,
+    breaker: runtime.breaker
+      ? { ...runtime.breaker, observed_at: new Date().toISOString() }
+      : null,
+  };
+}
+
+export async function getChannelRuntime(id: number): Promise<ChannelRuntime> {
+  const res = await api.get<{
+    data: Omit<ChannelRuntime, "breaker"> & {
+      breaker: Omit<ChannelBreakerSnapshot, "observed_at"> | null;
+    };
+  }>(`/admin/v1/channels/${id}/ops/runtime`);
+  return withObservedAt(res.data.data);
+}
+
+export async function resetChannelBreaker(id: number): Promise<ChannelRuntime> {
+  const res = await api.delete<{
+    data: Omit<ChannelRuntime, "breaker"> & {
+      breaker: Omit<ChannelBreakerSnapshot, "observed_at"> | null;
+    };
+  }>(`/admin/v1/channels/${id}/ops/circuit-breaker`);
+  return withObservedAt(res.data.data);
 }
 
 export async function getChannelOpsPerformance(

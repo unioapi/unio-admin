@@ -1,7 +1,7 @@
 import { api } from "@/lib/api/client";
 import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
-import type { HealthBucket, LatencyStats, RangeQuery } from "@/lib/api/dashboard";
+import type { LatencyStats, RangeQuery } from "@/lib/api/dashboard";
 
 // §3.2 服务商聚合视图只读运维聚合（与后端 providers_ops DTO 对齐）。
 
@@ -11,9 +11,17 @@ export interface ProviderOpsRow {
   name: string;
   status: string;
   created_at: string;
+  endpoints: ProviderOpsEndpoint[];
   channel_total: number;
   models_count: number;
   routes_count: number;
+}
+
+export interface ProviderOpsEndpoint {
+  id: number;
+  name: string;
+  base_url: string;
+  status: string;
 }
 
 export interface ProviderOpsDetail {
@@ -24,7 +32,6 @@ export interface ProviderOpsDetail {
   success_rate: number;
   timeout_total: number;
   latency: LatencyStats;
-  health: HealthBucket;
   tokens: number;
   revenue_usd: string;
   cost_usd: string;
@@ -59,7 +66,6 @@ export interface ProviderOpsChannel {
   attempt_succeeded: number;
   success_rate: number;
   latency: LatencyStats;
-  health: HealthBucket;
 }
 
 export interface ProviderOpsPerfPoint {
@@ -93,7 +99,13 @@ export async function getProvidersOpsTable(
     "/admin/v1/providers/ops",
     { params: buildListQuery(params) },
   );
-  return { items: res.data.data, total: res.data.meta.total };
+  return {
+    items: res.data.data.map((provider) => ({
+      ...provider,
+      endpoints: provider.endpoints ?? [],
+    })),
+    total: res.data.meta.total,
+  };
 }
 
 export async function getProviderOpsDetail(

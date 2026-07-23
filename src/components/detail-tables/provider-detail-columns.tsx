@@ -4,7 +4,6 @@ import { ArrowUpRightIcon } from "lucide-react";
 import type { ProviderOpsChannel, ProviderOpsError } from "@/lib/api/providersOps";
 import { resizableColumn } from "@/components/data-table";
 import { requestIdLinkColumn } from "./shared-columns";
-import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
 import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
 import { AttemptSuccessRateCell } from "@/components/table-cells/AttemptSuccessRateCell";
 import { TruncateCell } from "@/components/openstatus-table/truncate-cell";
@@ -16,7 +15,6 @@ import { Button } from "@/components/ui/button";
 export const PROVIDER_OPS_CHANNEL_COLUMN_LABELS: Record<string, string> = {
   channel: "渠道",
   status: "状态",
-  health: "健康",
   attempt_total: "尝试",
   success_rate: "成功率",
   latency: "平均延迟",
@@ -52,14 +50,6 @@ export function providerOpsChannelColumns(): ColumnDef<ProviderOpsChannel, unkno
       minSize: 72,
       cell: ({ row }) => (
         <StatusBadge status={row.original.status} />
-      ),
-    }),
-    resizableColumn<ProviderOpsChannel>("health", {
-      header: "健康",
-      size: 88,
-      minSize: 72,
-      cell: ({ row }) => (
-        <Badge variant={HEALTH_VARIANT[row.original.health]}>{HEALTH_LABEL[row.original.health]}</Badge>
       ),
     }),
     resizableColumn<ProviderOpsChannel>("attempt_total", {

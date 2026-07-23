@@ -28,6 +28,7 @@ import {
   TableSkeleton,
 } from "@/components/common/detail-section";
 import { PerformanceCharts, type PerfPoint } from "@/components/common/PerformanceCharts";
+import { ProviderEndpointsSection } from "@/components/providers/ProviderEndpointsSection";
 
 const PAGE_SIZE = 10;
 
@@ -40,6 +41,11 @@ export function ProviderDetailContent({
 }) {
   const sections = useMemo(
     () => [
+      {
+        id: "endpoints",
+        label: "端点",
+        content: <ProviderEndpointsSection providerId={providerId} />,
+      },
       {
         id: "channels",
         label: "渠道",
@@ -59,7 +65,7 @@ export function ProviderDetailContent({
     [providerId, range],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="channels" />;
+  return <DetailSideNav sections={sections} defaultSectionId="endpoints" />;
 }
 
 function ChannelsSection({ id, range }: { id: number; range: RangeQuery }) {

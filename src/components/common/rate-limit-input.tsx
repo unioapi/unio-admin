@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 
 // 限流「数字 + 单位」输入：用于 TPM / RPD 这类量级较大的上限。
 // 单位 K=千 / M=百万 / B=十亿，默认 K；入库存真实整数(数字 × 单位)。
-// 语义沿用原限流：空=继承全局默认；0=不限(0 × 任意单位仍是 0)。
+// 语义沿用限流覆盖约定：空=继承调用方对应的默认限流；0=不限(0 × 任意单位仍是 0)。
 
 type RateUnit = "K" | "M" | "B";
 
@@ -55,12 +55,13 @@ export function composeRateLimit(value: RateLimitFieldValue): number | null {
 // rateLimitWithUnitError 校验「数字 + 单位」：空放行；否则数字须 ≥ 0，且换算后为非负整数(0=不限)。
 export function rateLimitWithUnitError(
   value: RateLimitFieldValue,
+  inheritLabel = "继承默认",
 ): string | undefined {
   const t = value.num.trim();
   if (t === "") return undefined;
   const n = Number(t);
   if (!Number.isFinite(n) || n < 0) {
-    return "需为 ≥ 0 的数(0=不限，留空=继承默认)";
+    return `需为 ≥ 0 的数(0=不限，留空=${inheritLabel})`;
   }
   const real = n * RATE_UNIT_MULTIPLIER[value.unit];
   if (!Number.isInteger(real)) {

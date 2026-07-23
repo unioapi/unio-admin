@@ -144,6 +144,10 @@ export interface Attempt {
   error_message: string | null;
   internal_error_detail?: string | null;
   response_started_at: string | null;
+  /** 完整上游 transport 耗时，只由 upstream_completed_at - upstream_started_at 派生。 */
+  upstream_total_ms: number | null;
+  /** 流式上游首 Token 耗时；非流式恒为 null。 */
+  upstream_ttft_ms: number | null;
   final_usage_received: boolean;
   started_at: string;
   completed_at: string | null;

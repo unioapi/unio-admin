@@ -8,6 +8,10 @@ import {
   type Channel,
 } from "@/lib/api/channels";
 import { listAllProviders } from "@/lib/api/providers";
+import {
+  listProviderEndpoints,
+  type ProviderEndpoint,
+} from "@/lib/api/providerEndpoints";
 import { apiErrorMessage } from "@/lib/api/client";
 import { HintLabel } from "@/components/common/field-hint";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
@@ -70,9 +74,9 @@ export function ChannelFormDialog({
 
 interface FieldErrors {
   provider_id?: string;
+  provider_endpoint_id?: string;
   name?: string;
   adapter_key?: string;
-  base_url?: string;
   credential?: string;
   priority?: string;
   timeout_ms?: string;
@@ -82,12 +86,12 @@ interface FieldErrors {
   concurrency_limit?: string;
 }
 
-// 限流输入回填：null（继承全局默认）→ 空串；数字（含 0=不限）→ 字符串。
+// 限流输入回填：null（继承渠道默认限流）→ 空串；数字（含 0=不限）→ 字符串。
 function rateLimitToInput(v: number | null | undefined): string {
   return v == null ? "" : String(v);
 }
 
-// 限流输入解析：空串→null（继承全局默认）；否则取整数（0=不限，>0=具体上限）。
+// 限流输入解析：空串→null（继承渠道默认限流）；否则取整数（0=不限，>0=具体上限）。
 function parseRateLimit(raw: string): number | null {
   const t = raw.trim();
   if (t === "") return null;
@@ -95,11 +99,16 @@ function parseRateLimit(raw: string): number | null {
 }
 
 // 校验单个限流维度：空串放行；否则须为非负整数。
-function rateLimitError(raw: string): string | undefined {
+function rateLimitError(
+  raw: string,
+  inheritLabel = "继承默认",
+): string | undefined {
   const t = raw.trim();
   if (t === "") return undefined;
   const n = Number(t);
-  if (!Number.isInteger(n) || n < 0) return "需为 ≥ 0 的整数（0=不限，留空=继承默认）";
+  if (!Number.isInteger(n) || n < 0) {
+    return `需为 ≥ 0 的整数（0=不限，留空=${inheritLabel}）`;
+  }
   return undefined;
 }
 
@@ -116,6 +125,9 @@ function ChannelForm({
   const [providerId, setProviderId] = useState(
     channel ? String(channel.provider_id) : "",
   );
+  const [providerEndpointId, setProviderEndpointId] = useState(
+    channel ? String(channel.provider_endpoint_id) : "",
+  );
   const [name, setName] = useState(channel?.name ?? "");
   const initialProtocol = channel?.protocol ?? "openai";
   const [protocol, setProtocol] = useState(initialProtocol);
@@ -123,7 +135,6 @@ function ChannelForm({
   const [adapterKey, setAdapterKey] = useState(
     channel?.adapter_key ?? initialProtocol,
   );
-  const [baseUrl, setBaseUrl] = useState(channel?.base_url ?? "");
   const [credential, setCredential] = useState("");
   const [status, setStatus] = useState(channel?.status ?? "enabled");
   const [priority, setPriority] = useState(String(channel?.priority ?? 0));
@@ -152,6 +163,20 @@ function ChannelForm({
     queryKey: ["providers", "all"],
     queryFn: listAllProviders,
   });
+
+  const endpointsQuery = useQuery({
+    queryKey: ["provider-endpoints", "by-provider", providerId],
+    queryFn: () => listProviderEndpoints({ providerId: Number(providerId) }),
+    enabled: Number(providerId) > 0,
+  });
+
+  const endpoints = endpointsQuery.data?.items ?? [];
+  const endpointOptions = endpoints.filter(
+    (endpoint) => endpoint.status !== "archived",
+  );
+  const selectedEndpoint: ProviderEndpoint | undefined = endpoints.find(
+    (endpoint) => String(endpoint.id) === providerEndpointId,
+  );
 
   const providerDisplay = useMemo(() => {
     if (!channel) return "";
@@ -200,7 +225,7 @@ function ChannelForm({
         return updateChannel({
           id: channel.id,
           name: name.trim(),
-          base_url: baseUrl.trim(),
+          provider_endpoint_id: Number(providerEndpointId),
           status,
           priority: prio,
           timeout_ms: timeout,
@@ -210,10 +235,10 @@ function ChannelForm({
       }
       return createChannel({
         provider_id: Number(providerId),
+        provider_endpoint_id: Number(providerEndpointId),
         name: name.trim(),
         protocol,
         adapter_key: adapterKey.trim(),
-        base_url: baseUrl.trim(),
         credential: credential.trim(),
         status,
         priority: prio,
@@ -239,14 +264,18 @@ function ChannelForm({
     if (!isEdit && !(Number(providerId) > 0)) {
       next.provider_id = "请选择服务商";
     }
+    if (endpointsQuery.isError) {
+      next.provider_endpoint_id = "ProviderEndpoint 加载失败，请重试";
+    } else if (!(Number(providerEndpointId) > 0)) {
+      next.provider_endpoint_id = "请选择 ProviderEndpoint";
+    } else if (endpointsQuery.isSuccess && !selectedEndpoint) {
+      next.provider_endpoint_id = "所选 ProviderEndpoint 已不可用，请重新选择";
+    }
     if (name.trim() === "") {
       next.name = "名称不能为空";
     }
     if (!isEdit && adapterKey.trim() === "") {
       next.adapter_key = "adapter_key 不能为空";
-    }
-    if (!isValidHttpUrl(baseUrl.trim())) {
-      next.base_url = "请输入合法的 http(s) 地址";
     }
     if (!isEdit && credential.trim() === "") {
       next.credential = "凭据不能为空";
@@ -261,9 +290,9 @@ function ChannelForm({
         next.timeout_ms = "超时需为正整数（毫秒）";
       }
     }
-    next.rpm_limit = rateLimitError(rpmLimit);
-    next.tpm_limit = rateLimitWithUnitError(tpmLimit);
-    next.rpd_limit = rateLimitWithUnitError(rpdLimit);
+    next.rpm_limit = rateLimitError(rpmLimit, "继承渠道默认限流");
+    next.tpm_limit = rateLimitWithUnitError(tpmLimit, "继承渠道默认限流");
+    next.rpd_limit = rateLimitWithUnitError(rpdLimit, "继承渠道默认限流");
     next.concurrency_limit = rateLimitError(concurrencyLimit);
     setErrors(next);
     return Object.values(next).every((v) => v === undefined);
@@ -293,8 +322,8 @@ function ChannelForm({
             <DialogTitle>{isEdit ? "编辑渠道" : "新建渠道"}</DialogTitle>
             <DialogDescription>
               {isEdit
-                ? "所属服务商、协议、adapter 不在此修改；凭据请用「轮换凭据」。"
-                : "填写上游连接与路由参数。协议、adapter 创建后不可修改。"}
+                ? "协议、adapter 不在此修改；上游地址由 ProviderEndpoint 统一维护，凭据请用「轮换凭据」。"
+                : "选择 ProviderEndpoint 并填写渠道凭据与路由参数。协议、adapter 创建后不可修改。"}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -311,7 +340,13 @@ function ChannelForm({
               {isEdit ? (
                 <Input id="provider" value={providerDisplay} disabled />
               ) : (
-                <Select value={providerId} onValueChange={setProviderId}>
+                <Select
+                  value={providerId}
+                  onValueChange={(next) => {
+                    setProviderId(next);
+                    setProviderEndpointId("");
+                  }}
+                >
                   <SelectTrigger
                     id="provider"
                     className="w-full"
@@ -336,6 +371,105 @@ function ChannelForm({
               )}
               <FieldError>{errors.provider_id}</FieldError>
             </Field>
+
+            <Field data-invalid={!!errors.provider_endpoint_id}>
+              <HintLabel
+                htmlFor="provider_endpoint"
+                hint="ProviderEndpoint 代表一个上游 API Root 和公共故障域；同一 Provider 下的渠道必须绑定一个 Endpoint。"
+              >
+                ProviderEndpoint
+              </HintLabel>
+              <Select
+                value={providerEndpointId}
+                onValueChange={setProviderEndpointId}
+                disabled={
+                  Number(providerId) <= 0 ||
+                  endpointsQuery.isPending ||
+                  endpointsQuery.isError ||
+                  endpointOptions.length === 0
+                }
+              >
+                <SelectTrigger
+                  id="provider_endpoint"
+                  className="w-full"
+                  aria-invalid={!!errors.provider_endpoint_id}
+                >
+                  <SelectValue
+                    placeholder={
+                      Number(providerId) <= 0
+                        ? "先选择服务商"
+                        : endpointsQuery.isPending
+                          ? "加载中…"
+                          : endpointsQuery.isError
+                            ? "加载失败"
+                            : endpointOptions.length === 0
+                              ? "暂无可用 Endpoint"
+                          : "选择 ProviderEndpoint"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {endpointOptions.map((endpoint) => (
+                      <SelectItem key={endpoint.id} value={String(endpoint.id)}>
+                        {endpoint.name} · {endpoint.base_url}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldError>{errors.provider_endpoint_id}</FieldError>
+              {endpointsQuery.isError && !errors.provider_endpoint_id ? (
+                <p className="text-destructive text-xs">
+                  ProviderEndpoint 加载失败，请关闭弹窗后重试。
+                </p>
+              ) : Number(providerId) > 0 && endpointsQuery.isSuccess && endpointOptions.length === 0 ? (
+                <p className="text-muted-foreground truncate text-xs">
+                  该服务商暂无可用 Endpoint，请先到服务商详情创建。
+                </p>
+              ) : null}
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field data-disabled>
+                <HintLabel
+                  htmlFor="endpoint_provider"
+                  hint="由所选 ProviderEndpoint 决定，提交时后端会再次校验归属一致。"
+                >
+                  Endpoint 服务商
+                </HintLabel>
+                <Input
+                  id="endpoint_provider"
+                  value={
+                    selectedEndpoint
+                      ? `${selectedEndpoint.provider_name}（#${selectedEndpoint.provider_id}）`
+                      : ""
+                  }
+                  placeholder="选择 ProviderEndpoint 后显示"
+                  disabled
+                />
+              </Field>
+
+              <Field data-disabled>
+                <HintLabel
+                  htmlFor="endpoint_base_url"
+                  hint="地址由 ProviderEndpoint 统一维护；修改地址请到 ProviderEndpoint 管理。"
+                >
+                  API Root
+                </HintLabel>
+                <Input
+                  id="endpoint_base_url"
+                  value={selectedEndpoint?.base_url ?? channel?.base_url ?? ""}
+                  placeholder="选择 ProviderEndpoint 后显示"
+                  disabled
+                />
+                {selectedEndpoint ? (
+                  <p className="text-muted-foreground text-xs tabular-nums">
+                    地址版本 v{selectedEndpoint.base_url_revision}
+                  </p>
+                ) : null}
+              </Field>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field data-invalid={!!errors.name}>
@@ -399,73 +533,54 @@ function ChannelForm({
               )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                data-invalid={!!errors.adapter_key}
-                data-disabled={isEdit}
+            <Field
+              data-invalid={!!errors.adapter_key}
+              data-disabled={isEdit}
+            >
+              <HintLabel
+                htmlFor="adapter_key"
+                hint="请求/响应翻译实现。留默认「忠实透传」即可对接 OpenAI/Anthropic 兼容上游；特殊方言才换。创建后不可修改。"
               >
-                <HintLabel
-                  htmlFor="adapter_key"
-                  hint="请求/响应翻译实现。留默认「忠实透传」即可对接 OpenAI/Anthropic 兼容上游；特殊方言才换。创建后不可修改。"
-                >
-                  adapter_key
-                </HintLabel>
-                {isEdit ? (
-                  <Input
-                    id="adapter_key"
-                    value={channel.adapter_key}
-                    disabled
-                  />
-                ) : (
-                  <Select value={adapterKey} onValueChange={setAdapterKey}>
-                    <SelectTrigger
-                      id="adapter_key"
-                      className="w-full"
-                      aria-invalid={!!errors.adapter_key}
-                    >
-                      <SelectValue
-                        placeholder={
-                          adapterKeysQuery.isPending
-                            ? "加载中…"
-                            : "选择 adapter"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {adapterOptions.map((o) => (
-                          <SelectItem
-                            key={o.adapter_key}
-                            value={o.adapter_key}
-                          >
-                            {o.adapter_key}
-                            {o.is_default ? "（默认 · 忠实透传）" : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                )}
-                <FieldError>{errors.adapter_key}</FieldError>
-              </Field>
-
-              <Field data-invalid={!!errors.base_url}>
-                <HintLabel
-                  htmlFor="base_url"
-                  hint="上游 API 基础地址。OpenAI 兼容填到 /v1；Anthropic 填根地址（网关自动拼 /v1/messages）。"
-                >
-                  上游地址
-                </HintLabel>
+                adapter_key
+              </HintLabel>
+              {isEdit ? (
                 <Input
-                  id="base_url"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.deepseek.com/v1"
-                  aria-invalid={!!errors.base_url}
+                  id="adapter_key"
+                  value={channel.adapter_key}
+                  disabled
                 />
-                <FieldError>{errors.base_url}</FieldError>
-              </Field>
-            </div>
+              ) : (
+                <Select value={adapterKey} onValueChange={setAdapterKey}>
+                  <SelectTrigger
+                    id="adapter_key"
+                    className="w-full"
+                    aria-invalid={!!errors.adapter_key}
+                  >
+                    <SelectValue
+                      placeholder={
+                        adapterKeysQuery.isPending
+                          ? "加载中…"
+                          : "选择 adapter"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {adapterOptions.map((o) => (
+                        <SelectItem
+                          key={o.adapter_key}
+                          value={o.adapter_key}
+                        >
+                          {o.adapter_key}
+                          {o.is_default ? "（默认 · 忠实透传）" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              )}
+              <FieldError>{errors.adapter_key}</FieldError>
+            </Field>
 
             {isEdit ? (
               <Field data-disabled>
@@ -501,7 +616,7 @@ function ChannelForm({
               <Field data-invalid={!!errors.priority}>
                 <HintLabel
                   htmlFor="priority"
-                  hint="路由选渠道的优先级，数值越小越靠前（0 最高）；同级再按线路策略（如成本）排。"
+                  hint="候选基础顺序，数值越小越靠前（0 最高）；balanced 会按容量、错误率、流式首字和成本权重动态调度，不保证小数值渠道每次先命中。"
                 >
                   优先级
                 </HintLabel>
@@ -537,7 +652,7 @@ function ChannelForm({
             </div>
 
             <Field data-invalid={rateLimitInvalid}>
-              <HintLabel hint="限制本网关调用该上游渠道的速率（网关→上游），命中自动跳过该渠道回退到下一个。留空=继承全局默认，0=不限；TPM、RPD 可带单位 K/M/B（默认 K）。">
+              <HintLabel hint="限制本网关调用该上游渠道的速率（网关→上游），命中自动跳过该渠道回退到下一个。留空=继承渠道默认限流，0=不限；TPM、RPD 可带单位 K/M/B（默认 K）。">
                 渠道级限流
               </HintLabel>
               <div className="rounded-lg border bg-muted/30 p-3">
@@ -552,7 +667,7 @@ function ChannelForm({
                       min={0}
                       value={rpmLimit}
                       onChange={(e) => setRpmLimit(e.target.value)}
-                      placeholder="继承默认"
+                      placeholder="继承渠道默认限流"
                       aria-invalid={!!errors.rpm_limit}
                     />
                     <FieldError>{errors.rpm_limit}</FieldError>
@@ -566,6 +681,7 @@ function ChannelForm({
                       value={tpmLimit}
                       onChange={setTpmLimit}
                       ariaInvalid={!!errors.tpm_limit}
+                      placeholder="继承渠道默认限流"
                     />
                     <FieldError>{errors.tpm_limit}</FieldError>
                   </Field>
@@ -578,6 +694,7 @@ function ChannelForm({
                       value={rpdLimit}
                       onChange={setRpdLimit}
                       ariaInvalid={!!errors.rpd_limit}
+                      placeholder="继承渠道默认限流"
                     />
                     <FieldError>{errors.rpd_limit}</FieldError>
                   </Field>
@@ -668,13 +785,4 @@ function ChannelForm({
       ) : null}
     </>
   );
-}
-
-function isValidHttpUrl(raw: string): boolean {
-  try {
-    const u = new URL(raw);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
 }

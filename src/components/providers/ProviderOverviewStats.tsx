@@ -4,12 +4,10 @@ import { profitIntent, type MetricThresholds } from "@/components/dashboard/metr
 import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { RevenueTip } from "@/components/dashboard/RevenueTip";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
-import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
 import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
 import { AttemptSuccessRateCell } from "@/components/table-cells/AttemptSuccessRateCell";
 import { cn } from "@/lib/utils";
 import { formatCompact, formatTPS, formatUSD } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -39,7 +37,7 @@ function profitClass(marginUsd: string, th: MetricThresholds, revenueUsd?: strin
 export function ProviderOverviewStats({ detail }: { detail: ProviderOpsDetail }) {
   const th = useMetricThresholds();
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
       <Stat label="渠道" value={`${detail.channel_enabled}/${detail.channel_total}`} />
       <Stat
         label="成功率"
@@ -94,24 +92,14 @@ export function ProviderOverviewStats({ detail }: { detail: ProviderOpsDetail })
           </HoverCard>
         }
       />
-      <Stat
-        label="健康"
-        value={
-          detail.health ? (
-            <Badge variant={HEALTH_VARIANT[detail.health]}>{HEALTH_LABEL[detail.health]}</Badge>
-          ) : (
-            "—"
-          )
-        }
-      />
     </div>
   );
 }
 
 export function ProviderOverviewStatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-      {Array.from({ length: 7 }).map((_, i) => (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, i) => (
         <Skeleton key={i} className="h-[62px] w-full rounded-md" />
       ))}
     </div>

@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { ZapOffIcon, ZapIcon } from "lucide-react";
-import type { ChannelCircuitBreakerStatus } from "@/lib/api/channelsOps";
+import {
+  CircleAlertIcon,
+  CircleHelpIcon,
+  ZapOffIcon,
+  ZapIcon,
+} from "lucide-react";
+import type { ChannelBreakerSnapshot } from "@/lib/api/channelsOps";
+import type { RuntimeSyncState } from "@/lib/api/runtime";
 import {
   HoverCard,
   HoverCardContent,
@@ -11,10 +17,10 @@ import { cn } from "@/lib/utils";
 
 /** 把 observed_at + open_remaining_ms 换成仍在走的剩余毫秒（可到 0）。 */
 export function remainingOpenMs(
-  breaker: ChannelCircuitBreakerStatus,
+  breaker: ChannelBreakerSnapshot,
   nowMs: number,
 ): number | null {
-  if (breaker.state !== "open" || breaker.open_remaining_ms == null) return null;
+  if (breaker.state !== "open") return null;
   const observed = Date.parse(breaker.observed_at);
   if (!Number.isFinite(observed)) return Math.max(0, breaker.open_remaining_ms);
   const deadline = observed + breaker.open_remaining_ms;
@@ -50,33 +56,104 @@ function stateLabel(state: string): string {
   return circuitBreakerStateLabel(state);
 }
 
-const DEFAULT_CLOSED: ChannelCircuitBreakerStatus = {
-  state: "closed",
-  failures: 0,
-  successes: 0,
-  half_open_in_flight: false,
-  health_score: 0,
-  observed_at: "",
+const RUNTIME_STATE_COPY: Record<
+  Exclude<RuntimeSyncState, "active">,
+  { label: string; description: string }
+> = {
+  runtime_sync_pending: {
+    label: "运行态同步中",
+    description: "数据库变更已保存，Redis 新版本尚未确认提交，新准入保持拒绝。",
+  },
+  runtime_sync_required: {
+    label: "运行态待恢复",
+    description: "Redis control 缺失或尚未建立，新准入保持拒绝。",
+  },
+  stale: {
+    label: "运行态版本过期",
+    description: "Redis 与数据库版本不一致，旧 breaker 快照不作为当前事实展示。",
+  },
+  store_unavailable: {
+    label: "运行态基础设施故障",
+    description: "Redis/BreakerStore 当前不可用，新的上游准入已拒绝。",
+  },
+  runtime_state_lost: {
+    label: "运行态完整性丢失",
+    description: "完整性 epoch 尚未恢复并通过对账，新的上游准入已拒绝。",
+  },
 };
 
+export function channelRuntimeStateLabel(
+  state: RuntimeSyncState | undefined,
+): string | null {
+  if (!state || state === "active") return null;
+  return RUNTIME_STATE_COPY[state].label;
+}
+
 /**
- * 渠道名后熔断图标：始终显示。
- * closed=绿 / half_open=琥珀 / open=红。
+ * 渠道名后熔断图标。缺失运行态使用中性的“无样本”，不能伪装成 closed。
  */
 export function ChannelCircuitBreakerBadge({
   breaker,
+  runtimeSyncState,
 }: {
-  breaker?: ChannelCircuitBreakerStatus | null;
+  breaker?: ChannelBreakerSnapshot | null;
+  runtimeSyncState?: RuntimeSyncState;
 }) {
-  const status = breaker ?? DEFAULT_CLOSED;
   const [now, setNow] = useState(() => Date.now());
-  const remaining = remainingOpenMs(status, now);
 
   useEffect(() => {
-    if (status.state !== "open") return;
+    if (breaker?.state !== "open") return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [status.state, status.observed_at, status.open_remaining_ms]);
+  }, [breaker?.state, breaker?.observed_at, breaker?.open_remaining_ms]);
+
+  if (runtimeSyncState && runtimeSyncState !== "active") {
+    const copy = RUNTIME_STATE_COPY[runtimeSyncState];
+    return (
+      <HoverCard openDelay={150}>
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            title={copy.label}
+            aria-label={copy.label}
+            className="text-destructive inline-flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+            onClick={(event) => event.preventDefault()}
+          >
+            <CircleAlertIcon />
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent align="start" className="w-72 text-xs">
+          <div className="font-medium">{copy.label}</div>
+          <p className="text-muted-foreground mt-1">{copy.description}</p>
+        </HoverCardContent>
+      </HoverCard>
+    );
+  }
+
+  if (!breaker || !breaker.exists) {
+    const title = "无熔断运行样本";
+    return (
+      <HoverCard openDelay={150}>
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            title={title}
+            aria-label={title}
+            className="text-muted-foreground inline-flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+            onClick={(event) => event.preventDefault()}
+          >
+            <CircleHelpIcon />
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent align="start" className="w-64 text-xs">
+          运行态数据源未返回该渠道的熔断样本，当前状态不能推断为闭合。
+        </HoverCardContent>
+      </HoverCard>
+    );
+  }
+
+  const status = breaker;
+  const remaining = remainingOpenMs(status, now);
 
   const isOpen = status.state === "open";
   const isHalfOpen = status.state === "half_open";
@@ -97,16 +174,16 @@ export function ChannelCircuitBreakerBadge({
           title={title}
           aria-label={title}
           className={cn(
-            "inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm",
+            "inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm [&_svg]:size-3.5",
             isOpen
               ? "text-destructive"
               : isHalfOpen
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-emerald-600 dark:text-emerald-400",
+                ? "text-muted-foreground"
+                : "text-foreground",
           )}
           onClick={(e) => e.preventDefault()}
         >
-          <Icon className="size-3.5" strokeWidth={2.25} />
+          <Icon strokeWidth={2.25} />
         </button>
       </HoverCardTrigger>
       <HoverCardContent align="start" className="w-72 text-xs">
@@ -125,30 +202,21 @@ export function ChannelCircuitBreakerBadge({
                 </dd>
               </>
             ) : null}
-            {isHalfOpen ? (
-              <>
-                <dt className="text-muted-foreground">探测中</dt>
-                <dd>
-                  {status.half_open_in_flight ? "是（已有探测在飞）" : "否（等待探测）"}
-                </dd>
-              </>
-            ) : null}
             <dt className="text-muted-foreground">窗口样本</dt>
             <dd>
-              成功 {status.successes} / 失败 {status.failures}
-              {status.successes + status.failures > 0
-                ? `（失败率 ${(
-                    (status.failures / (status.successes + status.failures)) *
-                    100
-                  ).toFixed(0)}%）`
-                : status.state === "open" || status.state === "half_open"
-                  ? "（跳闸后计数已清零）"
-                  : "（暂无样本）"}
+              成功 {status.eligible_successes} / 失败 {status.eligible_failures}
+              {status.sample_count > 0
+                ? `（失败率 ${(status.error_rate * 100).toFixed(0)}%）`
+                : "（暂无样本）"}
             </dd>
-            {status.opened_at ? (
+            <dt className="text-muted-foreground">连续失败</dt>
+            <dd>{status.consecutive_failures}</dd>
+            {status.ttft_samples > 0 ? (
               <>
-                <dt className="text-muted-foreground">打开于</dt>
-                <dd>{formatDateTime(status.opened_at)}</dd>
+                <dt className="text-muted-foreground">流式 TTFT</dt>
+                <dd>
+                  {Math.round(status.ttft_ewma_ms)} ms（{status.ttft_samples} 样本）
+                </dd>
               </>
             ) : null}
             {status.observed_at ? (
@@ -158,19 +226,6 @@ export function ChannelCircuitBreakerBadge({
               </>
             ) : null}
           </dl>
-          {status.instances && status.instances.length > 1 ? (
-            <div className="border-t pt-2">
-              <div className="text-muted-foreground mb-1">各实例</div>
-              <ul className="space-y-1">
-                {status.instances.map((inst) => (
-                  <li key={inst.id} className="flex justify-between gap-2 font-mono">
-                    <span className="truncate">{inst.id}</span>
-                    <span className="shrink-0">{stateLabel(inst.state)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </div>
       </HoverCardContent>
     </HoverCard>

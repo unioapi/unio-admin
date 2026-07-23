@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RuntimeSettingsPanel } from "@/components/system/RuntimeSettingsPanel";
+import { RuntimeDiagnosticsPanel } from "@/components/system/RuntimeDiagnosticsPanel";
 
 // 系统设置页只留「配置」职责：运行时配置(可编辑) + 网关配置(只读 env)。
 // 任务记录已按领域归位：结算补偿 → 账本页「结算补偿」Tab;模型目录同步 → 参考目录页「同步记录」Tab。
@@ -46,6 +47,7 @@ export function SystemPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <RuntimeDiagnosticsPanel />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="providers">运行时配置</TabsTrigger>

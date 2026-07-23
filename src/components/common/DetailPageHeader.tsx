@@ -55,7 +55,9 @@ export function DetailPageHeader({
           </div>
         </div>
         {actions ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+            {actions}
+          </div>
         ) : null}
       </div>
 

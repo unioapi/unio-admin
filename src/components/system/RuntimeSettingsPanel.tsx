@@ -36,7 +36,7 @@ import {
 
 // 运行时配置面板：按「域」分 Tab 渲染（batch2 §2/§6.2，对齐 new-api 设置页组织方式）。
 //
-// 域 = 注册表 Category = key 前缀：gateway（网关热路径，applier ~5s 热生效）/
+// 域 = 注册表 Category = key 前缀：gateway（关键准入设置走 Redis control，其余由 applier 热更新）/
 // admin_backend（admin 后端判定，现读 ≤3s 生效）/ admin_frontend（仅前端消费，保存即生效）/
 // anthropic（Provider 策略）。未知域自动落「其他」Tab 用 JSON 兜底编辑器——新增域不改前端也能管。
 //
@@ -53,12 +53,49 @@ const SOURCE_LABEL: Record<string, string> = {
   default: "内置默认（DB 尚无记录）",
 };
 
+const CRITICAL_SETTING_KEYS = new Set([
+  "gateway.route_rate_limit_defaults",
+  "gateway.channel_rate_limit_defaults",
+  "gateway.concurrency_defaults",
+  "gateway.circuit_breaker",
+  "gateway.routing_balance",
+]);
+
+const RUNTIME_SYNC_COPY: Record<
+  string,
+  { label: string; destructive: boolean }
+> = {
+  active: { label: "运行态已激活", destructive: false },
+  runtime_sync_pending: { label: "配置同步中", destructive: true },
+  runtime_sync_required: { label: "待建立运行态", destructive: true },
+  stale: { label: "运行态不一致", destructive: true },
+  store_unavailable: { label: "基础设施故障", destructive: true },
+  runtime_state_lost: { label: "运行态完整性丢失", destructive: true },
+};
+
 // 已知域 Tab（按此顺序展示）；未知 category 归入 other。
 const DOMAIN_TABS: { value: string; label: string; hint: string }[] = [
-  { value: "gateway", label: "网关", hint: "gateway 进程热路径，保存后约 5 秒热生效（applier 周期推送）" },
-  { value: "admin_backend", label: "运营判定", hint: "admin 后端与渠道检测 worker 每请求现读，保存后约 3 秒内生效" },
-  { value: "admin_frontend", label: "前端展示", hint: "仅前端消费的展示档位，保存后本页面立即生效" },
-  { value: "anthropic", label: "Provider 策略", hint: "gateway adapter 现读，保存后秒级生效" },
+  {
+    value: "gateway",
+    label: "网关",
+    hint:
+      "五个关键运行态控制以 Redis 激活版本为执行依据；其他网关设置由 applier 在约 5 秒内热更新",
+  },
+  {
+    value: "admin_backend",
+    label: "运营判定",
+    hint: "admin 后端与渠道检测 worker 每请求现读，保存后约 3 秒内生效",
+  },
+  {
+    value: "admin_frontend",
+    label: "前端展示",
+    hint: "仅前端消费的展示档位，保存后本页面立即生效",
+  },
+  {
+    value: "anthropic",
+    label: "Provider 策略",
+    hint: "gateway adapter 现读，保存后秒级生效",
+  },
 ];
 
 /** 序无关深比较：Go 编码与前端编码的 JSON 键序可能不同，不能比字符串。 */
@@ -66,7 +103,8 @@ function jsonEquals(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== typeof b || a === null || b === null) return false;
   if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
+      return false;
     return a.every((v, i) => jsonEquals(v, b[i]));
   }
   if (typeof a === "object") {
@@ -74,7 +112,10 @@ function jsonEquals(a: unknown, b: unknown): boolean {
     const kb = Object.keys(b as object).sort();
     if (ka.length !== kb.length || ka.some((k, i) => k !== kb[i])) return false;
     return ka.every((k) =>
-      jsonEquals((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+      jsonEquals(
+        (a as Record<string, unknown>)[k],
+        (b as Record<string, unknown>)[k],
+      ),
     );
   }
   return false;
@@ -105,7 +146,8 @@ interface DurationFieldValue {
 
 /** 把存储的毫秒整数拆成可读的 {数字, 单位}：取能整除的最大单位（600000 → 10 分钟）。 */
 function decomposeDurationMs(ms: number): DurationFieldValue {
-  if (!Number.isFinite(ms) || ms <= 0) return { num: String(ms ?? 0), unit: "ms" };
+  if (!Number.isFinite(ms) || ms <= 0)
+    return { num: String(ms ?? 0), unit: "ms" };
   for (const unit of ["h", "m", "s"] as const) {
     if (ms % DURATION_UNIT_MS[unit] === 0) {
       return { num: String(ms / DURATION_UNIT_MS[unit]), unit };
@@ -124,7 +166,10 @@ function composeDurationMs(v: DurationFieldValue): number {
 }
 
 /** 校验时长输入：换算后须为整数毫秒且满足下界（allowZero 时 0 合法）。 */
-function durationError(v: DurationFieldValue, allowZero: boolean): string | undefined {
+function durationError(
+  v: DurationFieldValue,
+  allowZero: boolean,
+): string | undefined {
   const ms = composeDurationMs(v);
   if (Number.isNaN(ms)) return "请输入数字";
   if (!Number.isInteger(ms)) return "换算成毫秒后需为整数";
@@ -160,7 +205,10 @@ function DurationInput({
         value={value.unit}
         onValueChange={(u) => onChange({ ...value, unit: u as DurationUnit })}
       >
-        <SelectTrigger aria-label="时间单位" className="h-8 w-20 shrink-0 text-xs">
+        <SelectTrigger
+          aria-label="时间单位"
+          className="h-8 w-20 shrink-0 text-xs"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="min-w-(--radix-select-trigger-width)">
@@ -177,7 +225,10 @@ function DurationInput({
 
 /** 运行时配置面板（分域 Tab）。 */
 export function RuntimeSettingsPanel() {
-  const query = useQuery({ queryKey: RUNTIME_SETTINGS_QUERY_KEY, queryFn: listSettings });
+  const query = useQuery({
+    queryKey: RUNTIME_SETTINGS_QUERY_KEY,
+    queryFn: listSettings,
+  });
 
   if (query.isError) {
     return (
@@ -212,7 +263,8 @@ export function RuntimeSettingsPanel() {
       <Alert>
         <AlertTitle>运行时配置（免重启生效）</AlertTitle>
         <AlertDescription>
-          按域分组：配置保存后写入数据库并经 Redis 推送到对应消费方（各域生效时效见 Tab 内说明）。
+          按域分组：配置保存后写入数据库并经 Redis
+          推送到对应消费方（各域生效时效见 Tab 内说明）。
           标有「已偏离代码默认」的项表示当前值与代码内置默认不同（可能是人为调整，也可能是新版本
           默认值已升级而 DB 仍为旧值），是否跟进由你决定。
         </AlertDescription>
@@ -231,7 +283,11 @@ export function RuntimeSettingsPanel() {
               ? otherItems
               : items.filter((s) => s.category === t.value);
           return (
-            <TabsContent key={t.value} value={t.value} className="flex flex-col gap-4 pt-3">
+            <TabsContent
+              key={t.value}
+              value={t.value}
+              className="flex flex-col gap-4 pt-3"
+            >
               <p className="text-muted-foreground text-xs">{t.hint}</p>
               {/* anthropic 域的 beta 策略有专用 typed 卡片（含生效探针），生成式卡片跳过该 key。 */}
               {t.value === "anthropic" && <AnthropicBetaPolicyCard />}
@@ -252,12 +308,23 @@ export function RuntimeSettingsPanel() {
 
 function SettingCard({ item }: { item: SettingItem }) {
   const diverged = !jsonEquals(item.value, item.default);
+  const critical = CRITICAL_SETTING_KEYS.has(item.key);
+  const sourceLabel = critical
+    ? item.source === "redis"
+      ? "Redis 激活值"
+      : item.source === "db"
+        ? "数据库目标值（执行以 Redis 激活版本为准）"
+        : "内置默认（尚未建立运行态）"
+    : (SOURCE_LABEL[item.source] ?? item.source);
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
           {item.label}
           {diverged && <Badge variant="secondary">已偏离代码默认</Badge>}
+          {critical ? (
+            <RuntimeControlBadge state={item.runtime_sync_state} />
+          ) : null}
         </CardTitle>
         <p className="text-muted-foreground text-xs">{item.description}</p>
       </CardHeader>
@@ -266,10 +333,22 @@ function SettingCard({ item }: { item: SettingItem }) {
         <div className="text-muted-foreground border-t pt-2 text-[11px] leading-5">
           <div>
             <span className="font-medium">生效来源</span>：
-            {SOURCE_LABEL[item.source] ?? item.source}
+            {sourceLabel}
           </div>
+          <div>
+            <span className="font-medium">数据库版本</span>：v
+            {item.revision || "—"}
+          </div>
+          {critical ? (
+            <div>
+              <span className="font-medium">Redis 版本</span>：激活 v
+              {item.runtime_active_revision || "—"} / 待提交 v
+              {item.runtime_pending_revision || "—"}
+            </div>
+          ) : null}
           <div className="font-mono break-all">
-            <span className="font-sans font-medium">当前值</span>：{JSON.stringify(item.value)}
+            <span className="font-sans font-medium">当前值</span>：
+            {JSON.stringify(item.value)}
           </div>
           <div className="font-mono break-all">
             <span className="font-sans font-medium">代码默认</span>：
@@ -286,8 +365,13 @@ function SettingEditor({ item }: { item: SettingItem }) {
   switch (item.key) {
     case "gateway.circuit_breaker":
       return <CircuitBreakerEditor item={item} />;
-    case "gateway.rate_limit_defaults":
+    case "gateway.route_rate_limit_defaults":
+    case "gateway.channel_rate_limit_defaults":
       return <RateLimitEditor item={item} />;
+    case "gateway.concurrency_defaults":
+      return <ConcurrencyDefaultsEditor item={item} />;
+    case "gateway.routing_balance":
+      return <RoutingBalanceEditor item={item} />;
     case "gateway.channel_ratelimit_cooldown":
       return <CooldownEditor item={item} />;
     case "gateway.routing_sticky":
@@ -299,8 +383,6 @@ function SettingEditor({ item }: { item: SettingItem }) {
       return <PositiveIntEditor item={item} label="阈值（次）" />;
     case "admin_backend.channel_test":
       return <ChannelTestEditor item={item} />;
-    case "admin_backend.channel_health_thresholds":
-      return <ChannelHealthEditor item={item} />;
     case "admin_frontend.dashboard_thresholds":
       return <DashboardThresholdsEditor item={item} />;
     default:
@@ -313,12 +395,36 @@ function useSaveSetting(key: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (value: unknown) => updateSetting(key, value),
-    onSuccess: () => {
-      toast.success("已保存");
-      void queryClient.invalidateQueries({ queryKey: RUNTIME_SETTINGS_QUERY_KEY });
+    onSuccess: (result) => {
+      if (result.state === "runtime_sync_pending") {
+        toast.warning(
+          `数据库已保存为 v${result.revision}，运行态同步中；同步完成前新准入保持拒绝`,
+        );
+      } else if (result.state === "active") {
+        toast.success(
+          `已保存并激活 v${result.active_revision || result.revision}`,
+        );
+      } else {
+        toast.success("已保存");
+      }
+      void queryClient.invalidateQueries({
+        queryKey: RUNTIME_SETTINGS_QUERY_KEY,
+      });
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
+}
+
+function RuntimeControlBadge({ state }: { state?: string }) {
+  const copy = RUNTIME_SYNC_COPY[state ?? "runtime_sync_required"] ?? {
+    label: state || "待建立运行态",
+    destructive: true,
+  };
+  return (
+    <Badge variant={copy.destructive ? "destructive" : "outline"}>
+      {copy.label}
+    </Badge>
+  );
 }
 
 function SaveReset({
@@ -349,17 +455,65 @@ interface CircuitBreakerValue {
   window_ms: number;
   min_requests: number;
   failure_ratio: number;
-  open_duration_ms: number;
+  consecutive_failures: number;
+  consecutive_window_ms: number;
+  half_open_successes: number;
+  attempt_permit_ttl_ms: number;
+  attempt_permit_renew_interval_ms: number;
+  attempt_permit_terminal_ttl_ms: number;
+  endpoint_base_url_revision_operation_ttl_ms: number;
+  endpoint_status_revision_operation_ttl_ms: number;
+  endpoint_status_batch_max: number;
+  open_durations_ms: number[];
+  endpoint_ambiguous_distinct_channels: number;
+  endpoint_ambiguous_distinct_models: number;
 }
 
 function CircuitBreakerEditor({ item }: { item: SettingItem }) {
   const server = item.value as CircuitBreakerValue;
   const [enabled, setEnabled] = useState(server.enabled);
-  const [window_, setWindow] = useState(() => decomposeDurationMs(server.window_ms));
+  const [window_, setWindow] = useState(() =>
+    decomposeDurationMs(server.window_ms),
+  );
   const [minRequests, setMinRequests] = useState(String(server.min_requests));
-  const [failureRatio, setFailureRatio] = useState(String(server.failure_ratio));
-  const [openDuration, setOpenDuration] = useState(() =>
-    decomposeDurationMs(server.open_duration_ms),
+  const [failureRatio, setFailureRatio] = useState(
+    String(server.failure_ratio),
+  );
+  const [consecutiveFailures, setConsecutiveFailures] = useState(
+    String(server.consecutive_failures),
+  );
+  const [consecutiveWindow, setConsecutiveWindow] = useState(() =>
+    decomposeDurationMs(server.consecutive_window_ms),
+  );
+  const [halfOpenSuccesses, setHalfOpenSuccesses] = useState(
+    String(server.half_open_successes),
+  );
+  const [permitTTL, setPermitTTL] = useState(() =>
+    decomposeDurationMs(server.attempt_permit_ttl_ms),
+  );
+  const [permitRenew, setPermitRenew] = useState(() =>
+    decomposeDurationMs(server.attempt_permit_renew_interval_ms),
+  );
+  const [permitTerminalTTL, setPermitTerminalTTL] = useState(() =>
+    decomposeDurationMs(server.attempt_permit_terminal_ttl_ms),
+  );
+  const [baseURLOperationTTL, setBaseURLOperationTTL] = useState(() =>
+    decomposeDurationMs(server.endpoint_base_url_revision_operation_ttl_ms),
+  );
+  const [statusOperationTTL, setStatusOperationTTL] = useState(() =>
+    decomposeDurationMs(server.endpoint_status_revision_operation_ttl_ms),
+  );
+  const [statusBatchMax, setStatusBatchMax] = useState(
+    String(server.endpoint_status_batch_max),
+  );
+  const [openDurations, setOpenDurations] = useState(
+    server.open_durations_ms.join(", "),
+  );
+  const [ambiguousChannels, setAmbiguousChannels] = useState(
+    String(server.endpoint_ambiguous_distinct_channels),
+  );
+  const [ambiguousModels, setAmbiguousModels] = useState(
+    String(server.endpoint_ambiguous_distinct_models),
   );
   const mutation = useSaveSetting(item.key);
 
@@ -368,21 +522,112 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
     setWindow(decomposeDurationMs(server.window_ms));
     setMinRequests(String(server.min_requests));
     setFailureRatio(String(server.failure_ratio));
-    setOpenDuration(decomposeDurationMs(server.open_duration_ms));
+    setConsecutiveFailures(String(server.consecutive_failures));
+    setConsecutiveWindow(decomposeDurationMs(server.consecutive_window_ms));
+    setHalfOpenSuccesses(String(server.half_open_successes));
+    setPermitTTL(decomposeDurationMs(server.attempt_permit_ttl_ms));
+    setPermitRenew(
+      decomposeDurationMs(server.attempt_permit_renew_interval_ms),
+    );
+    setPermitTerminalTTL(
+      decomposeDurationMs(server.attempt_permit_terminal_ttl_ms),
+    );
+    setBaseURLOperationTTL(
+      decomposeDurationMs(server.endpoint_base_url_revision_operation_ttl_ms),
+    );
+    setStatusOperationTTL(
+      decomposeDurationMs(server.endpoint_status_revision_operation_ttl_ms),
+    );
+    setStatusBatchMax(String(server.endpoint_status_batch_max));
+    setOpenDurations(server.open_durations_ms.join(", "));
+    setAmbiguousChannels(String(server.endpoint_ambiguous_distinct_channels));
+    setAmbiguousModels(String(server.endpoint_ambiguous_distinct_models));
   };
 
   const save = () => {
-    const err = durationError(window_, false) ?? durationError(openDuration, false);
+    const err =
+      durationError(window_, false) ??
+      durationError(consecutiveWindow, false) ??
+      durationError(permitTTL, false) ??
+      durationError(permitRenew, false) ??
+      durationError(permitTerminalTTL, false) ??
+      durationError(baseURLOperationTTL, false) ??
+      durationError(statusOperationTTL, false);
     if (err) {
       toast.error(`时长：${err}`);
+      return;
+    }
+    const parsedOpenDurations = openDurations
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value));
+    const integers = [
+      Number(minRequests),
+      Number(consecutiveFailures),
+      Number(halfOpenSuccesses),
+      Number(statusBatchMax),
+      Number(ambiguousChannels),
+      Number(ambiguousModels),
+    ];
+    if (integers.some((value) => !Number.isInteger(value) || value < 1)) {
+      toast.error("计数阈值需为正整数");
+      return;
+    }
+    if (Number(minRequests) < 2 || Number(halfOpenSuccesses) < 2) {
+      toast.error("最小样本数和半开成功数必须至少为 2");
+      return;
+    }
+    if (Number(ambiguousChannels) < 2 || Number(ambiguousModels) < 2) {
+      toast.error("Endpoint 模糊归因的渠道数和模型数必须至少为 2");
+      return;
+    }
+    if (Number(statusBatchMax) > 1024) {
+      toast.error("Endpoint 状态批量上限不能超过 1024");
+      return;
+    }
+    if (
+      parsedOpenDurations.length === 0 ||
+      parsedOpenDurations.some(
+        (value, index) =>
+          !Number.isInteger(value) ||
+          value <= 0 ||
+          (index > 0 && value < parsedOpenDurations[index - 1]),
+      )
+    ) {
+      toast.error("退避时长需为逗号分隔、递增的正整数毫秒");
+      return;
+    }
+    const permitTTLms = composeDurationMs(permitTTL);
+    const permitRenewMs = composeDurationMs(permitRenew);
+    const permitTerminalTTLms = composeDurationMs(permitTerminalTTL);
+    if (permitRenewMs * 3 > permitTTLms || permitTerminalTTLms < permitTTLms) {
+      toast.error("续租间隔的 3 倍不能超过租约，终态保留时间不能短于租约");
+      return;
+    }
+    const ratio = Number(failureRatio);
+    if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1) {
+      toast.error("失败率阈值需在 (0,1] 内");
       return;
     }
     mutation.mutate({
       enabled,
       window_ms: composeDurationMs(window_),
       min_requests: Number(minRequests),
-      failure_ratio: Number(failureRatio),
-      open_duration_ms: composeDurationMs(openDuration),
+      failure_ratio: ratio,
+      consecutive_failures: Number(consecutiveFailures),
+      consecutive_window_ms: composeDurationMs(consecutiveWindow),
+      half_open_successes: Number(halfOpenSuccesses),
+      attempt_permit_ttl_ms: permitTTLms,
+      attempt_permit_renew_interval_ms: permitRenewMs,
+      attempt_permit_terminal_ttl_ms: permitTerminalTTLms,
+      endpoint_base_url_revision_operation_ttl_ms:
+        composeDurationMs(baseURLOperationTTL),
+      endpoint_status_revision_operation_ttl_ms:
+        composeDurationMs(statusOperationTTL),
+      endpoint_status_batch_max: Number(statusBatchMax),
+      open_durations_ms: parsedOpenDurations,
+      endpoint_ambiguous_distinct_channels: Number(ambiguousChannels),
+      endpoint_ambiguous_distinct_models: Number(ambiguousModels),
     } satisfies CircuitBreakerValue);
   };
 
@@ -395,13 +640,15 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
         >
           启用熔断
         </HintLabel>
-        <Switch id={`${item.key}-enabled`} checked={enabled} onCheckedChange={setEnabled} />
+        <Switch
+          id={`${item.key}-enabled`}
+          checked={enabled}
+          onCheckedChange={setEnabled}
+        />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <HintLabel
-            hint="在固定时间窗里数成功/失败。窗口一过，计数清零重算。例：最近一个窗口内该渠道的请求结果。"
-          >
+          <HintLabel hint="在固定时间窗里数成功/失败。窗口一过，计数清零重算。例：最近一个窗口内该渠道的请求结果。">
             统计窗口
           </HintLabel>
           <DurationInput value={window_} onChange={setWindow} />
@@ -421,11 +668,89 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
           inputMode="decimal"
         />
         <div className="flex flex-col gap-1.5">
-          <HintLabel hint="跳闸后先挡住这段时间，再进入半开：只放行一次探测请求。探测成功 → 恢复正常；探测失败 → 再按本时长熔断。">
-            熔断打开时长
+          <HintLabel hint="在这段短窗口内连续达到失败次数，也会立即熔断，不必等待比例样本凑齐。">
+            连续失败窗口
           </HintLabel>
-          <DurationInput value={openDuration} onChange={setOpenDuration} />
+          <DurationInput
+            value={consecutiveWindow}
+            onChange={setConsecutiveWindow}
+          />
         </div>
+        <FieldText
+          label="连续失败次数"
+          value={consecutiveFailures}
+          onChange={setConsecutiveFailures}
+          inputMode="numeric"
+        />
+        <FieldText
+          label="半开恢复成功数"
+          value={halfOpenSuccesses}
+          onChange={setHalfOpenSuccesses}
+          inputMode="numeric"
+        />
+        <FieldText
+          label="退避时长（毫秒，逗号分隔）"
+          hint="每次再次熔断按顺序使用，最后一档封顶。"
+          value={openDurations}
+          onChange={setOpenDurations}
+        />
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="AttemptPermit 的活动租约；长流会按续租间隔自动续期。">
+            Permit 租约
+          </HintLabel>
+          <DurationInput value={permitTTL} onChange={setPermitTTL} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="活动 permit 的续租周期，三倍周期不能超过租约。">
+            Permit 续租间隔
+          </HintLabel>
+          <DurationInput value={permitRenew} onChange={setPermitRenew} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="终态记录保留时间，用于幂等重试和迟到结果判定。">
+            Permit 终态保留
+          </HintLabel>
+          <DurationInput
+            value={permitTerminalTTL}
+            onChange={setPermitTerminalTTL}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="Endpoint 地址变更操作的可恢复窗口。">
+            地址操作保留
+          </HintLabel>
+          <DurationInput
+            value={baseURLOperationTTL}
+            onChange={setBaseURLOperationTTL}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="Endpoint 状态变更操作的可恢复窗口。">
+            状态操作保留
+          </HintLabel>
+          <DurationInput
+            value={statusOperationTTL}
+            onChange={setStatusOperationTTL}
+          />
+        </div>
+        <FieldText
+          label="状态批量上限"
+          value={statusBatchMax}
+          onChange={setStatusBatchMax}
+          inputMode="numeric"
+        />
+        <FieldText
+          label="Endpoint 归因最少渠道"
+          value={ambiguousChannels}
+          onChange={setAmbiguousChannels}
+          inputMode="numeric"
+        />
+        <FieldText
+          label="Endpoint 归因最少模型"
+          value={ambiguousModels}
+          onChange={setAmbiguousModels}
+          inputMode="numeric"
+        />
       </div>
       <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
     </div>
@@ -445,7 +770,9 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
   const server = item.value as RoutingStickyValue;
   const [enabledDefault, setEnabledDefault] = useState(server.enabled_default);
   const [ttl, setTtl] = useState(() => decomposeDurationMs(server.ttl_ms));
-  const [tpmWait, setTpmWait] = useState(() => decomposeDurationMs(server.tpm_wait_ms));
+  const [tpmWait, setTpmWait] = useState(() =>
+    decomposeDurationMs(server.tpm_wait_ms),
+  );
   const [tpmWaitJitter, setTpmWaitJitter] = useState(() =>
     decomposeDurationMs(server.tpm_wait_jitter_ms),
   );
@@ -515,32 +842,34 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
   );
 }
 
-// ---- gateway.rate_limit_defaults ----
+// ---- gateway.route_rate_limit_defaults / gateway.channel_rate_limit_defaults ----
 
 interface RateLimitValue {
   rpm: number;
   tpm: number;
   rpd: number;
-  failure_policy: string;
 }
 
 function RateLimitEditor({ item }: { item: SettingItem }) {
   const server = item.value as RateLimitValue;
+  const isRouteDefault = item.key === "gateway.route_rate_limit_defaults";
   const [rpm, setRpm] = useState(String(server.rpm));
-  const [tpm, setTpm] = useState<RateLimitFieldValue>(() => decomposeRateLimit(server.tpm));
-  const [rpd, setRpd] = useState<RateLimitFieldValue>(() => decomposeRateLimit(server.rpd));
-  const [policy, setPolicy] = useState(server.failure_policy);
+  const [tpm, setTpm] = useState<RateLimitFieldValue>(() =>
+    decomposeRateLimit(server.tpm),
+  );
+  const [rpd, setRpd] = useState<RateLimitFieldValue>(() =>
+    decomposeRateLimit(server.rpd),
+  );
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
     setRpm(String(server.rpm));
     setTpm(decomposeRateLimit(server.tpm));
     setRpd(decomposeRateLimit(server.rpd));
-    setPolicy(server.failure_policy);
   };
 
   const save = () => {
-    // 全局默认没有「继承」语义（它就是兜底），故不允许留空；0=不限。
+    // 默认值没有「继承」语义（它就是兜底），故不允许留空；0=不限。
     for (const [label, v] of [
       ["TPM", tpm],
       ["RPD", rpd],
@@ -559,7 +888,6 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
       rpm: Number(rpm),
       tpm: composeRateLimit(tpm) as number,
       rpd: composeRateLimit(rpd) as number,
-      failure_policy: policy,
     } satisfies RateLimitValue);
   };
 
@@ -581,19 +909,193 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
           <RateLimitInput value={rpd} onChange={setRpd} placeholder="0" />
         </div>
       </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`${item.key}-policy`}>Redis 故障策略</Label>
-        <Select value={policy} onValueChange={setPolicy}>
-          <SelectTrigger id={`${item.key}-policy`} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fail_closed">fail_closed（故障即拒绝，安全优先）</SelectItem>
-            <SelectItem value="fail_open">fail_open（故障放行，可用性优先）</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Alert>
+        <AlertTitle>
+          {isRouteDefault
+            ? "线路限流命中后直接返回 429"
+            : "渠道限流命中后自动尝试后备渠道"}
+        </AlertTitle>
+        <AlertDescription>
+          {isRouteDefault
+            ? "在线路未单独设置限额时使用；RPM/RPD 在请求入口执行，TPM 在候选估算后、上游调用前执行。命中均直接返回 429；Redis 或运行态存储不可用时固定拒绝准入。"
+            : "在渠道未单独设置限额时使用；命中后跳过当前渠道并继续 fallback。Redis 或运行态存储不可用时固定拒绝准入。"}
+        </AlertDescription>
+      </Alert>
       <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
+    </div>
+  );
+}
+
+interface ConcurrencyDefaultsValue {
+  key_limit: number;
+  channel_limit: number;
+}
+
+function ConcurrencyDefaultsEditor({ item }: { item: SettingItem }) {
+  const server = item.value as ConcurrencyDefaultsValue;
+  const [keyLimit, setKeyLimit] = useState(String(server.key_limit));
+  const [channelLimit, setChannelLimit] = useState(
+    String(server.channel_limit),
+  );
+  const mutation = useSaveSetting(item.key);
+
+  const save = () => {
+    const key = Number(keyLimit);
+    const channel = Number(channelLimit);
+    if (
+      !Number.isInteger(key) ||
+      key < 0 ||
+      !Number.isInteger(channel) ||
+      channel < 0
+    ) {
+      toast.error("并发上限需为大于等于 0 的整数");
+      return;
+    }
+    mutation.mutate({
+      key_limit: key,
+      channel_limit: channel,
+    } satisfies ConcurrencyDefaultsValue);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FieldText
+          label="线路用户并发（0=不限）"
+          hint="同一线路、同一用户同时进行中的客户请求上限。"
+          value={keyLimit}
+          onChange={setKeyLimit}
+          inputMode="numeric"
+        />
+        <FieldText
+          label="渠道并发（0=不限）"
+          hint="同一渠道同时进行中的上游调用上限，渠道可单独覆盖。"
+          value={channelLimit}
+          onChange={setChannelLimit}
+          inputMode="numeric"
+        />
+      </div>
+      <SaveReset
+        saving={mutation.isPending}
+        onSave={save}
+        onReset={() => {
+          setKeyLimit(String(server.key_limit));
+          setChannelLimit(String(server.channel_limit));
+        }}
+      />
+    </div>
+  );
+}
+
+interface RoutingBalanceValue {
+  ttft_target_ms: number;
+  ttft_weight: number;
+  cost_weight?: number;
+  minimum_routing_factor: number;
+  ttft_ewma_alpha: number;
+}
+
+function RoutingBalanceEditor({ item }: { item: SettingItem }) {
+  const server = item.value as RoutingBalanceValue;
+  const [target, setTarget] = useState(() =>
+    decomposeDurationMs(server.ttft_target_ms),
+  );
+  const [weight, setWeight] = useState(String(server.ttft_weight));
+  const [costWeight, setCostWeight] = useState(
+    String(server.cost_weight ?? 0),
+  );
+  const [minimum, setMinimum] = useState(String(server.minimum_routing_factor));
+  const [alpha, setAlpha] = useState(String(server.ttft_ewma_alpha));
+  const mutation = useSaveSetting(item.key);
+
+  const save = () => {
+    const targetError = durationError(target, false);
+    const weightNumber = Number(weight);
+    const costWeightNumber = Number(costWeight);
+    const minimumNumber = Number(minimum);
+    const alphaNumber = Number(alpha);
+    if (targetError) {
+      toast.error(`TTFT 目标：${targetError}`);
+      return;
+    }
+    if (
+      !Number.isFinite(weightNumber) ||
+      weightNumber < 0 ||
+      weightNumber > 1 ||
+      !Number.isFinite(costWeightNumber) ||
+      costWeightNumber < 0 ||
+      costWeightNumber > 1 ||
+      !Number.isFinite(minimumNumber) ||
+      minimumNumber <= 0 ||
+      minimumNumber > 1 ||
+      !Number.isFinite(alphaNumber) ||
+      alphaNumber <= 0 ||
+      alphaNumber > 1
+    ) {
+      toast.error("TTFT 与成本权重需在 [0,1]，最小路由因子与 EWMA 系数需在 (0,1]");
+      return;
+    }
+    mutation.mutate({
+      ttft_target_ms: composeDurationMs(target),
+      ttft_weight: weightNumber,
+      cost_weight: costWeightNumber,
+      minimum_routing_factor: minimumNumber,
+      ttft_ewma_alpha: alphaNumber,
+    } satisfies RoutingBalanceValue);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Alert>
+        <AlertTitle>TTFT 只采集流式首 Token</AlertTitle>
+        <AlertDescription>
+          流式和非流式调度共用这一个流式 TTFT EWMA；非流式响应头不进入样本。
+        </AlertDescription>
+      </Alert>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="达到该首 Token 时长时，TTFT 项开始降低候选权重。">
+            TTFT 目标
+          </HintLabel>
+          <DurationInput value={target} onChange={setTarget} />
+        </div>
+        <FieldText
+          label="TTFT 权重 [0,1]"
+          value={weight}
+          onChange={setWeight}
+          inputMode="decimal"
+        />
+        <FieldText
+          label="成本权重 [0,1]"
+          hint="按渠道真实成本调整 balanced 抽中概率；0 不参与，1 影响最大，但不会绕过熔断、限流或负毛利保护。"
+          value={costWeight}
+          onChange={setCostWeight}
+          inputMode="decimal"
+        />
+        <FieldText
+          label="最小路由因子 (0,1]"
+          value={minimum}
+          onChange={setMinimum}
+          inputMode="decimal"
+        />
+        <FieldText
+          label="TTFT EWMA 系数 (0,1]"
+          value={alpha}
+          onChange={setAlpha}
+          inputMode="decimal"
+        />
+      </div>
+      <SaveReset
+        saving={mutation.isPending}
+        onSave={save}
+        onReset={() => {
+          setTarget(decomposeDurationMs(server.ttft_target_ms));
+          setWeight(String(server.ttft_weight));
+          setCostWeight(String(server.cost_weight ?? 0));
+          setMinimum(String(server.minimum_routing_factor));
+          setAlpha(String(server.ttft_ewma_alpha));
+        }}
+      />
     </div>
   );
 }
@@ -607,7 +1109,9 @@ interface CooldownValue {
 
 function CooldownEditor({ item }: { item: SettingItem }) {
   const server = item.value as CooldownValue;
-  const [cooldown, setCooldown] = useState(() => decomposeDurationMs(server.cooldown_ms));
+  const [cooldown, setCooldown] = useState(() =>
+    decomposeDurationMs(server.cooldown_ms),
+  );
   const [cap, setCap] = useState(() => decomposeDurationMs(server.cap_ms));
   const mutation = useSaveSetting(item.key);
 
@@ -627,7 +1131,9 @@ function CooldownEditor({ item }: { item: SettingItem }) {
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">默认冷却（无 Retry-After，0=不冷却）</Label>
+          <Label className="text-xs">
+            默认冷却（无 Retry-After，0=不冷却）
+          </Label>
           <DurationInput value={cooldown} onChange={setCooldown} />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -693,7 +1199,12 @@ function PositiveIntEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <FieldText label={label} value={value} onChange={setValue} inputMode="numeric" />
+      <FieldText
+        label={label}
+        value={value}
+        onChange={setValue}
+        inputMode="numeric"
+      />
       <SaveReset
         saving={mutation.isPending}
         onSave={() => mutation.mutate(Number(value))}
@@ -715,11 +1226,15 @@ interface ChannelTestValue {
 function ChannelTestEditor({ item }: { item: SettingItem }) {
   const server = item.value as ChannelTestValue;
   const [enabled, setEnabled] = useState(server.enabled);
-  const [interval, setInterval] = useState(() => decomposeDurationMs(server.interval_ms));
+  const [interval, setInterval] = useState(() =>
+    decomposeDurationMs(server.interval_ms),
+  );
   const [probeTimeout, setProbeTimeout] = useState(() =>
     decomposeDurationMs(server.probe_timeout_ms),
   );
-  const [retention, setRetention] = useState(String(server.log_retention_per_channel));
+  const [retention, setRetention] = useState(
+    String(server.log_retention_per_channel),
+  );
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
@@ -783,71 +1298,12 @@ function ChannelTestEditor({ item }: { item: SettingItem }) {
   );
 }
 
-// ---- admin_backend.channel_health_thresholds ----
-
-interface ChannelHealthValue {
-  healthy_rate: number;
-  degraded_rate: number;
-}
-
 /** 比率输入的通用前端预检（服务端注册表校验仍是权威）。 */
 function rateError(s: string, label: string): string | undefined {
   const n = Number(s);
   if (s.trim() === "" || !Number.isFinite(n)) return `${label}：请输入数字`;
   if (n <= 0 || n > 1) return `${label}：需在 (0, 1] 内`;
   return undefined;
-}
-
-function ChannelHealthEditor({ item }: { item: SettingItem }) {
-  const server = item.value as ChannelHealthValue;
-  const [healthy, setHealthy] = useState(String(server.healthy_rate));
-  const [degraded, setDegraded] = useState(String(server.degraded_rate));
-  const mutation = useSaveSetting(item.key);
-
-  const save = () => {
-    const err = rateError(healthy, "健康线") ?? rateError(degraded, "降级线");
-    if (err) {
-      toast.error(err);
-      return;
-    }
-    if (Number(degraded) >= Number(healthy)) {
-      toast.error("降级线必须低于健康线");
-      return;
-    }
-    mutation.mutate({
-      healthy_rate: Number(healthy),
-      degraded_rate: Number(degraded),
-    } satisfies ChannelHealthValue);
-  };
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3">
-        <FieldText
-          label="健康线（成功率 ≥ 此值）"
-          value={healthy}
-          onChange={setHealthy}
-          inputMode="decimal"
-          placeholder="0.95"
-        />
-        <FieldText
-          label="降级线（成功率 ≥ 此值）"
-          value={degraded}
-          onChange={setDegraded}
-          inputMode="decimal"
-          placeholder="0.8"
-        />
-      </div>
-      <SaveReset
-        saving={mutation.isPending}
-        onSave={save}
-        onReset={() => {
-          setHealthy(String(server.healthy_rate));
-          setDegraded(String(server.degraded_rate));
-        }}
-      />
-    </div>
-  );
 }
 
 // ---- admin_frontend.dashboard_thresholds ----
@@ -866,10 +1322,18 @@ function DashboardThresholdsEditor({ item }: { item: SettingItem }) {
   const server = item.value as DashboardThresholdsValue;
   const [slo, setSlo] = useState(String(server.success_rate_slo));
   const [warn, setWarn] = useState(String(server.success_rate_warn));
-  const [ttftWarn, setTtftWarn] = useState(() => decomposeDurationMs(server.ttft_warn_ms));
-  const [ttftDanger, setTtftDanger] = useState(() => decomposeDurationMs(server.ttft_danger_ms));
-  const [latWarn, setLatWarn] = useState(() => decomposeDurationMs(server.latency_warn_ms));
-  const [latDanger, setLatDanger] = useState(() => decomposeDurationMs(server.latency_danger_ms));
+  const [ttftWarn, setTtftWarn] = useState(() =>
+    decomposeDurationMs(server.ttft_warn_ms),
+  );
+  const [ttftDanger, setTtftDanger] = useState(() =>
+    decomposeDurationMs(server.ttft_danger_ms),
+  );
+  const [latWarn, setLatWarn] = useState(() =>
+    decomposeDurationMs(server.latency_warn_ms),
+  );
+  const [latDanger, setLatDanger] = useState(() =>
+    decomposeDurationMs(server.latency_danger_ms),
+  );
   const [profitThin, setProfitThin] = useState(String(server.profit_thin_rate));
   const mutation = useSaveSetting(item.key);
 
@@ -896,7 +1360,12 @@ function DashboardThresholdsEditor({ item }: { item: SettingItem }) {
       return;
     }
     const profit = Number(profitThin);
-    if (profitThin.trim() === "" || !Number.isFinite(profit) || profit < 0 || profit >= 1) {
+    if (
+      profitThin.trim() === "" ||
+      !Number.isFinite(profit) ||
+      profit < 0 ||
+      profit >= 1
+    ) {
       toast.error("毛利偏薄线需在 [0, 1) 内（0=关闭）");
       return;
     }
@@ -972,7 +1441,10 @@ function DashboardThresholdsEditor({ item }: { item: SettingItem }) {
 // ---- 未识别 key 的 JSON 兜底编辑器 ----
 
 function RawJSONEditor({ item }: { item: SettingItem }) {
-  const server = useMemo(() => JSON.stringify(item.value, null, 2), [item.value]);
+  const server = useMemo(
+    () => JSON.stringify(item.value, null, 2),
+    [item.value],
+  );
   const [text, setText] = useState(server);
   const mutation = useSaveSetting(item.key);
 
@@ -992,7 +1464,11 @@ function RawJSONEditor({ item }: { item: SettingItem }) {
         rows={5}
         className="border-input bg-transparent w-full rounded-md border px-3 py-2 font-mono text-xs"
       />
-      <SaveReset saving={mutation.isPending} onSave={save} onReset={() => setText(server)} />
+      <SaveReset
+        saving={mutation.isPending}
+        onSave={save}
+        onReset={() => setText(server)}
+      />
     </div>
   );
 }
@@ -1014,7 +1490,11 @@ function FieldText({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {hint ? <HintLabel hint={hint}>{label}</HintLabel> : <Label className="text-xs">{label}</Label>}
+      {hint ? (
+        <HintLabel hint={hint}>{label}</HintLabel>
+      ) : (
+        <Label className="text-xs">{label}</Label>
+      )}
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}

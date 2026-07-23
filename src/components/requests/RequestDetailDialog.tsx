@@ -106,7 +106,7 @@ function DetailBody({ requestId }: { requestId: string }) {
 // TimingSection 由请求时间戳 + 输出 token 计算首字/总耗时/TPS（与列表口径一致）。
 function TimingSection({ detail }: { detail: RequestDetail }) {
   const started = new Date(detail.started_at).getTime();
-  const respStart = detail.response_started_at
+  const respStart = detail.stream && detail.response_started_at
     ? new Date(detail.response_started_at).getTime()
     : null;
   const completed = detail.completed_at
@@ -128,8 +128,12 @@ function TimingSection({ detail }: { detail: RequestDetail }) {
     <Section title="时延">
       <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
         <Row label="总耗时">{latencyMs != null ? formatLatencyMs(latencyMs) : "—"}</Row>
-        <Row label="首字 (TTFT)">{ttftMs != null ? formatLatencyMs(ttftMs) : "—"}</Row>
-        <Row label="TPS">{tps != null ? formatTPS(tps) : "—"}</Row>
+        {detail.stream ? (
+          <>
+            <Row label="首字 (TTFT)">{ttftMs != null ? formatLatencyMs(ttftMs) : "—"}</Row>
+            <Row label="TPS">{tps != null ? formatTPS(tps) : "—"}</Row>
+          </>
+        ) : null}
       </dl>
     </Section>
   );
@@ -275,6 +279,19 @@ function AttemptRow({ attempt }: { attempt: Attempt }) {
         {attempt.upstream_finish_reason &&
           ` · finish ${attempt.upstream_finish_reason}`}
       </div>
+      {(attempt.upstream_total_ms != null || attempt.upstream_ttft_ms != null) && (
+        <div className="text-muted-foreground text-xs tabular-nums">
+          {attempt.upstream_total_ms != null
+            ? `上游总耗时 ${formatLatencyMs(attempt.upstream_total_ms)}`
+            : null}
+          {attempt.upstream_total_ms != null && attempt.upstream_ttft_ms != null
+            ? " · "
+            : null}
+          {attempt.upstream_ttft_ms != null
+            ? `上游 TTFT ${formatLatencyMs(attempt.upstream_ttft_ms)}`
+            : null}
+        </div>
+      )}
       {attempt.error_message && (
         <div className="text-destructive text-xs">
           {attempt.error_code ? `${attempt.error_code}: ` : ""}

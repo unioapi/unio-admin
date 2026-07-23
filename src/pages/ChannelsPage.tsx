@@ -21,7 +21,7 @@ export function ChannelsPage() {
     statusOptions: CHANNEL_STATUS_OPTIONS,
     initialStatus: "enabled",
     // 不在此页做定时整表轮询：会整表重渲染，关掉「…」菜单并闪一下。
-    // 熔断打开剩余由徽章本地倒计时；状态变化等下次进入/筛选取数即可。
+    // Redis breaker 实时事实在渠道详情和线路运行态页单独读取。
   });
 
   return (

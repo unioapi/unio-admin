@@ -3,6 +3,11 @@ import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
 import type { RangeQuery } from "@/lib/api/dashboard";
 import type { RouteMode } from "@/lib/api/routes";
+import type {
+  BreakerState,
+  BreakerStoreAdmission,
+  RuntimeSyncState,
+} from "@/lib/api/runtime";
 
 // §3.5 线路路由作战台只读运维聚合（与后端 routes_ops DTO 对齐）。
 
@@ -97,26 +102,6 @@ export interface RouteRuntimeSource {
   stale: boolean;
 }
 
-export interface RouteRuntimeGatewaySource {
-  id: string;
-  available: boolean;
-  observed_at?: string;
-  error?: string;
-}
-
-export interface RouteRuntimeInstanceSnapshot {
-  id: string;
-  state: string;
-  open_remaining_ms?: number;
-  half_open_in_flight: boolean;
-  failures: number;
-  successes: number;
-  health_score: number;
-  error_rate: number;
-  latency_ewma_ms: number;
-  observed_at: string;
-}
-
 export interface RouteRuntimeChannel {
   channel_id: number;
   channel_name: string;
@@ -124,6 +109,33 @@ export interface RouteRuntimeChannel {
   provider_id: number;
   provider_name: string;
   provider_status: string;
+  provider_endpoint_id: number;
+  provider_endpoint_name: string;
+  provider_endpoint_status: string;
+  endpoint_base_url_revision: number;
+  endpoint_status_revision: number;
+  runtime_endpoint_base_url_revision: number;
+  runtime_endpoint_status_revision: number;
+  pending_endpoint_base_url_revision: number | null;
+  pending_endpoint_status_revision: number | null;
+  endpoint_base_url_revision_current: boolean;
+  endpoint_status_revision_current: boolean;
+  endpoint_state_generation: number;
+  endpoint_base_url_fence_generation: number;
+  endpoint_status_fence_generation: number;
+  channel_config_revision: number;
+  runtime_channel_config_revision: number | null;
+  channel_config_revision_current: boolean;
+  channel_admission_limits_revision: number;
+  runtime_channel_admission_limits_revision: number;
+  channel_admission_limits_revision_current: boolean;
+  route_rate_limits_revision: number;
+  channel_rate_limits_revision: number;
+  global_concurrency_revision: number;
+  circuit_breaker_revision: number;
+  routing_balance_revision: number;
+  runtime_control_state: RuntimeSyncState;
+  runtime_revision_current: boolean;
   protocol: string;
   adapter_key: string;
   priority: number;
@@ -132,18 +144,37 @@ export interface RouteRuntimeChannel {
   concurrency_used: number;
   concurrency_limit: number;
   concurrency_remaining: number | null;
+  rpm_used: number;
+  rpm_limit: number;
+  rpm_remaining: number | null;
+  rpd_used: number;
+  rpd_limit: number;
+  rpd_remaining: number | null;
   tpm_used: number;
   tpm_limit: number;
   tpm_remaining: number | null;
   capacity_score: number;
-  health_factor: number;
+  cost_ratio?: number | null;
+  cost_weight?: number;
+  cost_factor?: number;
   final_weight: number;
   pressure: number;
   capacity_unknown: boolean;
   capacity_read_failed: boolean;
-  breaker_state: string;
-  error_rate: number;
-  latency_ewma_ms: number;
+  endpoint_breaker_state: BreakerState | null;
+  endpoint_open_remaining_ms: number | null;
+  channel_breaker_state: BreakerState | null;
+  channel_open_remaining_ms: number | null;
+  error_rate: number | null;
+  error_samples: number;
+  ttft_ewma_ms: number | null;
+  ttft_samples: number;
+  ttft_sample_source: "stream_only";
+  cooldown_remaining_ms: number;
+  model_permission_paused: boolean;
+  model_permission_recheck_state: string;
+  runtime_sync_state: RuntimeSyncState;
+  breaker_store_admission: BreakerStoreAdmission;
   current_order: number;
   selected_1m: number;
   selected_5m: number;
@@ -151,7 +182,6 @@ export interface RouteRuntimeChannel {
   selected_share_5m: number;
   fallback_1m: number;
   margin_status: string;
-  instance_snapshots: RouteRuntimeInstanceSnapshot[];
 }
 
 export interface RouteRuntime {
@@ -166,25 +196,60 @@ export interface RouteRuntime {
   candidate_count: number;
   no_redundancy: boolean;
   all_capacity_zero: boolean;
-  capacity_degraded: boolean;
+  runtime_sync_state: RuntimeSyncState;
+  breaker_store_admission: BreakerStoreAdmission;
   sources: RouteRuntimeSource[];
-  gateway_sources: RouteRuntimeGatewaySource[];
   channels: RouteRuntimeChannel[];
 }
 
 export interface RoutingCandidateScore {
+  endpoint_id: number;
   channel_id: number;
   route_index: number;
   eligible: boolean;
   excluded_reason?: string;
+  candidate_endpoint_base_url_revision: number;
+  runtime_endpoint_base_url_revision: number;
+  endpoint_base_url_revision_current: boolean;
+  candidate_endpoint_status_revision: number;
+  runtime_endpoint_status_revision: number;
+  endpoint_status_revision_current: boolean;
+  candidate_channel_config_revision: number;
+  runtime_channel_config_revision: number | null;
+  channel_config_revision_current: boolean;
+  candidate_channel_admission_limits_revision: number;
+  runtime_channel_admission_limits_revision: number;
+  channel_admission_limits_revision_current: boolean;
+  route_rate_limits_revision: number;
+  channel_rate_limits_revision: number;
+  global_concurrency_revision: number;
+  circuit_breaker_revision: number;
+  routing_balance_revision: number;
+  runtime_control_state: RuntimeSyncState;
+  runtime_revision_current: boolean;
+  endpoint_breaker_state?: BreakerState;
+  channel_breaker_state?: BreakerState;
+  breaker_store_admission: BreakerStoreAdmission;
   concurrency_remaining: number | null;
   tpm_remaining: number | null;
   capacity_score: number;
-  health_factor: number;
-  weight: number;
+  error_rate: number;
+  error_samples: number;
+  ttft_ewma_ms: number;
+  ttft_samples: number;
+  ttft_sample_source: "stream_only";
+  latency_penalty: number;
+  routing_factor: number;
+  cost_ratio?: number | null;
+  cost_weight?: number;
+  cost_factor?: number;
+  final_weight: number;
   pressure: number;
   capacity_unknown: boolean;
   capacity_read_failed: boolean;
+  cooldown_remaining_ms: number;
+  model_permission_paused: boolean;
+  model_permission_recheck_state: string;
 }
 
 export interface RoutingDecision {
@@ -202,7 +267,6 @@ export interface RoutingDecision {
   sticky_channel_id: number | null;
   sticky_pinned: boolean;
   sticky_invalid: boolean;
-  capacity_degraded: boolean;
   all_capacity_zero: boolean;
   margin_guard_triggered: boolean;
   abnormal: boolean;
@@ -225,42 +289,75 @@ export interface RoutesOpsTableParams extends RangeQuery {
   search?: string;
 }
 
-export async function getRoutesOpsTable(params: RoutesOpsTableParams): Promise<Page<RouteOpsRow>> {
-  const res = await api.get<{ data: RouteOpsRow[]; meta: ListMeta }>("/admin/v1/routes/ops", {
-    params: buildListQuery(params),
-  });
+export async function getRoutesOpsTable(
+  params: RoutesOpsTableParams,
+): Promise<Page<RouteOpsRow>> {
+  const res = await api.get<{ data: RouteOpsRow[]; meta: ListMeta }>(
+    "/admin/v1/routes/ops",
+    {
+      params: buildListQuery(params),
+    },
+  );
   return { items: res.data.data, total: res.data.meta.total };
 }
 
-export async function getRouteOpsDetail(id: number, params: RangeQuery): Promise<RouteOpsDetail> {
-  const res = await api.get<{ data: RouteOpsDetail }>(`/admin/v1/routes/${id}/ops/detail`, { params });
+export async function getRouteOpsDetail(
+  id: number,
+  params: RangeQuery,
+): Promise<RouteOpsDetail> {
+  const res = await api.get<{ data: RouteOpsDetail }>(
+    `/admin/v1/routes/${id}/ops/detail`,
+    { params },
+  );
   return res.data.data;
 }
 
-export async function getRouteOpsReachableModels(id: number): Promise<RouteOpsReachableModel[]> {
+export async function getRouteOpsReachableModels(
+  id: number,
+): Promise<RouteOpsReachableModel[]> {
   const res = await api.get<{ data: RouteOpsReachableModel[] }>(
     `/admin/v1/routes/${id}/ops/reachable-models`,
   );
   return res.data.data;
 }
 
-export async function getRouteOpsChannelPool(id: number): Promise<RouteOpsChannelPoolItem[]> {
-  const res = await api.get<{ data: RouteOpsChannelPoolItem[] }>(`/admin/v1/routes/${id}/ops/channel-pool`);
+export async function getRouteOpsChannelPool(
+  id: number,
+): Promise<RouteOpsChannelPoolItem[]> {
+  const res = await api.get<{ data: RouteOpsChannelPoolItem[] }>(
+    `/admin/v1/routes/${id}/ops/channel-pool`,
+  );
   return res.data.data;
 }
 
-export async function getRouteOpsBindings(id: number): Promise<RouteOpsBindings> {
-  const res = await api.get<{ data: RouteOpsBindings }>(`/admin/v1/routes/${id}/ops/bindings`);
+export async function getRouteOpsBindings(
+  id: number,
+): Promise<RouteOpsBindings> {
+  const res = await api.get<{ data: RouteOpsBindings }>(
+    `/admin/v1/routes/${id}/ops/bindings`,
+  );
   return res.data.data;
 }
 
-export async function getRouteOpsPerformance(id: number, params: RangeQuery): Promise<RouteOpsPerfPoint[]> {
-  const res = await api.get<{ data: RouteOpsPerfPoint[] }>(`/admin/v1/routes/${id}/ops/performance`, { params });
+export async function getRouteOpsPerformance(
+  id: number,
+  params: RangeQuery,
+): Promise<RouteOpsPerfPoint[]> {
+  const res = await api.get<{ data: RouteOpsPerfPoint[] }>(
+    `/admin/v1/routes/${id}/ops/performance`,
+    { params },
+  );
   return res.data.data;
 }
 
-export async function getRouteOpsModels(id: number, params: RangeQuery): Promise<RouteOpsModel[]> {
-  const res = await api.get<{ data: RouteOpsModel[] }>(`/admin/v1/routes/${id}/ops/models`, { params });
+export async function getRouteOpsModels(
+  id: number,
+  params: RangeQuery,
+): Promise<RouteOpsModel[]> {
+  const res = await api.get<{ data: RouteOpsModel[] }>(
+    `/admin/v1/routes/${id}/ops/models`,
+    { params },
+  );
   return res.data.data;
 }
 
@@ -268,7 +365,10 @@ export async function getRouteOpsRequests(
   id: number,
   params: RangeQuery & { page: number; page_size: number },
 ): Promise<Page<RouteOpsRequest>> {
-  const res = await api.get<{ data: RouteOpsRequest[]; meta: ListMeta }>(`/admin/v1/routes/${id}/ops/requests`, { params });
+  const res = await api.get<{ data: RouteOpsRequest[]; meta: ListMeta }>(
+    `/admin/v1/routes/${id}/ops/requests`,
+    { params },
+  );
   return { items: res.data.data, total: res.data.meta.total };
 }
 

@@ -2,15 +2,13 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "react-router-dom";
 import type { RadarBadChannel } from "@/lib/api/dashboard";
 import { resizableColumn } from "@/components/data-table";
-import { HEALTH_LABEL, HEALTH_VARIANT } from "@/components/channels/health";
 import { TruncateCell } from "@/components/openstatus-table/truncate-cell";
 import { formatPercent } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const BAD_CHANNELS_COLUMN_LABELS: Record<string, string> = {
   name: "渠道",
-  bucket: "健康",
+  attempt_failed: "失败",
   success_rate: "成功率",
   recent_error_code: "最近错误",
   action: "操作",
@@ -25,12 +23,12 @@ export function badChannelsColumns(): ColumnDef<RadarBadChannel, unknown>[] {
       enableHiding: false,
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
     }),
-    resizableColumn<RadarBadChannel>("bucket", {
-      header: "健康",
+    resizableColumn<RadarBadChannel>("attempt_failed", {
+      header: "失败",
       size: 88,
       minSize: 72,
       cell: ({ row }) => (
-        <Badge variant={HEALTH_VARIANT[row.original.bucket]}>{HEALTH_LABEL[row.original.bucket]}</Badge>
+        <span className="tabular-nums">{row.original.attempt_failed}</span>
       ),
     }),
     resizableColumn<RadarBadChannel>("success_rate", {

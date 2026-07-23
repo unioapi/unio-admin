@@ -54,8 +54,6 @@ const STANDARD_COLUMN_SIZES: Record<string, { size: number; minSize: number }> =
   credential: { size: 180, minSize: 140 },
   rate_limit: { size: 112, minSize: 96 },
   status: { size: 88, minSize: 72 },
-  health: { size: 88, minSize: 72 },
-  health_bucket: { size: 88, minSize: 72 },
   price: { size: 96, minSize: 72 },
   has_price: { size: 96, minSize: 72 },
   upstream_model: { size: 160, minSize: 120 },
