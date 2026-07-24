@@ -58,7 +58,7 @@ function detailFixture(stream: boolean, attempt: Attempt): RequestDetail {
     api_key_id: 9,
     requested_model_id: "gpt-test",
     ingress_protocol: "openai",
-    operation: "chat_completions",
+    endpoint: "chat_completions",
     response_model_id: "gpt-test",
     response_protocol: "openai",
     response_id: null,

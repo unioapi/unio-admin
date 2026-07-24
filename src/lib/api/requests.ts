@@ -11,7 +11,7 @@ interface RequestSummary {
   api_key_id: number;
   requested_model_id: string;
   ingress_protocol: string;
-  operation: string;
+  endpoint: string;
   response_model_id: string | null;
   response_protocol: string | null;
   response_id: string | null;

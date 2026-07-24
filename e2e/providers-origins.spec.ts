@@ -114,7 +114,7 @@ async function mockProviders(page: Page) {
       return;
     }
 
-    if (path === "/admin/v1/provider-endpoints" && request.method() === "POST") {
+    if (path === "/admin/v1/provider-origins" && request.method() === "POST") {
       const input = request.postDataJSON() as {
         provider_id: number;
         name: string;
@@ -173,32 +173,32 @@ test("shows Endpoint facts and creates one from the row menu", async ({
   const state = await mockProviders(page);
   await page.goto("/providers");
 
-  await expect(page.getByRole("columnheader", { name: "端点" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "源站" })).toBeVisible();
   const starAPI = page.getByRole("row", { name: /StarAPI/ });
   await expect(starAPI.getByText("Primary", { exact: true })).toBeVisible();
   await expect(starAPI.getByText("https://primary.example.com/v1", { exact: true })).toBeVisible();
   await expect(starAPI.getByText("Backup", { exact: true })).toBeVisible();
-  await starAPI.getByRole("button", { name: "另有 1 个端点" }).click();
+  await starAPI.getByRole("button", { name: "另有 1 个源站" }).click();
   await expect(page.getByText("Legacy", { exact: true })).toBeVisible();
   await expect(page.getByText("https://legacy.example.com/v1", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
 
   const emptyAI = page.getByRole("row", { name: /EmptyAI/ });
-  await expect(emptyAI.getByText("暂无端点", { exact: true })).toBeVisible();
+  await expect(emptyAI.getByText("暂无源站", { exact: true })).toBeVisible();
   const legacyResponse = page.getByRole("row", { name: /LegacyResponse/ });
-  await expect(legacyResponse.getByText("暂无端点", { exact: true })).toBeVisible();
+  await expect(legacyResponse.getByText("暂无源站", { exact: true })).toBeVisible();
   const archivedAI = page.getByRole("row", { name: /ArchivedAI/ });
   await archivedAI.getByRole("button", { name: "更多" }).hover();
-  await expect(page.getByRole("menuitem", { name: "新建端点" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "新建源站" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await emptyAI.getByRole("button", { name: "更多" }).hover();
-  await page.getByRole("menuitem", { name: "新建端点" }).click();
+  await page.getByRole("menuitem", { name: "新建源站" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "新建端点" });
+  const dialog = page.getByRole("dialog", { name: "新建源站" });
   await expect(dialog).toBeVisible();
-  await dialog.locator("#endpoint_name").fill("Primary");
-  await dialog.locator("#endpoint_base_url").fill("https://empty.example.com/v1");
+  await dialog.locator("#origin_name").fill("Primary");
+  await dialog.locator("#origin_base_url").fill("https://empty.example.com/v1");
   await dialog.getByRole("button", { name: "创建" }).click();
 
   await expect(dialog).toBeHidden();

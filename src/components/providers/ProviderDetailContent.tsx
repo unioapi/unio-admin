@@ -28,7 +28,7 @@ import {
   TableSkeleton,
 } from "@/components/common/detail-section";
 import { PerformanceCharts, type PerfPoint } from "@/components/common/PerformanceCharts";
-import { ProviderEndpointsSection } from "@/components/providers/ProviderEndpointsSection";
+import { ProviderOriginsSection } from "@/components/providers/ProviderOriginsSection";
 
 const PAGE_SIZE = 10;
 
@@ -43,8 +43,8 @@ export function ProviderDetailContent({
     () => [
       {
         id: "endpoints",
-        label: "端点",
-        content: <ProviderEndpointsSection providerId={providerId} />,
+        label: "源站",
+        content: <ProviderOriginsSection providerId={providerId} />,
       },
       {
         id: "channels",

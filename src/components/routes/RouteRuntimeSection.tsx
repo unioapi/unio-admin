@@ -95,7 +95,7 @@ const EXCLUSION_LABELS: Record<string, string> = {
   model_permission: "模型权限暂停",
   model_permission_paused: "模型权限暂停",
   stale_revision: "运行态版本不一致",
-  stale_status_revision: "Endpoint 状态版本不一致",
+  stale_status_revision: "源站 状态版本不一致",
   stale_config_revision: "渠道配置版本不一致",
   breaker_or_cooldown: "熔断或冷却中",
   not_in_candidate_plan: "未进入候选计划",
@@ -220,8 +220,8 @@ function runtimeStateForChannel(
     return channel.runtime_control_state;
   }
   if (
-    !channel.endpoint_base_url_revision_current ||
-    !channel.endpoint_status_revision_current ||
+    !channel.origin_base_url_revision_current ||
+    !channel.origin_status_revision_current ||
     !channel.channel_config_revision_current ||
     !channel.channel_admission_limits_revision_current ||
     !channel.runtime_revision_current
@@ -236,14 +236,14 @@ function channelLabel(channelId: number, names: Map<number, string>): string {
   return name ? `${name} (#${channelId})` : `渠道 #${channelId}`;
 }
 
-function upstreamOperationLabel(operation: string): string {
+function upstreamEndpointLabel(endpoint: string): string {
   const labels: Record<string, string> = {
     chat_completions: "Chat Completions",
     responses: "Responses",
     responses_compact: "Responses Compact",
     messages: "Messages",
   };
-  return labels[operation] ?? operation.replaceAll("_", " ");
+  return labels[endpoint] ?? endpoint.replaceAll("_", " ");
 }
 
 function chainItemLabel(item: unknown, names: Map<number, string>): string {
@@ -252,11 +252,11 @@ function chainItemLabel(item: unknown, names: Map<number, string>): string {
     const channelId = Number((item as { channel_id: unknown }).channel_id);
     if (Number.isFinite(channelId)) {
       const channel = channelLabel(channelId, names);
-      if ("upstream_operation" in item) {
-        const operation = (item as { upstream_operation: unknown })
-          .upstream_operation;
-        if (typeof operation === "string" && operation !== "") {
-          return `${channel} · ${upstreamOperationLabel(operation)}`;
+      if ("upstream_endpoint" in item) {
+        const endpoint = (item as { upstream_endpoint: unknown })
+          .upstream_endpoint;
+        if (typeof endpoint === "string" && endpoint !== "") {
+          return `${channel} · ${upstreamEndpointLabel(endpoint)}`;
         }
       }
       return channel;
@@ -599,13 +599,13 @@ function RuntimeChannelTable({
           <TableRow>
             <TableHead className="w-14">顺序</TableHead>
             <TableHead>渠道</TableHead>
-            <TableHead>Endpoint</TableHead>
+            <TableHead>源站</TableHead>
             <TableHead>资格</TableHead>
             <TableHead>并发</TableHead>
             <TableHead>RPM / RPD</TableHead>
             <TableHead>TPM</TableHead>
             <TableHead>429 / 权限</TableHead>
-            <TableHead>Endpoint 熔断</TableHead>
+            <TableHead>源站 熔断</TableHead>
             <TableHead>渠道熔断</TableHead>
             <TableHead>错误率</TableHead>
             <TableHead>流式 TTFT</TableHead>
@@ -673,39 +673,39 @@ function RuntimeChannelTable({
                 </TableCell>
                 <TableCell>
                   <div className="max-w-48 truncate font-medium">
-                    {channel.provider_endpoint_name ||
-                      `Endpoint #${channel.provider_endpoint_id}`}
+                    {channel.provider_origin_name ||
+                      `源站 #${channel.provider_origin_id}`}
                   </div>
                   <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-                    #{channel.provider_endpoint_id} ·{" "}
-                    {channel.provider_endpoint_status}
+                    #{channel.provider_origin_id} ·{" "}
+                    {channel.provider_origin_status}
                   </div>
                   <div className="text-muted-foreground mt-1 text-xs tabular-nums">
-                    URL {formatRuntimeRevision(channel.endpoint_base_url_revision)}/
+                    URL {formatRuntimeRevision(channel.origin_base_url_revision)}/
                     {formatRuntimeRevision(
-                      channel.runtime_endpoint_base_url_revision,
+                      channel.runtime_origin_base_url_revision,
                     )}
                     {" · "}状态{" "}
-                    {formatRuntimeRevision(channel.endpoint_status_revision)}/
-                    {formatRuntimeRevision(channel.runtime_endpoint_status_revision)}
+                    {formatRuntimeRevision(channel.origin_status_revision)}/
+                    {formatRuntimeRevision(channel.runtime_origin_status_revision)}
                   </div>
-                  {channel.pending_endpoint_base_url_revision != null ||
-                  channel.pending_endpoint_status_revision != null ? (
+                  {channel.pending_origin_base_url_revision != null ||
+                  channel.pending_origin_status_revision != null ? (
                     <div className="text-amber-700 mt-1 text-xs tabular-nums dark:text-amber-400">
                       待提交 URL{" "}
                       {formatRuntimeRevision(
-                        channel.pending_endpoint_base_url_revision,
+                        channel.pending_origin_base_url_revision,
                       )}
                       {" · "}状态{" "}
                       {formatRuntimeRevision(
-                        channel.pending_endpoint_status_revision,
+                        channel.pending_origin_status_revision,
                       )}
                     </div>
                   ) : null}
-                  {!channel.endpoint_base_url_revision_current ||
-                  !channel.endpoint_status_revision_current ? (
+                  {!channel.origin_base_url_revision_current ||
+                  !channel.origin_status_revision_current ? (
                     <div className="text-destructive mt-1 text-xs">
-                      Endpoint 版本不一致
+                      源站 版本不一致
                     </div>
                   ) : null}
                 </TableCell>
@@ -799,8 +799,8 @@ function RuntimeChannelTable({
                 <TableCell className="text-xs tabular-nums">
                   {runtimeUsable ? (
                     <BreakerBadge
-                      state={channel.endpoint_breaker_state}
-                      openRemainingMs={channel.endpoint_open_remaining_ms}
+                      state={channel.origin_breaker_state}
+                      openRemainingMs={channel.origin_open_remaining_ms}
                     />
                   ) : (
                     "—"
@@ -1047,7 +1047,7 @@ function RecentDecisions({
                       {decision.requested_model_id}
                     </div>
                     <div className="text-muted-foreground mt-1 text-xs">
-                      {decision.protocol} · {decision.operation}
+                      {decision.protocol} · {decision.endpoint}
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs tabular-nums">
@@ -1154,8 +1154,8 @@ function DecisionSummary({
         <DecisionField label="模型">
           {decision.requested_model_id}
         </DecisionField>
-        <DecisionField label="协议 / 操作">
-          {decision.protocol} · {decision.operation}
+        <DecisionField label="协议 / 端点">
+          {decision.protocol} · {decision.endpoint}
         </DecisionField>
         <DecisionField label="候选">
           {decision.candidate_count} / {decision.pool_size}

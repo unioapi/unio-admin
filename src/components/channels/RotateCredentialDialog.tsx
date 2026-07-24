@@ -86,7 +86,7 @@ function RotateForm({
       <DialogHeader>
         <DialogTitle>修改 API Key</DialogTitle>
         <DialogDescription>
-          为「{channel.name}」保存上游 API Key，并立即用当前 Endpoint 和模型执行验证。
+          为「{channel.name}」保存上游 API Key，并立即用当前 源站 和模型执行验证。
         </DialogDescription>
       </DialogHeader>
 
@@ -143,7 +143,7 @@ const VERIFICATION_COPY: Record<
   },
   stale: {
     title: "凭据已保存，检测结果已过期",
-    description: "验证期间 Endpoint 或渠道配置发生变化，本次结果没有覆盖当前状态。",
+    description: "验证期间 源站 或渠道配置发生变化，本次结果没有覆盖当前状态。",
     destructive: true,
   },
   execution_failed: {

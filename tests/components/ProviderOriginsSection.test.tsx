@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ProviderEndpointsSection } from "@/components/providers/ProviderEndpointsSection";
+import { ProviderOriginsSection } from "@/components/providers/ProviderOriginsSection";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
@@ -15,14 +15,14 @@ const mocks = vi.hoisted(() => ({
   updateStatus: vi.fn(),
 }));
 
-vi.mock("@/lib/api/providerEndpoints", () => ({
-  createProviderEndpoint: mocks.create,
-  getProviderEndpointRuntime: mocks.getRuntime,
-  listProviderEndpoints: mocks.list,
-  resetProviderEndpointBreaker: mocks.reset,
-  updateProviderEndpointBaseURL: mocks.updateBaseURL,
-  updateProviderEndpointName: mocks.updateName,
-  updateProviderEndpointStatus: mocks.updateStatus,
+vi.mock("@/lib/api/providerOrigins", () => ({
+  createProviderOrigin: mocks.create,
+  getProviderOriginRuntime: mocks.getRuntime,
+  listProviderOrigins: mocks.list,
+  resetProviderOriginBreaker: mocks.reset,
+  updateProviderOriginBaseURL: mocks.updateBaseURL,
+  updateProviderOriginName: mocks.updateName,
+  updateProviderOriginStatus: mocks.updateStatus,
 }));
 
 function TestProviders({ children }: { children: ReactNode }) {
@@ -54,7 +54,7 @@ const endpoint = {
   updated_at: "2026-07-22T00:00:00Z",
 };
 
-describe("ProviderEndpointsSection", () => {
+describe("ProviderOriginsSection", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.list.mockResolvedValue({ items: [endpoint], total: 1 });
@@ -64,7 +64,7 @@ describe("ProviderEndpointsSection", () => {
     const user = userEvent.setup();
     render(
       <TestProviders>
-        <ProviderEndpointsSection providerId={3} />
+        <ProviderOriginsSection providerId={3} />
       </TestProviders>,
     );
 
@@ -93,7 +93,7 @@ describe("ProviderEndpointsSection", () => {
       total: 1,
     });
     mocks.getRuntime.mockResolvedValue({
-      scope: "endpoint",
+      scope: "origin",
       id: 7,
       exists: true,
       state: "open",
@@ -116,7 +116,7 @@ describe("ProviderEndpointsSection", () => {
 
     render(
       <TestProviders>
-        <ProviderEndpointsSection providerId={3} />
+        <ProviderOriginsSection providerId={3} />
       </TestProviders>,
     );
 

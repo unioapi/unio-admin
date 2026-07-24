@@ -10,12 +10,12 @@ export interface Provider {
   updated_at: string;
   archived_at: string | null;
   runtime_sync_pending: boolean;
-  affected_endpoint_count: number;
+  affected_origin_count: number;
 }
 
 export interface ProviderStatusChangeResult {
   runtime_sync_pending: boolean;
-  affected_endpoint_count: number;
+  affected_origin_count: number;
 }
 
 // 服务端分页：把 page/page_size/status/q 作为 query 传给后端，拆出 items + total。
@@ -75,8 +75,8 @@ export async function updateProvider({
   return res.data.data;
 }
 
-// 删除服务商：仅允许删除已归档且无历史引用的服务商（后端「先归档才能删」闸门）；
-// 名下仍有渠道或已被请求/账务历史引用时，后端返回 409。
+// 删除服务商：仅允许删除已归档的服务商（后端「先归档才能删」闸门）；后端会连带清理其名下上游源站
+//（及其操作日志审计置空）。名下仍有渠道、或其（含源站）已被请求/账务历史引用时，后端返回 409。
 export async function deleteProvider(id: number): Promise<void> {
   await api.delete(`/admin/v1/providers/${id}`);
 }

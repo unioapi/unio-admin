@@ -67,7 +67,7 @@ describe("ArchiveWithReplacementDialog", () => {
     mocks.archiveChannel.mockResolvedValue(undefined);
     mocks.archiveProvider.mockResolvedValue({
       runtime_sync_pending: false,
-      affected_endpoint_count: 0,
+      affected_origin_count: 0,
     });
   });
 
@@ -100,7 +100,7 @@ describe("ArchiveWithReplacementDialog", () => {
     const onArchived = vi.fn();
     const pending = {
       runtime_sync_pending: true,
-      affected_endpoint_count: 2,
+      affected_origin_count: 2,
     };
     mocks.getProviderRoutes.mockResolvedValue([]);
     mocks.archiveProvider.mockResolvedValue(pending);

@@ -109,20 +109,20 @@ export interface RouteRuntimeChannel {
   provider_id: number;
   provider_name: string;
   provider_status: string;
-  provider_endpoint_id: number;
-  provider_endpoint_name: string;
-  provider_endpoint_status: string;
-  endpoint_base_url_revision: number;
-  endpoint_status_revision: number;
-  runtime_endpoint_base_url_revision: number;
-  runtime_endpoint_status_revision: number;
-  pending_endpoint_base_url_revision: number | null;
-  pending_endpoint_status_revision: number | null;
-  endpoint_base_url_revision_current: boolean;
-  endpoint_status_revision_current: boolean;
-  endpoint_state_generation: number;
-  endpoint_base_url_fence_generation: number;
-  endpoint_status_fence_generation: number;
+  provider_origin_id: number;
+  provider_origin_name: string;
+  provider_origin_status: string;
+  origin_base_url_revision: number;
+  origin_status_revision: number;
+  runtime_origin_base_url_revision: number;
+  runtime_origin_status_revision: number;
+  pending_origin_base_url_revision: number | null;
+  pending_origin_status_revision: number | null;
+  origin_base_url_revision_current: boolean;
+  origin_status_revision_current: boolean;
+  origin_state_generation: number;
+  origin_base_url_fence_generation: number;
+  origin_status_fence_generation: number;
   channel_config_revision: number;
   runtime_channel_config_revision: number | null;
   channel_config_revision_current: boolean;
@@ -161,8 +161,8 @@ export interface RouteRuntimeChannel {
   pressure: number;
   capacity_unknown: boolean;
   capacity_read_failed: boolean;
-  endpoint_breaker_state: BreakerState | null;
-  endpoint_open_remaining_ms: number | null;
+  origin_breaker_state: BreakerState | null;
+  origin_open_remaining_ms: number | null;
   channel_breaker_state: BreakerState | null;
   channel_open_remaining_ms: number | null;
   error_rate: number | null;
@@ -203,17 +203,17 @@ export interface RouteRuntime {
 }
 
 export interface RoutingCandidateScore {
-  endpoint_id: number;
+  origin_id: number;
   channel_id: number;
   route_index: number;
   eligible: boolean;
   excluded_reason?: string;
-  candidate_endpoint_base_url_revision: number;
-  runtime_endpoint_base_url_revision: number;
-  endpoint_base_url_revision_current: boolean;
-  candidate_endpoint_status_revision: number;
-  runtime_endpoint_status_revision: number;
-  endpoint_status_revision_current: boolean;
+  candidate_origin_base_url_revision: number;
+  runtime_origin_base_url_revision: number;
+  origin_base_url_revision_current: boolean;
+  candidate_origin_status_revision: number;
+  runtime_origin_status_revision: number;
+  origin_status_revision_current: boolean;
   candidate_channel_config_revision: number;
   runtime_channel_config_revision: number | null;
   channel_config_revision_current: boolean;
@@ -227,7 +227,7 @@ export interface RoutingCandidateScore {
   routing_balance_revision: number;
   runtime_control_state: RuntimeSyncState;
   runtime_revision_current: boolean;
-  endpoint_breaker_state?: BreakerState;
+  origin_breaker_state?: BreakerState;
   channel_breaker_state?: BreakerState;
   breaker_store_admission: BreakerStoreAdmission;
   concurrency_remaining: number | null;
@@ -261,7 +261,7 @@ export interface RoutingDecision {
   mode: RouteMode;
   requested_model_id: string;
   protocol: string;
-  operation: string;
+  endpoint: string;
   pool_size: number;
   candidate_count: number;
   sticky_channel_id: number | null;

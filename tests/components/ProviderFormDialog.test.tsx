@@ -34,7 +34,7 @@ const provider = {
   updated_at: "2026-07-22T00:00:00Z",
   archived_at: null,
   runtime_sync_pending: false,
-  affected_endpoint_count: 0,
+  affected_origin_count: 0,
 } satisfies Provider;
 
 function TestProviders({
@@ -55,7 +55,7 @@ describe("ProviderFormDialog runtime sync feedback", () => {
     mocks.toastError.mockReset();
   });
 
-  it("reports pending status and refreshes ProviderEndpoint facts after an edit", async () => {
+  it("reports pending status and refreshes ProviderOrigin facts after an edit", async () => {
     const user = userEvent.setup();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -64,7 +64,7 @@ describe("ProviderFormDialog runtime sync feedback", () => {
     mocks.updateProvider.mockResolvedValue({
       ...provider,
       runtime_sync_pending: true,
-      affected_endpoint_count: 2,
+      affected_origin_count: 2,
     });
 
     render(
@@ -81,6 +81,6 @@ describe("ProviderFormDialog runtime sync feedback", () => {
 
     await waitFor(() => expect(mocks.updateProvider).toHaveBeenCalledTimes(1));
     expect(mocks.toastSuccess).toHaveBeenCalledWith("已保存，运行态同步中");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["provider-endpoints"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["provider-origins"] });
   });
 });

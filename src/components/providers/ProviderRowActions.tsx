@@ -10,7 +10,7 @@ import {
 import { apiErrorMessage } from "@/lib/api/client";
 import { ArchiveWithReplacementDialog } from "@/components/common/ArchiveWithReplacementDialog";
 import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
-import { ProviderEndpointFormDialog } from "@/components/providers/ProviderEndpointsSection";
+import { ProviderOriginFormDialog } from "@/components/providers/ProviderOriginsSection";
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,7 @@ import {
 
 export function ProviderRowActions({ provider }: { provider: Provider }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [endpointOpen, setEndpointOpen] = useState(false);
+  const [endpointOpen, setOriginOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -37,7 +37,7 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
     mutationFn: () => restoreProvider(provider.id),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
-      queryClient.invalidateQueries({ queryKey: ["provider-endpoints"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-origins"] });
       toast.success(result.runtime_sync_pending
         ? "已保存，运行态同步中"
         : `已恢复服务商「${provider.name}」为停用（名下渠道需单独恢复）`);
@@ -72,9 +72,9 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
           <HoverDropdownMenuContent align="end" className="min-w-40">
             <DropdownMenuGroup>
               {!archived ? (
-                <DropdownMenuItem onClick={() => openDialog(setEndpointOpen)}>
+                <DropdownMenuItem onClick={() => openDialog(setOriginOpen)}>
                   <PlusIcon />
-                  新建端点
+                  新建源站
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
@@ -103,10 +103,10 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
         </HoverDropdownMenu>
       </div>
 
-      <ProviderEndpointFormDialog
+      <ProviderOriginFormDialog
         providerId={provider.id}
         open={endpointOpen}
-        onOpenChange={setEndpointOpen}
+        onOpenChange={setOriginOpen}
       />
       <ProviderFormDialog provider={provider} open={editOpen} onOpenChange={setEditOpen} />
       <DeleteProviderDialog provider={provider} open={deleteOpen} onOpenChange={setDeleteOpen} />
@@ -116,7 +116,7 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
         target={{ kind: "provider", id: provider.id, name: provider.name }}
         onArchived={(result) => {
           queryClient.invalidateQueries({ queryKey: ["providers"] });
-          queryClient.invalidateQueries({ queryKey: ["provider-endpoints"] });
+          queryClient.invalidateQueries({ queryKey: ["provider-origins"] });
           queryClient.invalidateQueries({ queryKey: ["channels"] });
           queryClient.invalidateQueries({ queryKey: ["routes"] });
           queryClient.invalidateQueries({ queryKey: ["route"] });

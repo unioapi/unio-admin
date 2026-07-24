@@ -461,9 +461,9 @@ interface CircuitBreakerValue {
   attempt_permit_ttl_ms: number;
   attempt_permit_renew_interval_ms: number;
   attempt_permit_terminal_ttl_ms: number;
-  endpoint_base_url_revision_operation_ttl_ms: number;
-  endpoint_status_revision_operation_ttl_ms: number;
-  endpoint_status_batch_max: number;
+  origin_base_url_revision_operation_ttl_ms: number;
+  origin_status_revision_operation_ttl_ms: number;
+  origin_status_batch_max: number;
   open_durations_ms: number[];
   endpoint_ambiguous_distinct_channels: number;
   endpoint_ambiguous_distinct_models: number;
@@ -498,13 +498,13 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
     decomposeDurationMs(server.attempt_permit_terminal_ttl_ms),
   );
   const [baseURLOperationTTL, setBaseURLOperationTTL] = useState(() =>
-    decomposeDurationMs(server.endpoint_base_url_revision_operation_ttl_ms),
+    decomposeDurationMs(server.origin_base_url_revision_operation_ttl_ms),
   );
   const [statusOperationTTL, setStatusOperationTTL] = useState(() =>
-    decomposeDurationMs(server.endpoint_status_revision_operation_ttl_ms),
+    decomposeDurationMs(server.origin_status_revision_operation_ttl_ms),
   );
   const [statusBatchMax, setStatusBatchMax] = useState(
-    String(server.endpoint_status_batch_max),
+    String(server.origin_status_batch_max),
   );
   const [openDurations, setOpenDurations] = useState(
     server.open_durations_ms.join(", "),
@@ -533,12 +533,12 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
       decomposeDurationMs(server.attempt_permit_terminal_ttl_ms),
     );
     setBaseURLOperationTTL(
-      decomposeDurationMs(server.endpoint_base_url_revision_operation_ttl_ms),
+      decomposeDurationMs(server.origin_base_url_revision_operation_ttl_ms),
     );
     setStatusOperationTTL(
-      decomposeDurationMs(server.endpoint_status_revision_operation_ttl_ms),
+      decomposeDurationMs(server.origin_status_revision_operation_ttl_ms),
     );
-    setStatusBatchMax(String(server.endpoint_status_batch_max));
+    setStatusBatchMax(String(server.origin_status_batch_max));
     setOpenDurations(server.open_durations_ms.join(", "));
     setAmbiguousChannels(String(server.endpoint_ambiguous_distinct_channels));
     setAmbiguousModels(String(server.endpoint_ambiguous_distinct_models));
@@ -578,11 +578,11 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
       return;
     }
     if (Number(ambiguousChannels) < 2 || Number(ambiguousModels) < 2) {
-      toast.error("Endpoint 模糊归因的渠道数和模型数必须至少为 2");
+      toast.error("源站 模糊归因的渠道数和模型数必须至少为 2");
       return;
     }
     if (Number(statusBatchMax) > 1024) {
-      toast.error("Endpoint 状态批量上限不能超过 1024");
+      toast.error("源站 状态批量上限不能超过 1024");
       return;
     }
     if (
@@ -620,11 +620,11 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
       attempt_permit_ttl_ms: permitTTLms,
       attempt_permit_renew_interval_ms: permitRenewMs,
       attempt_permit_terminal_ttl_ms: permitTerminalTTLms,
-      endpoint_base_url_revision_operation_ttl_ms:
+      origin_base_url_revision_operation_ttl_ms:
         composeDurationMs(baseURLOperationTTL),
-      endpoint_status_revision_operation_ttl_ms:
+      origin_status_revision_operation_ttl_ms:
         composeDurationMs(statusOperationTTL),
-      endpoint_status_batch_max: Number(statusBatchMax),
+      origin_status_batch_max: Number(statusBatchMax),
       open_durations_ms: parsedOpenDurations,
       endpoint_ambiguous_distinct_channels: Number(ambiguousChannels),
       endpoint_ambiguous_distinct_models: Number(ambiguousModels),
@@ -716,7 +716,7 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <HintLabel hint="Endpoint 地址变更操作的可恢复窗口。">
+          <HintLabel hint="源站 地址变更操作的可恢复窗口。">
             地址操作保留
           </HintLabel>
           <DurationInput
@@ -725,7 +725,7 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <HintLabel hint="Endpoint 状态变更操作的可恢复窗口。">
+          <HintLabel hint="源站 状态变更操作的可恢复窗口。">
             状态操作保留
           </HintLabel>
           <DurationInput
@@ -740,13 +740,13 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
           inputMode="numeric"
         />
         <FieldText
-          label="Endpoint 归因最少渠道"
+          label="源站 归因最少渠道"
           value={ambiguousChannels}
           onChange={setAmbiguousChannels}
           inputMode="numeric"
         />
         <FieldText
-          label="Endpoint 归因最少模型"
+          label="源站 归因最少模型"
           value={ambiguousModels}
           onChange={setAmbiguousModels}
           inputMode="numeric"

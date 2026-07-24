@@ -149,8 +149,8 @@ function DetailContent({ detail }: { detail: RequestDetail }) {
           </Row>
           <Row label="请求模型">{detail.requested_model_id}</Row>
           <Row label="响应模型">{dash(detail.response_model_id)}</Row>
-          <Row label="协议 / 操作">
-            {detail.ingress_protocol} · {detail.operation}
+          <Row label="协议 / 端点">
+            {detail.ingress_protocol} · {detail.endpoint}
           </Row>
           <Row label="流式">{detail.stream ? "是" : "否"}</Row>
           <Row label="交付状态">{detail.delivery_status}</Row>

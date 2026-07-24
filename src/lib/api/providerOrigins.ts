@@ -2,20 +2,20 @@ import { api } from "@/lib/api/client";
 import type { ListMeta, Page } from "@/lib/api/types";
 import type { BreakerState, RuntimeSyncState } from "@/lib/api/runtime";
 
-export type ProviderEndpointStatus = "enabled" | "disabled" | "archived";
-export type CreatableProviderEndpointStatus = Exclude<
-  ProviderEndpointStatus,
+export type ProviderOriginStatus = "enabled" | "disabled" | "archived";
+export type CreatableProviderOriginStatus = Exclude<
+  ProviderOriginStatus,
   "archived"
 >;
 
-export interface ProviderEndpoint {
+export interface ProviderOrigin {
   id: number;
   provider_id: number;
   provider_name: string;
   name: string;
   base_url: string;
   base_url_revision: number;
-  status: ProviderEndpointStatus;
+  status: ProviderOriginStatus;
   status_revision: number;
   channel_count: number;
   runtime_sync_pending: boolean;
@@ -24,25 +24,25 @@ export interface ProviderEndpoint {
   runtime_pending_base_url_revision: number | null;
   runtime_active_status_revision: number | null;
   runtime_pending_status_revision: number | null;
-  runtime_effective_status: ProviderEndpointStatus | null;
+  runtime_effective_status: ProviderOriginStatus | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface ProviderEndpointListParams {
+export interface ProviderOriginListParams {
   providerId?: number;
-  status?: ProviderEndpointStatus;
+  status?: ProviderOriginStatus;
   q?: string;
   page?: number;
   pageSize?: number;
 }
 
-export async function listProviderEndpoints(
-  params: ProviderEndpointListParams = {},
-): Promise<Page<ProviderEndpoint>> {
-  const res = await api.get<{ data: ProviderEndpoint[]; meta: ListMeta }>(
-    "/admin/v1/provider-endpoints",
+export async function listProviderOrigins(
+  params: ProviderOriginListParams = {},
+): Promise<Page<ProviderOrigin>> {
+  const res = await api.get<{ data: ProviderOrigin[]; meta: ListMeta }>(
+    "/admin/v1/provider-origins",
     {
       params: {
         provider_id: params.providerId,
@@ -56,67 +56,67 @@ export async function listProviderEndpoints(
   return { items: res.data.data, total: res.data.meta.total };
 }
 
-export async function getProviderEndpoint(
+export async function getProviderOrigin(
   id: number,
-): Promise<ProviderEndpoint> {
-  const res = await api.get<{ data: ProviderEndpoint }>(
-    `/admin/v1/provider-endpoints/${id}`,
+): Promise<ProviderOrigin> {
+  const res = await api.get<{ data: ProviderOrigin }>(
+    `/admin/v1/provider-origins/${id}`,
   );
   return res.data.data;
 }
 
-export interface CreateProviderEndpointInput {
+export interface CreateProviderOriginInput {
   provider_id: number;
   name: string;
   base_url: string;
-  status: CreatableProviderEndpointStatus;
+  status: CreatableProviderOriginStatus;
 }
 
-export async function createProviderEndpoint(
-  input: CreateProviderEndpointInput,
-): Promise<ProviderEndpoint> {
-  const res = await api.post<{ data: ProviderEndpoint }>(
-    "/admin/v1/provider-endpoints",
+export async function createProviderOrigin(
+  input: CreateProviderOriginInput,
+): Promise<ProviderOrigin> {
+  const res = await api.post<{ data: ProviderOrigin }>(
+    "/admin/v1/provider-origins",
     input,
   );
   return res.data.data;
 }
 
-export async function updateProviderEndpointName(
+export async function updateProviderOriginName(
   id: number,
   name: string,
-): Promise<ProviderEndpoint> {
-  const res = await api.patch<{ data: ProviderEndpoint }>(
-    `/admin/v1/provider-endpoints/${id}`,
+): Promise<ProviderOrigin> {
+  const res = await api.patch<{ data: ProviderOrigin }>(
+    `/admin/v1/provider-origins/${id}`,
     { name },
   );
   return res.data.data;
 }
 
-export async function updateProviderEndpointBaseURL(
+export async function updateProviderOriginBaseURL(
   id: number,
   baseURL: string,
-): Promise<ProviderEndpoint> {
-  const res = await api.post<{ data: ProviderEndpoint }>(
-    `/admin/v1/provider-endpoints/${id}/base-url`,
+): Promise<ProviderOrigin> {
+  const res = await api.post<{ data: ProviderOrigin }>(
+    `/admin/v1/provider-origins/${id}/base-url`,
     { base_url: baseURL },
   );
   return res.data.data;
 }
 
-export async function updateProviderEndpointStatus(
+export async function updateProviderOriginStatus(
   id: number,
-  status: ProviderEndpointStatus,
-): Promise<ProviderEndpoint> {
-  const res = await api.post<{ data: ProviderEndpoint }>(
-    `/admin/v1/provider-endpoints/${id}/status`,
+  status: ProviderOriginStatus,
+): Promise<ProviderOrigin> {
+  const res = await api.post<{ data: ProviderOrigin }>(
+    `/admin/v1/provider-origins/${id}/status`,
     { status },
   );
   return res.data.data;
 }
 
 export interface BreakerRuntimeSnapshot {
-  scope: "endpoint" | "channel";
+  scope: "origin" | "channel";
   id: number;
   exists: boolean;
   state: BreakerState;
@@ -134,23 +134,23 @@ export interface BreakerRuntimeSnapshot {
   pending_base_url_revision: number;
   active_status_revision: number;
   pending_status_revision: number;
-  effective_status: ProviderEndpointStatus;
+  effective_status: ProviderOriginStatus;
 }
 
-export async function getProviderEndpointRuntime(
+export async function getProviderOriginRuntime(
   id: number,
 ): Promise<BreakerRuntimeSnapshot> {
   const res = await api.get<{ data: BreakerRuntimeSnapshot }>(
-    `/admin/v1/provider-endpoints/${id}/ops/runtime`,
+    `/admin/v1/provider-origins/${id}/ops/runtime`,
   );
   return res.data.data;
 }
 
-export async function resetProviderEndpointBreaker(
+export async function resetProviderOriginBreaker(
   id: number,
 ): Promise<BreakerRuntimeSnapshot> {
   const res = await api.delete<{ data: BreakerRuntimeSnapshot }>(
-    `/admin/v1/provider-endpoints/${id}/ops/circuit-breaker`,
+    `/admin/v1/provider-origins/${id}/ops/circuit-breaker`,
   );
   return res.data.data;
 }

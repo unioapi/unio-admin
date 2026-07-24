@@ -83,7 +83,7 @@ export function ProviderFormDialog({
       // 新建不影响已有渠道，无需刷。
       if (isEdit) {
         queryClient.invalidateQueries({ queryKey: ["channels"] });
-        queryClient.invalidateQueries({ queryKey: ["provider-endpoints"] });
+        queryClient.invalidateQueries({ queryKey: ["provider-origins"] });
       }
       toast.success(saved.runtime_sync_pending
         ? "已保存，运行态同步中"

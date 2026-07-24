@@ -11,13 +11,13 @@ export interface ProviderOpsRow {
   name: string;
   status: string;
   created_at: string;
-  endpoints: ProviderOpsEndpoint[];
+  origins: ProviderOpsOrigin[];
   channel_total: number;
   models_count: number;
   routes_count: number;
 }
 
-export interface ProviderOpsEndpoint {
+export interface ProviderOpsOrigin {
   id: number;
   name: string;
   base_url: string;
@@ -102,7 +102,7 @@ export async function getProvidersOpsTable(
   return {
     items: res.data.data.map((provider) => ({
       ...provider,
-      endpoints: provider.endpoints ?? [],
+      origins: provider.origins ?? [],
     })),
     total: res.data.meta.total,
   };

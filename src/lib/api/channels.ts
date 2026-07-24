@@ -7,9 +7,9 @@ export interface Channel {
   id: number;
   provider_id: number;
   provider_name: string;
-  provider_endpoint_id: number;
-  provider_endpoint_name: string;
-  provider_endpoint_status: string;
+  provider_origin_id: number;
+  provider_origin_name: string;
+  provider_origin_status: string;
   name: string;
   protocol: string;
   adapter_key: string;
@@ -79,7 +79,7 @@ export async function getChannel(id: number): Promise<Channel> {
 // 创建入参与后端 createChannelRequest 对齐；credential 为明文，后端加密落库。
 export interface CreateChannelInput {
   provider_id: number;
-  provider_endpoint_id: number;
+  provider_origin_id: number;
   name: string;
   protocol: string;
   adapter_key: string;
@@ -126,7 +126,7 @@ export async function listAdapterKeys(): Promise<AdapterKeyOption[]> {
 export interface UpdateChannelInput {
   id: number;
   name: string;
-  provider_endpoint_id: number;
+  provider_origin_id: number;
   status: string;
   priority: number;
   timeout_ms: number | null;
@@ -165,8 +165,8 @@ export type CredentialVerificationState =
 
 export interface CredentialVerification {
   state: CredentialVerificationState;
-  tested_endpoint_base_url_revision: number | null;
-  tested_endpoint_status_revision: number | null;
+  tested_origin_base_url_revision: number | null;
+  tested_origin_status_revision: number | null;
   tested_config_revision: number | null;
   state_change_applied: boolean;
   credential_valid_after: boolean;

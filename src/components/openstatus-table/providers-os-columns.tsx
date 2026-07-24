@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ColumnDef, FilterFn } from "@tanstack/react-table";
 import type { Provider } from "@/lib/api/providers";
 import type {
-  ProviderOpsEndpoint,
+  ProviderOpsOrigin,
   ProviderOpsRow,
 } from "@/lib/api/providersOps";
 import {
@@ -43,7 +43,7 @@ function toProvider(row: ProviderOpsRow): Provider {
     // ops 行不带归档时间；行操作只按 status 判断，archived_at 置空即可满足类型。
     archived_at: null,
     runtime_sync_pending: false,
-    affected_endpoint_count: 0,
+    affected_origin_count: 0,
   };
 }
 
@@ -56,7 +56,7 @@ const facetedFilter: FilterFn<ProviderOpsRow> = (row, columnId, filterValue) => 
 export const PROVIDER_OS_COLUMN_LABELS: Record<string, string> = {
   name: "服务商",
   status: "状态",
-  endpoints: "端点",
+  origins: "源站",
   channels: "渠道",
   models: "模型",
   routes: "线路",
@@ -103,18 +103,18 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
         ),
     },
     {
-      id: "endpoints",
-      accessorFn: (row) => row.endpoints,
-      header: () => <span className="text-muted-foreground">端点</span>,
+      id: "origins",
+      accessorFn: (row) => row.origins,
+      header: () => <span className="text-muted-foreground">源站</span>,
       enableSorting: false,
       meta: {
         autoSizeValue: (row: ProviderOpsRow) =>
-          (row.endpoints ?? [])
+          (row.origins ?? [])
             .map((endpoint) => `${endpoint.name} ${endpoint.base_url}`)
             .join(" "),
       },
       cell: ({ row }) => (
-        <ProviderEndpointsCell endpoints={row.original.endpoints ?? []} />
+        <ProviderOriginsCell origins={row.original.origins ?? []} />
       ),
     },
     {
@@ -166,24 +166,24 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
   ];
 }
 
-function ProviderEndpointsCell({
-  endpoints,
+function ProviderOriginsCell({
+  origins,
 }: {
-  endpoints: ProviderOpsEndpoint[];
+  origins: ProviderOpsOrigin[];
 }) {
   const [hiddenOpen, setHiddenOpen] = useState(false);
 
-  if (endpoints.length === 0) {
-    return <span className="text-muted-foreground text-xs">暂无端点</span>;
+  if (origins.length === 0) {
+    return <span className="text-muted-foreground text-xs">暂无源站</span>;
   }
 
-  const visible = endpoints.slice(0, 2);
-  const hidden = endpoints.slice(2);
+  const visible = origins.slice(0, 2);
+  const hidden = origins.slice(2);
 
   return (
     <div className="flex min-w-56 max-w-80 flex-col gap-1.5 py-0.5">
       {visible.map((endpoint) => (
-        <EndpointSummary key={endpoint.id} endpoint={endpoint} />
+        <OriginSummary key={endpoint.id} endpoint={endpoint} />
       ))}
       {hidden.length > 0 ? (
         <HoverCard
@@ -201,13 +201,13 @@ function ProviderEndpointsCell({
               aria-expanded={hiddenOpen}
               onClick={() => setHiddenOpen(true)}
             >
-              另有 {hidden.length} 个端点
+              另有 {hidden.length} 个源站
             </Button>
           </HoverCardTrigger>
           <HoverCardContent align="start" className="w-96">
             <div className="flex flex-col gap-2">
               {hidden.map((endpoint) => (
-                <EndpointSummary key={endpoint.id} endpoint={endpoint} />
+                <OriginSummary key={endpoint.id} endpoint={endpoint} />
               ))}
             </div>
           </HoverCardContent>
@@ -217,7 +217,7 @@ function ProviderEndpointsCell({
   );
 }
 
-function EndpointSummary({ endpoint }: { endpoint: ProviderOpsEndpoint }) {
+function OriginSummary({ endpoint }: { endpoint: ProviderOpsOrigin }) {
   return (
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-1.5">

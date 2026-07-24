@@ -18,15 +18,15 @@ import {
   resetChannelBreaker,
 } from "@/lib/api/channelsOps";
 import {
-  createProviderEndpoint,
-  getProviderEndpoint,
-  getProviderEndpointRuntime,
-  listProviderEndpoints,
-  resetProviderEndpointBreaker,
-  updateProviderEndpointBaseURL,
-  updateProviderEndpointName,
-  updateProviderEndpointStatus,
-} from "@/lib/api/providerEndpoints";
+  createProviderOrigin,
+  getProviderOrigin,
+  getProviderOriginRuntime,
+  listProviderOrigins,
+  resetProviderOriginBreaker,
+  updateProviderOriginBaseURL,
+  updateProviderOriginName,
+  updateProviderOriginStatus,
+} from "@/lib/api/providerOrigins";
 import {
   archiveProvider,
   restoreProvider,
@@ -127,7 +127,7 @@ describe("P4 admin API contracts", () => {
       readiness: { ready: false, reason: "runtime_operation_pending" },
       runtime_state_epoch: { state: "ready", revision: 7, match: true },
       operations: {
-        endpoint_routing: { nonterminal_count: 1, oldest_age_seconds: 12 },
+        origin_routing: { nonterminal_count: 1, oldest_age_seconds: 12 },
         runtime_control: { nonterminal_count: 2, oldest_age_seconds: 20 },
       },
     };
@@ -142,39 +142,39 @@ describe("P4 admin API contracts", () => {
     expect(result).not.toHaveProperty("payload_hash");
   });
 
-  it("uses the dedicated ProviderEndpoint CRUD, fence and runtime routes", async () => {
+  it("uses the dedicated ProviderOrigin CRUD, fence and runtime routes", async () => {
     mocks.get
       .mockResolvedValueOnce({ data: { data: [endpoint], meta: { total: 1 } } })
       .mockResolvedValueOnce({ data: { data: endpoint } })
-      .mockResolvedValueOnce({ data: { data: { scope: "endpoint", id: 7 } } });
+      .mockResolvedValueOnce({ data: { data: { scope: "origin", id: 7 } } });
     mocks.post.mockResolvedValue({ data: { data: endpoint } });
     mocks.patch.mockResolvedValue({ data: { data: endpoint } });
     mocks.delete.mockResolvedValue({
-      data: { data: { scope: "endpoint", id: 7 } },
+      data: { data: { scope: "origin", id: 7 } },
     });
 
-    await listProviderEndpoints({
+    await listProviderOrigins({
       providerId: 3,
       status: "enabled",
       page: 2,
       pageSize: 25,
     });
-    await getProviderEndpoint(7);
-    await createProviderEndpoint({
+    await getProviderOrigin(7);
+    await createProviderOrigin({
       provider_id: 3,
       name: "primary",
       base_url: endpoint.base_url,
       status: "enabled",
     });
-    await updateProviderEndpointName(7, "renamed");
-    await updateProviderEndpointBaseURL(7, "https://next.example.test/v1");
-    await updateProviderEndpointStatus(7, "disabled");
-    await getProviderEndpointRuntime(7);
-    await resetProviderEndpointBreaker(7);
+    await updateProviderOriginName(7, "renamed");
+    await updateProviderOriginBaseURL(7, "https://next.example.test/v1");
+    await updateProviderOriginStatus(7, "disabled");
+    await getProviderOriginRuntime(7);
+    await resetProviderOriginBreaker(7);
 
     expect(mocks.get).toHaveBeenNthCalledWith(
       1,
-      "/admin/v1/provider-endpoints",
+      "/admin/v1/provider-origins",
       {
         params: {
           provider_id: 3,
@@ -187,42 +187,42 @@ describe("P4 admin API contracts", () => {
     );
     expect(mocks.get).toHaveBeenNthCalledWith(
       2,
-      "/admin/v1/provider-endpoints/7",
+      "/admin/v1/provider-origins/7",
     );
-    expect(mocks.post).toHaveBeenCalledWith("/admin/v1/provider-endpoints", {
+    expect(mocks.post).toHaveBeenCalledWith("/admin/v1/provider-origins", {
       provider_id: 3,
       name: "primary",
       base_url: endpoint.base_url,
       status: "enabled",
     });
-    expect(mocks.patch).toHaveBeenCalledWith("/admin/v1/provider-endpoints/7", {
+    expect(mocks.patch).toHaveBeenCalledWith("/admin/v1/provider-origins/7", {
       name: "renamed",
     });
     expect(mocks.post).toHaveBeenCalledWith(
-      "/admin/v1/provider-endpoints/7/base-url",
+      "/admin/v1/provider-origins/7/base-url",
       { base_url: "https://next.example.test/v1" },
     );
     expect(mocks.post).toHaveBeenCalledWith(
-      "/admin/v1/provider-endpoints/7/status",
+      "/admin/v1/provider-origins/7/status",
       { status: "disabled" },
     );
     expect(mocks.get).toHaveBeenNthCalledWith(
       3,
-      "/admin/v1/provider-endpoints/7/ops/runtime",
+      "/admin/v1/provider-origins/7/ops/runtime",
     );
     expect(mocks.delete).toHaveBeenCalledWith(
-      "/admin/v1/provider-endpoints/7/ops/circuit-breaker",
+      "/admin/v1/provider-origins/7/ops/circuit-breaker",
     );
   });
 
   it("preserves Provider status-fence summaries without exposing operation details", async () => {
     const pending = {
       runtime_sync_pending: true,
-      affected_endpoint_count: 2,
+      affected_origin_count: 2,
     };
     const committed = {
       runtime_sync_pending: false,
-      affected_endpoint_count: 1,
+      affected_origin_count: 1,
     };
     mocks.patch.mockResolvedValue({
       data: {
@@ -268,13 +268,13 @@ describe("P4 admin API contracts", () => {
     expect(archived).not.toHaveProperty("base_url");
   });
 
-  it("binds channel writes to provider_endpoint_id and never sends base_url", async () => {
+  it("binds channel writes to provider_origin_id and never sends base_url", async () => {
     mocks.post.mockResolvedValue({ data: { data: { id: 9 } } });
     mocks.patch.mockResolvedValue({ data: { data: { id: 9 } } });
 
     await createChannel({
       provider_id: 3,
-      provider_endpoint_id: 7,
+      provider_origin_id: 7,
       name: "channel-a",
       protocol: "openai",
       adapter_key: "openai",
@@ -285,7 +285,7 @@ describe("P4 admin API contracts", () => {
     });
     await updateChannel({
       id: 9,
-      provider_endpoint_id: 7,
+      provider_origin_id: 7,
       name: "channel-a",
       status: "disabled",
       priority: 0,
@@ -296,9 +296,9 @@ describe("P4 admin API contracts", () => {
     const updateBody = mocks.patch.mock.calls[0][1];
     expect(createBody).toMatchObject({
       provider_id: 3,
-      provider_endpoint_id: 7,
+      provider_origin_id: 7,
     });
-    expect(updateBody).toMatchObject({ provider_endpoint_id: 7 });
+    expect(updateBody).toMatchObject({ provider_origin_id: 7 });
     expect(createBody).not.toHaveProperty("base_url");
     expect(updateBody).not.toHaveProperty("base_url");
   });
@@ -306,15 +306,15 @@ describe("P4 admin API contracts", () => {
   it("uses the Redis-backed channel runtime and breaker reset routes", async () => {
     const runtime = {
       id: 9,
-      provider_endpoint_id: 7,
-      endpoint_base_url_revision: 2,
-      endpoint_status_revision: 4,
+      provider_origin_id: 7,
+      origin_base_url_revision: 2,
+      origin_status_revision: 4,
       config_revision: 3,
       admission_limits_revision: 5,
       runtime_sync_state: "active" as const,
-      runtime_provider_endpoint_id: 7,
-      runtime_endpoint_base_url_revision: 2,
-      runtime_endpoint_status_revision: 4,
+      runtime_provider_origin_id: 7,
+      runtime_origin_base_url_revision: 2,
+      runtime_origin_status_revision: 4,
       runtime_config_revision: 3,
       runtime_admission_active_revision: 5,
       runtime_admission_pending_revision: null,

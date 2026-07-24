@@ -134,7 +134,7 @@ export function ChannelDetailPage() {
         }
         subtitle={
           channel
-            ? `${channel.provider_name} · ${channel.provider_endpoint_name} · ${channel.base_url}`
+            ? `${channel.provider_name} · ${channel.provider_origin_name} · ${channel.base_url}`
             : null
         }
         actions={

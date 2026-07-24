@@ -13,17 +13,17 @@ import {
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api/client";
 import {
-  createProviderEndpoint,
-  getProviderEndpointRuntime,
-  listProviderEndpoints,
-  resetProviderEndpointBreaker,
-  updateProviderEndpointBaseURL,
-  updateProviderEndpointName,
-  updateProviderEndpointStatus,
-  type CreatableProviderEndpointStatus,
-  type ProviderEndpoint,
-  type ProviderEndpointStatus,
-} from "@/lib/api/providerEndpoints";
+  createProviderOrigin,
+  getProviderOriginRuntime,
+  listProviderOrigins,
+  resetProviderOriginBreaker,
+  updateProviderOriginBaseURL,
+  updateProviderOriginName,
+  updateProviderOriginStatus,
+  type CreatableProviderOriginStatus,
+  type ProviderOrigin,
+  type ProviderOriginStatus,
+} from "@/lib/api/providerOrigins";
 import type { RuntimeSyncState } from "@/lib/api/runtime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
@@ -66,7 +66,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const ENDPOINTS_QUERY_KEY = "provider-endpoints";
+const ENDPOINTS_QUERY_KEY = "provider-origins";
 
 const RUNTIME_SYNC_COPY: Record<
   RuntimeSyncState,
@@ -95,19 +95,19 @@ const RUNTIME_SYNC_COPY: Record<
   },
 };
 
-function endpointSyncState(endpoint: ProviderEndpoint): RuntimeSyncState {
+function endpointSyncState(endpoint: ProviderOrigin): RuntimeSyncState {
   if (endpoint.runtime_sync_state) return endpoint.runtime_sync_state;
   return endpoint.runtime_sync_pending ? "runtime_sync_pending" : "active";
 }
 
-export function ProviderEndpointsSection({
+export function ProviderOriginsSection({
   providerId,
 }: {
   providerId: number;
 }) {
   const query = useQuery({
     queryKey: [ENDPOINTS_QUERY_KEY, "by-provider", providerId],
-    queryFn: () => listProviderEndpoints({ providerId }),
+    queryFn: () => listProviderOrigins({ providerId }),
   });
 
   if (query.isPending) return <TableSkeleton rows={4} cols={7} />;
@@ -119,20 +119,20 @@ export function ProviderEndpointsSection({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-muted-foreground text-sm tabular-nums">
-          共 {query.data.total} 个端点
+          共 {query.data.total} 个源站
         </span>
-        <ProviderEndpointFormDialog providerId={providerId}>
+        <ProviderOriginFormDialog providerId={providerId}>
           <Button size="sm">
             <PlusIcon data-icon="inline-start" />
-            新建端点
+            新建源站
           </Button>
-        </ProviderEndpointFormDialog>
+        </ProviderOriginFormDialog>
       </div>
 
       {endpoints.length === 0 ? (
         <SectionEmpty
           icon={ActivityIcon}
-          title="暂无端点"
+          title="暂无源站"
           description="创建一个上游 API Root 后，渠道才能绑定并参与路由"
         />
       ) : (
@@ -140,7 +140,7 @@ export function ProviderEndpointsSection({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>端点</TableHead>
+                <TableHead>源站</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>版本</TableHead>
                 <TableHead>渠道</TableHead>
@@ -176,16 +176,16 @@ export function ProviderEndpointsSection({
                     {endpoint.channel_count}
                   </TableCell>
                   <TableCell>
-                    <EndpointRuntimeSummary endpoint={endpoint} />
+                    <OriginRuntimeSummary endpoint={endpoint} />
                   </TableCell>
                   <TableCell>
                     <RuntimeSyncBadge state={endpointSyncState(endpoint)} />
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
-                      <EndpointRuntimeDialog endpoint={endpoint} />
-                      <EndpointStatusActions endpoint={endpoint} />
-                      <ProviderEndpointFormDialog
+                      <OriginRuntimeDialog endpoint={endpoint} />
+                      <OriginStatusActions endpoint={endpoint} />
+                      <ProviderOriginFormDialog
                         providerId={providerId}
                         endpoint={endpoint}
                       >
@@ -202,7 +202,7 @@ export function ProviderEndpointsSection({
                         >
                           <Settings2Icon />
                         </Button>
-                      </ProviderEndpointFormDialog>
+                      </ProviderOriginFormDialog>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -215,7 +215,7 @@ export function ProviderEndpointsSection({
   );
 }
 
-export function ProviderEndpointFormDialog({
+export function ProviderOriginFormDialog({
   providerId,
   endpoint,
   children,
@@ -223,7 +223,7 @@ export function ProviderEndpointFormDialog({
   onOpenChange,
 }: {
   providerId: number;
-  endpoint?: ProviderEndpoint;
+  endpoint?: ProviderOrigin;
   children?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -233,7 +233,7 @@ export function ProviderEndpointFormDialog({
   const [name, setName] = useState("");
   const [baseURL, setBaseURL] = useState("");
   const [status, setStatus] =
-    useState<CreatableProviderEndpointStatus>("enabled");
+    useState<CreatableProviderOriginStatus>("enabled");
   const [errors, setErrors] = useState<{ name?: string; base_url?: string }>(
     {},
   );
@@ -255,7 +255,7 @@ export function ProviderEndpointFormDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!endpoint) {
-        return createProviderEndpoint({
+        return createProviderOrigin({
           provider_id: providerId,
           name: name.trim(),
           base_url: baseURL.trim(),
@@ -265,10 +265,10 @@ export function ProviderEndpointFormDialog({
 
       let saved = endpoint;
       if (name.trim() !== endpoint.name) {
-        saved = await updateProviderEndpointName(endpoint.id, name.trim());
+        saved = await updateProviderOriginName(endpoint.id, name.trim());
       }
       if (baseURL.trim() !== endpoint.base_url) {
-        saved = await updateProviderEndpointBaseURL(
+        saved = await updateProviderOriginBaseURL(
           endpoint.id,
           baseURL.trim(),
         );
@@ -281,10 +281,10 @@ export function ProviderEndpointFormDialog({
       void queryClient.invalidateQueries({ queryKey: ["channels"] });
       toast.success(
         endpointSyncState(saved) !== "active"
-          ? `端点「${saved.name}」已保存，运行态同步待恢复`
+          ? `源站「${saved.name}」已保存，运行态同步待恢复`
           : endpoint
-            ? `已保存端点「${saved.name}」`
-            : `已创建端点「${saved.name}」`,
+            ? `已保存源站「${saved.name}」`
+            : `已创建源站「${saved.name}」`,
       );
       setOpen(false);
     },
@@ -295,7 +295,7 @@ export function ProviderEndpointFormDialog({
     event.preventDefault();
     const next: { name?: string; base_url?: string } = {};
     if (!name.trim()) next.name = "名称不能为空";
-    if (!isValidEndpointURL(baseURL.trim())) {
+    if (!isValidOriginURL(baseURL.trim())) {
       next.base_url = "请输入不含参数或片段的 http(s) API Root";
     }
     setErrors(next);
@@ -308,23 +308,23 @@ export function ProviderEndpointFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {endpoint ? "编辑端点" : "新建端点"}
+            {endpoint ? "编辑源站" : "新建源站"}
           </DialogTitle>
           <DialogDescription>
-            一个端点对应一个上游 API Root，也是独立熔断的公共故障域。
+            一个源站对应一个上游 API Root，也是独立熔断的公共故障域。
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit}>
           <FieldGroup>
             <Field data-invalid={!!errors.name}>
               <HintLabel
-                htmlFor="endpoint_name"
+                htmlFor="origin_name"
                 hint="同一服务商下用于区分上游入口的名称。"
               >
                 名称
               </HintLabel>
               <Input
-                id="endpoint_name"
+                id="origin_name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="primary"
@@ -335,13 +335,13 @@ export function ProviderEndpointFormDialog({
             </Field>
             <Field data-invalid={!!errors.base_url}>
               <HintLabel
-                htmlFor="endpoint_base_url"
-                hint="API Root 由端点独占；修改后地址版本递增，旧请求结果不会污染新运行态。"
+                htmlFor="origin_base_url"
+                hint="API Root 由源站独占；修改后地址版本递增，旧请求结果不会污染新运行态。"
               >
                 API Root
               </HintLabel>
               <Input
-                id="endpoint_base_url"
+                id="origin_base_url"
                 value={baseURL}
                 onChange={(event) => setBaseURL(event.target.value)}
                 placeholder="https://api.example.com/v1"
@@ -352,18 +352,18 @@ export function ProviderEndpointFormDialog({
             {!endpoint ? (
               <Field>
                 <HintLabel
-                  htmlFor="endpoint_status"
-                  hint="停用后该端点下的新渠道尝试不再准入。"
+                  htmlFor="origin_status"
+                  hint="停用后该源站下的新渠道尝试不再准入。"
                 >
                   状态
                 </HintLabel>
                 <Select
                   value={status}
                   onValueChange={(value) =>
-                    setStatus(value as CreatableProviderEndpointStatus)
+                    setStatus(value as CreatableProviderOriginStatus)
                   }
                 >
-                  <SelectTrigger id="endpoint_status" className="w-full">
+                  <SelectTrigger id="origin_status" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -393,12 +393,12 @@ export function ProviderEndpointFormDialog({
   );
 }
 
-function EndpointStatusActions({ endpoint }: { endpoint: ProviderEndpoint }) {
-  const [nextStatus, setNextStatus] = useState<ProviderEndpointStatus>();
+function OriginStatusActions({ endpoint }: { endpoint: ProviderOrigin }) {
+  const [nextStatus, setNextStatus] = useState<ProviderOriginStatus>();
   const queryClient = useQueryClient();
   const statusMutation = useMutation({
-    mutationFn: (status: ProviderEndpointStatus) =>
-      updateProviderEndpointStatus(endpoint.id, status),
+    mutationFn: (status: ProviderOriginStatus) =>
+      updateProviderOriginStatus(endpoint.id, status),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: [ENDPOINTS_QUERY_KEY] });
       void queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -412,8 +412,8 @@ function EndpointStatusActions({ endpoint }: { endpoint: ProviderEndpoint }) {
             : "归档";
       toast.success(
         endpointSyncState(saved) !== "active"
-          ? `端点「${saved.name}」已${action}，运行态同步待恢复`
-          : `已${action}端点「${saved.name}」`,
+          ? `源站「${saved.name}」已${action}，运行态同步待恢复`
+          : `已${action}源站「${saved.name}」`,
       );
       setNextStatus(undefined);
     },
@@ -422,7 +422,7 @@ function EndpointStatusActions({ endpoint }: { endpoint: ProviderEndpoint }) {
 
   const archived = endpoint.status === "archived";
   const runtimeConflicted = endpointSyncState(endpoint) !== "active";
-  const toggleStatus: ProviderEndpointStatus = archived
+  const toggleStatus: ProviderOriginStatus = archived
     ? "disabled"
     : endpoint.status === "enabled"
       ? "disabled"
@@ -440,15 +440,15 @@ function EndpointStatusActions({ endpoint }: { endpoint: ProviderEndpoint }) {
 
   const confirmTitle =
     nextStatus === "archived"
-      ? "归档端点"
+      ? "归档源站"
       : nextStatus === "enabled"
-        ? "启用端点"
+        ? "启用源站"
         : archived
-          ? "恢复端点"
-          : "停用端点";
+          ? "恢复源站"
+          : "停用源站";
   const confirmDescription =
     nextStatus === "archived"
-      ? `确认归档「${endpoint.name}」？只有未绑定渠道的端点才能归档。`
+      ? `确认归档「${endpoint.name}」？只有未绑定渠道的源站才能归档。`
       : nextStatus === "enabled"
         ? `确认启用「${endpoint.name}」？运行态同步完成后，其下符合条件的渠道可参与路由。`
         : archived
@@ -509,25 +509,25 @@ function EndpointStatusActions({ endpoint }: { endpoint: ProviderEndpoint }) {
   );
 }
 
-function EndpointRuntimeDialog({ endpoint }: { endpoint: ProviderEndpoint }) {
+function OriginRuntimeDialog({ endpoint }: { endpoint: ProviderOrigin }) {
   const [open, setOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
   const syncState = endpointSyncState(endpoint);
   const runtime = useQuery({
     queryKey: [ENDPOINTS_QUERY_KEY, endpoint.id, "runtime"],
-    queryFn: () => getProviderEndpointRuntime(endpoint.id),
+    queryFn: () => getProviderOriginRuntime(endpoint.id),
     enabled: open && syncState === "active",
     retry: 1,
   });
   const reset = useMutation({
-    mutationFn: () => resetProviderEndpointBreaker(endpoint.id),
+    mutationFn: () => resetProviderOriginBreaker(endpoint.id),
     onSuccess: (snapshot) => {
       queryClient.setQueryData(
         [ENDPOINTS_QUERY_KEY, endpoint.id, "runtime"],
         snapshot,
       );
-      toast.success(`已复位端点「${endpoint.name}」熔断状态`);
+      toast.success(`已复位源站「${endpoint.name}」熔断状态`);
       setResetConfirmOpen(false);
     },
     onError: (error) => toast.error(apiErrorMessage(error)),
@@ -585,7 +585,7 @@ function EndpointRuntimeDialog({ endpoint }: { endpoint: ProviderEndpoint }) {
             <Alert>
               <AlertTitle>无运行样本</AlertTitle>
               <AlertDescription>
-                Redis 查询成功，但当前端点尚未产生可展示的熔断样本。
+                Redis 查询成功，但当前源站尚未产生可展示的熔断样本。
               </AlertDescription>
             </Alert>
           ) : snapshot ? (
@@ -644,7 +644,7 @@ function EndpointRuntimeDialog({ endpoint }: { endpoint: ProviderEndpoint }) {
       <ConfirmActionDialog
         open={resetConfirmOpen}
         onOpenChange={setResetConfirmOpen}
-        title="复位端点熔断状态"
+        title="复位源站熔断状态"
         description={`确认复位「${endpoint.name}」？当前熔断窗口和连续失败计数将被清空。`}
         confirmLabel="确认复位"
         destructive
@@ -655,11 +655,11 @@ function EndpointRuntimeDialog({ endpoint }: { endpoint: ProviderEndpoint }) {
   );
 }
 
-function EndpointRuntimeSummary({ endpoint }: { endpoint: ProviderEndpoint }) {
+function OriginRuntimeSummary({ endpoint }: { endpoint: ProviderOrigin }) {
   const syncState = endpointSyncState(endpoint);
   const runtime = useQuery({
     queryKey: [ENDPOINTS_QUERY_KEY, endpoint.id, "runtime"],
-    queryFn: () => getProviderEndpointRuntime(endpoint.id),
+    queryFn: () => getProviderOriginRuntime(endpoint.id),
     enabled: syncState === "active",
     refetchInterval: syncState === "active" ? 5_000 : false,
     refetchIntervalInBackground: false,
@@ -733,7 +733,7 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function isValidEndpointURL(raw: string): boolean {
+function isValidOriginURL(raw: string): boolean {
   try {
     const url = new URL(raw);
     return (

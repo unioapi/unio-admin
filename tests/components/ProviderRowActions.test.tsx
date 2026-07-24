@@ -9,7 +9,7 @@ import type { Provider, ProviderStatusChangeResult } from "@/lib/api/providers";
 
 const pendingResult: ProviderStatusChangeResult = {
   runtime_sync_pending: true,
-  affected_endpoint_count: 2,
+  affected_origin_count: 2,
 };
 
 const mocks = vi.hoisted(() => ({
@@ -39,7 +39,7 @@ vi.mock("@/components/common/ArchiveWithReplacementDialog", () => ({
       type="button"
       onClick={() => onArchived({
         runtime_sync_pending: true,
-        affected_endpoint_count: 2,
+        affected_origin_count: 2,
       })}
     >
       complete-provider-archive
@@ -51,8 +51,8 @@ vi.mock("@/components/providers/ProviderFormDialog", () => ({
   ProviderFormDialog: () => null,
 }));
 
-vi.mock("@/components/providers/ProviderEndpointsSection", () => ({
-  ProviderEndpointFormDialog: () => null,
+vi.mock("@/components/providers/ProviderOriginsSection", () => ({
+  ProviderOriginFormDialog: () => null,
 }));
 
 vi.mock("@/components/providers/DeleteProviderDialog", () => ({
@@ -90,7 +90,7 @@ const provider = {
   updated_at: "2026-07-22T00:00:00Z",
   archived_at: null,
   runtime_sync_pending: false,
-  affected_endpoint_count: 0,
+  affected_origin_count: 0,
 } satisfies Provider;
 
 function TestProviders({
@@ -133,7 +133,7 @@ describe("ProviderRowActions runtime sync feedback", () => {
     await user.click(screen.getByRole("button", { name: "complete-provider-archive" }));
 
     expect(mocks.toastSuccess).toHaveBeenCalledWith("已保存，运行态同步中");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["provider-endpoints"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["provider-origins"] });
   });
 
   it("reports a pending Provider restore and refreshes Endpoint facts", async () => {
@@ -154,6 +154,6 @@ describe("ProviderRowActions runtime sync feedback", () => {
 
     await waitFor(() => expect(mocks.restoreProvider).toHaveBeenCalledWith(7));
     expect(mocks.toastSuccess).toHaveBeenCalledWith("已保存，运行态同步中");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["provider-endpoints"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["provider-origins"] });
   });
 });

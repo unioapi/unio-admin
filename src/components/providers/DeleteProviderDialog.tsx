@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/dialog";
 
 // 删除服务商确认弹窗：用于清理录错的脏数据。删除是物理删除，slug 随之释放可重录同名。
-// 名下仍有渠道或已被请求/账务历史引用时，后端返回 409，这里给出中文引导（先删渠道或改用停用）。
+// 后端会连带清理其名下的上游源站；但名下仍有渠道、或其（含源站）已被请求/账务历史引用时返回 409，
+// 这里给出中文引导（先删渠道或改用停用）。
 export function DeleteProviderDialog({
   provider,
   children,
@@ -44,7 +45,7 @@ export function DeleteProviderDialog({
     onError: (err) => {
       if (apiErrorStatus(err) === 409) {
         toast.error(
-          "该服务商名下仍有渠道，或已被请求/账务历史引用，无法删除。请先删除其下渠道，或改为「停用」。",
+          "该服务商名下仍有渠道，或其（含名下源站）已被请求/账务历史引用，无法删除。请先删除其下渠道，或改为「停用」。",
         );
         return;
       }

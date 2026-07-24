@@ -42,9 +42,9 @@ export const REQUEST_OS_COLUMN_LABELS: Record<string, string> = {
   action: "操作",
 };
 
-// 端点显示：优先 operation（chat_completions/messages/responses），回退 ingress_protocol。
+// 端点显示：优先 endpoint（chat_completions/messages/responses），回退 ingress_protocol。
 function endpointLabel(row: RequestListItem): string {
-  return row.operation || row.ingress_protocol || "—";
+  return row.endpoint || row.ingress_protocol || "—";
 }
 
 export function requestOsColumns(

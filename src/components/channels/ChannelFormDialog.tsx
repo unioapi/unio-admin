@@ -9,9 +9,9 @@ import {
 } from "@/lib/api/channels";
 import { listAllProviders } from "@/lib/api/providers";
 import {
-  listProviderEndpoints,
-  type ProviderEndpoint,
-} from "@/lib/api/providerEndpoints";
+  listProviderOrigins,
+  type ProviderOrigin,
+} from "@/lib/api/providerOrigins";
 import { apiErrorMessage } from "@/lib/api/client";
 import { HintLabel } from "@/components/common/field-hint";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
@@ -74,7 +74,7 @@ export function ChannelFormDialog({
 
 interface FieldErrors {
   provider_id?: string;
-  provider_endpoint_id?: string;
+  provider_origin_id?: string;
   name?: string;
   adapter_key?: string;
   credential?: string;
@@ -125,8 +125,8 @@ function ChannelForm({
   const [providerId, setProviderId] = useState(
     channel ? String(channel.provider_id) : "",
   );
-  const [providerEndpointId, setProviderEndpointId] = useState(
-    channel ? String(channel.provider_endpoint_id) : "",
+  const [providerOriginId, setProviderOriginId] = useState(
+    channel ? String(channel.provider_origin_id) : "",
   );
   const [name, setName] = useState(channel?.name ?? "");
   const initialProtocol = channel?.protocol ?? "openai";
@@ -165,8 +165,8 @@ function ChannelForm({
   });
 
   const endpointsQuery = useQuery({
-    queryKey: ["provider-endpoints", "by-provider", providerId],
-    queryFn: () => listProviderEndpoints({ providerId: Number(providerId) }),
+    queryKey: ["provider-origins", "by-provider", providerId],
+    queryFn: () => listProviderOrigins({ providerId: Number(providerId) }),
     enabled: Number(providerId) > 0,
   });
 
@@ -174,8 +174,8 @@ function ChannelForm({
   const endpointOptions = endpoints.filter(
     (endpoint) => endpoint.status !== "archived",
   );
-  const selectedEndpoint: ProviderEndpoint | undefined = endpoints.find(
-    (endpoint) => String(endpoint.id) === providerEndpointId,
+  const selectedOrigin: ProviderOrigin | undefined = endpoints.find(
+    (endpoint) => String(endpoint.id) === providerOriginId,
   );
 
   const providerDisplay = useMemo(() => {
@@ -225,7 +225,7 @@ function ChannelForm({
         return updateChannel({
           id: channel.id,
           name: name.trim(),
-          provider_endpoint_id: Number(providerEndpointId),
+          provider_origin_id: Number(providerOriginId),
           status,
           priority: prio,
           timeout_ms: timeout,
@@ -235,7 +235,7 @@ function ChannelForm({
       }
       return createChannel({
         provider_id: Number(providerId),
-        provider_endpoint_id: Number(providerEndpointId),
+        provider_origin_id: Number(providerOriginId),
         name: name.trim(),
         protocol,
         adapter_key: adapterKey.trim(),
@@ -265,11 +265,11 @@ function ChannelForm({
       next.provider_id = "请选择服务商";
     }
     if (endpointsQuery.isError) {
-      next.provider_endpoint_id = "ProviderEndpoint 加载失败，请重试";
-    } else if (!(Number(providerEndpointId) > 0)) {
-      next.provider_endpoint_id = "请选择 ProviderEndpoint";
-    } else if (endpointsQuery.isSuccess && !selectedEndpoint) {
-      next.provider_endpoint_id = "所选 ProviderEndpoint 已不可用，请重新选择";
+      next.provider_origin_id = "ProviderOrigin 加载失败，请重试";
+    } else if (!(Number(providerOriginId) > 0)) {
+      next.provider_origin_id = "请选择 ProviderOrigin";
+    } else if (endpointsQuery.isSuccess && !selectedOrigin) {
+      next.provider_origin_id = "所选 ProviderOrigin 已不可用，请重新选择";
     }
     if (name.trim() === "") {
       next.name = "名称不能为空";
@@ -322,8 +322,8 @@ function ChannelForm({
             <DialogTitle>{isEdit ? "编辑渠道" : "新建渠道"}</DialogTitle>
             <DialogDescription>
               {isEdit
-                ? "协议、adapter 不在此修改；上游地址由 ProviderEndpoint 统一维护，凭据请用「轮换凭据」。"
-                : "选择 ProviderEndpoint 并填写渠道凭据与路由参数。协议、adapter 创建后不可修改。"}
+                ? "协议、adapter 不在此修改；上游地址由 ProviderOrigin 统一维护，凭据请用「轮换凭据」。"
+                : "选择 ProviderOrigin 并填写渠道凭据与路由参数。协议、adapter 创建后不可修改。"}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -344,7 +344,7 @@ function ChannelForm({
                   value={providerId}
                   onValueChange={(next) => {
                     setProviderId(next);
-                    setProviderEndpointId("");
+                    setProviderOriginId("");
                   }}
                 >
                   <SelectTrigger
@@ -372,16 +372,16 @@ function ChannelForm({
               <FieldError>{errors.provider_id}</FieldError>
             </Field>
 
-            <Field data-invalid={!!errors.provider_endpoint_id}>
+            <Field data-invalid={!!errors.provider_origin_id}>
               <HintLabel
-                htmlFor="provider_endpoint"
-                hint="ProviderEndpoint 代表一个上游 API Root 和公共故障域；同一 Provider 下的渠道必须绑定一个 Endpoint。"
+                htmlFor="provider_origin"
+                hint="上游源站代表一个上游 API Root 和公共故障域；同一 Provider 下的渠道必须绑定一个 源站。"
               >
-                ProviderEndpoint
+                ProviderOrigin
               </HintLabel>
               <Select
-                value={providerEndpointId}
-                onValueChange={setProviderEndpointId}
+                value={providerOriginId}
+                onValueChange={setProviderOriginId}
                 disabled={
                   Number(providerId) <= 0 ||
                   endpointsQuery.isPending ||
@@ -390,9 +390,9 @@ function ChannelForm({
                 }
               >
                 <SelectTrigger
-                  id="provider_endpoint"
+                  id="provider_origin"
                   className="w-full"
-                  aria-invalid={!!errors.provider_endpoint_id}
+                  aria-invalid={!!errors.provider_origin_id}
                 >
                   <SelectValue
                     placeholder={
@@ -403,8 +403,8 @@ function ChannelForm({
                           : endpointsQuery.isError
                             ? "加载失败"
                             : endpointOptions.length === 0
-                              ? "暂无可用 Endpoint"
-                          : "选择 ProviderEndpoint"
+                              ? "暂无可用 源站"
+                          : "选择 ProviderOrigin"
                     }
                   />
                 </SelectTrigger>
@@ -418,14 +418,14 @@ function ChannelForm({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldError>{errors.provider_endpoint_id}</FieldError>
-              {endpointsQuery.isError && !errors.provider_endpoint_id ? (
+              <FieldError>{errors.provider_origin_id}</FieldError>
+              {endpointsQuery.isError && !errors.provider_origin_id ? (
                 <p className="text-destructive text-xs">
-                  ProviderEndpoint 加载失败，请关闭弹窗后重试。
+                  ProviderOrigin 加载失败，请关闭弹窗后重试。
                 </p>
               ) : Number(providerId) > 0 && endpointsQuery.isSuccess && endpointOptions.length === 0 ? (
                 <p className="text-muted-foreground truncate text-xs">
-                  该服务商暂无可用 Endpoint，请先到服务商详情创建。
+                  该服务商暂无可用 源站，请先到服务商详情创建。
                 </p>
               ) : null}
             </Field>
@@ -434,38 +434,38 @@ function ChannelForm({
               <Field data-disabled>
                 <HintLabel
                   htmlFor="endpoint_provider"
-                  hint="由所选 ProviderEndpoint 决定，提交时后端会再次校验归属一致。"
+                  hint="由所选 ProviderOrigin 决定，提交时后端会再次校验归属一致。"
                 >
-                  Endpoint 服务商
+                  源站 服务商
                 </HintLabel>
                 <Input
                   id="endpoint_provider"
                   value={
-                    selectedEndpoint
-                      ? `${selectedEndpoint.provider_name}（#${selectedEndpoint.provider_id}）`
+                    selectedOrigin
+                      ? `${selectedOrigin.provider_name}（#${selectedOrigin.provider_id}）`
                       : ""
                   }
-                  placeholder="选择 ProviderEndpoint 后显示"
+                  placeholder="选择 ProviderOrigin 后显示"
                   disabled
                 />
               </Field>
 
               <Field data-disabled>
                 <HintLabel
-                  htmlFor="endpoint_base_url"
-                  hint="地址由 ProviderEndpoint 统一维护；修改地址请到 ProviderEndpoint 管理。"
+                  htmlFor="origin_base_url"
+                  hint="地址由 ProviderOrigin 统一维护；修改地址请到 ProviderOrigin 管理。"
                 >
                   API Root
                 </HintLabel>
                 <Input
-                  id="endpoint_base_url"
-                  value={selectedEndpoint?.base_url ?? channel?.base_url ?? ""}
-                  placeholder="选择 ProviderEndpoint 后显示"
+                  id="origin_base_url"
+                  value={selectedOrigin?.base_url ?? channel?.base_url ?? ""}
+                  placeholder="选择 ProviderOrigin 后显示"
                   disabled
                 />
-                {selectedEndpoint ? (
+                {selectedOrigin ? (
                   <p className="text-muted-foreground text-xs tabular-nums">
-                    地址版本 v{selectedEndpoint.base_url_revision}
+                    地址版本 v{selectedOrigin.base_url_revision}
                   </p>
                 ) : null}
               </Field>

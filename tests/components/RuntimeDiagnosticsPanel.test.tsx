@@ -26,7 +26,7 @@ describe("RuntimeDiagnosticsPanel", () => {
       readiness: { ready: false, reason: "marker_mismatch" },
       runtime_state_epoch: { state: "ready", revision: 7, match: false },
       operations: {
-        endpoint_routing: { nonterminal_count: 1, oldest_age_seconds: 17 },
+        origin_routing: { nonterminal_count: 1, oldest_age_seconds: 17 },
         runtime_control: { nonterminal_count: 2, oldest_age_seconds: 125 },
       },
     });
@@ -43,7 +43,7 @@ describe("RuntimeDiagnosticsPanel", () => {
     expect(screen.getByText("2 个待收口")).toBeInTheDocument();
     expect(screen.getByText("最老 2 分 5 秒")).toBeInTheDocument();
     expect(screen.queryByText("00112233445566778899aabbccddeeff")).not.toBeInTheDocument();
-    expect(screen.queryByText(/payload_hash|operation_token/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/payload_hash|endpoint_token/)).not.toBeInTheDocument();
   });
 
   it("renders a compact failure state when the diagnostic request fails", async () => {
