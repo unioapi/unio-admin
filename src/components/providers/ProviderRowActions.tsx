@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { EllipsisIcon, EyeIcon, PlusIcon } from "lucide-react";
+import { EllipsisIcon, EyeIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -73,7 +73,6 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
             <DropdownMenuGroup>
               {!archived ? (
                 <DropdownMenuItem onClick={() => openDialog(setOriginOpen)}>
-                  <PlusIcon />
                   新建源站
                 </DropdownMenuItem>
               ) : null}

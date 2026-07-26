@@ -1,5 +1,16 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  parseAsArrayOf,
+  parseAsInteger,
+  parseAsString,
+  useQueryState,
+} from "nuqs";
 import {
   ActivityIcon,
   ArchiveIcon,
@@ -25,17 +36,20 @@ import {
   type ProviderOriginStatus,
 } from "@/lib/api/providerOrigins";
 import type { RuntimeSyncState } from "@/lib/api/runtime";
-import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
-import { HintLabel } from "@/components/common/field-hint";
-import {
-  ErrorBox,
-  SectionEmpty,
-  TableSkeleton,
-} from "@/components/common/detail-section";
+import { FieldHint, HintLabel } from "@/components/common/field-hint";
+import { CopyChannelsToOriginDialog } from "@/components/providers/CopyChannelsToOriginDialog";
+import { ErrorBox } from "@/components/common/detail-section";
+import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
+import { providerOriginColumns } from "@/components/providers/provider-origins-columns";
+import { DataTable } from "@/components/tablecn/data-table";
+import { DataTableSkeleton } from "@/components/tablecn/data-table-skeleton";
+import { DataTableToolbar } from "@/components/tablecn/data-table-toolbar";
+import { useDataTable } from "@/components/tablecn/hooks/use-data-table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   Dialog,
   DialogClose,
@@ -58,15 +72,21 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 
 const ENDPOINTS_QUERY_KEY = "provider-origins";
+const PAGE_SIZE = 20;
+
+const ORIGINS_QUERY_KEYS = {
+  page: "originsPage",
+  perPage: "originsPerPage",
+  sort: "originsSort",
+} as const;
 
 const RUNTIME_SYNC_COPY: Record<
   RuntimeSyncState,
@@ -100,118 +120,203 @@ function endpointSyncState(endpoint: ProviderOrigin): RuntimeSyncState {
   return endpoint.runtime_sync_pending ? "runtime_sync_pending" : "active";
 }
 
+function formatRevision(revision: number | null | undefined): string {
+  return revision == null || revision <= 0 ? "—" : `v${revision}`;
+}
+
+function OriginRuntimeSyncCell({ endpoint }: { endpoint: ProviderOrigin }) {
+  const state = endpointSyncState(endpoint);
+  const copy = RUNTIME_SYNC_COPY[state];
+  const dbURL = endpoint.base_url_revision;
+  const dbStatus = endpoint.status_revision;
+  const redisURL = endpoint.runtime_active_base_url_revision;
+  const redisStatus = endpoint.runtime_active_status_revision;
+  const urlSynced = redisURL != null && redisURL === dbURL;
+  const statusSynced = redisStatus != null && redisStatus === dbStatus;
+  const revisionsSynced = urlSynced && statusSynced;
+
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="cursor-default"
+          aria-label={`${copy.label}；查看修订详情`}
+        >
+          <RuntimeSyncBadge state={state} />
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-72">
+        <div className="flex flex-col gap-2">
+          <div>
+            <div className="text-xs font-medium">{copy.label}</div>
+            <p className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
+              {copy.description}
+            </p>
+          </div>
+          <div className="rounded-md border px-2.5 py-2">
+            <div className="text-muted-foreground text-[10px]">数据库</div>
+            <div className="mt-0.5 text-xs tabular-nums">
+              地址 {formatRevision(dbURL)} · 状态 {formatRevision(dbStatus)}
+            </div>
+          </div>
+          <div className="rounded-md border px-2.5 py-2">
+            <div className="text-muted-foreground text-[10px]">Redis 运行态</div>
+            <div className="mt-0.5 text-xs tabular-nums">
+              地址 {formatRevision(redisURL)} · 状态 {formatRevision(redisStatus)}
+            </div>
+          </div>
+          <p className="text-muted-foreground text-[11px] leading-snug">
+            {revisionsSynced
+              ? "修订号两边一致；改地址或状态后会 +1。"
+              : "数据库与 Redis 修订号不一致，以数据库为准等待同步。"}
+          </p>
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
+  );
+}
+
+function OriginRowActions({
+  providerId,
+  endpoint,
+}: {
+  providerId: number;
+  endpoint: ProviderOrigin;
+}) {
+  return (
+    <div className="flex gap-1">
+      <OriginRuntimeDialog endpoint={endpoint} />
+      <CopyChannelsToOriginDialog targetOrigin={endpoint} />
+      <OriginStatusActions endpoint={endpoint} />
+      <ProviderOriginFormDialog providerId={providerId} endpoint={endpoint}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={`编辑 ${endpoint.name}`}
+          title={
+            endpointSyncState(endpoint) === "active"
+              ? `编辑 ${endpoint.name}`
+              : "运行态未同步，暂不能修改"
+          }
+          disabled={endpointSyncState(endpoint) !== "active"}
+        >
+          <Settings2Icon />
+        </Button>
+      </ProviderOriginFormDialog>
+    </div>
+  );
+}
+
 export function ProviderOriginsSection({
   providerId,
 }: {
   providerId: number;
 }) {
+  const [page] = useQueryState(
+    ORIGINS_QUERY_KEYS.page,
+    parseAsInteger.withDefault(1),
+  );
+  const [perPage] = useQueryState(
+    ORIGINS_QUERY_KEYS.perPage,
+    parseAsInteger.withDefault(PAGE_SIZE),
+  );
+  const [statusFilter] = useQueryState(
+    "origin_status",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
+  const [nameFilter] = useQueryState(
+    "origin_name",
+    parseAsString.withDefault(""),
+  );
+
+  const status = (statusFilter[0] ?? "") as ProviderOriginStatus | "";
+  const q = nameFilter.trim();
+
+  const columns = useMemo(
+    () =>
+      providerOriginColumns({
+        RuntimeSyncCell: OriginRuntimeSyncCell,
+        BreakerCell: OriginBreakerCell,
+        ErrorRateCell: OriginErrorRateCell,
+        Actions: ({ endpoint }) => (
+          <OriginRowActions providerId={providerId} endpoint={endpoint} />
+        ),
+      }),
+    [providerId],
+  );
+
   const query = useQuery({
-    queryKey: [ENDPOINTS_QUERY_KEY, "by-provider", providerId],
-    queryFn: () => listProviderOrigins({ providerId }),
+    queryKey: [
+      ENDPOINTS_QUERY_KEY,
+      "by-provider",
+      providerId,
+      "tablecn",
+      { status, q, page, perPage },
+    ],
+    queryFn: () =>
+      listProviderOrigins({
+        providerId,
+        status: status || undefined,
+        q: q || undefined,
+        page,
+        pageSize: perPage,
+      }),
+    placeholderData: keepPreviousData,
   });
 
-  if (query.isPending) return <TableSkeleton rows={4} cols={7} />;
-  if (query.isError) return <ErrorBox message={apiErrorMessage(query.error)} />;
+  const items = query.data?.items ?? [];
+  const total = query.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / perPage));
 
-  const endpoints = query.data.items;
+  const { table } = useDataTable({
+    data: items,
+    columns,
+    pageCount,
+    queryKeys: ORIGINS_QUERY_KEYS,
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: PAGE_SIZE },
+    },
+    getRowId: (row) => String(row.id),
+  });
+
+  if (query.isError) {
+    return <ErrorBox message={apiErrorMessage(query.error)} />;
+  }
+
+  if (query.isPending && items.length === 0) {
+    return <DataTableSkeleton columnCount={columns.length} rowCount={6} />;
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-muted-foreground text-sm tabular-nums">
-          共 {query.data.total} 个源站
-        </span>
-        <ProviderOriginFormDialog providerId={providerId}>
-          <Button size="sm">
-            <PlusIcon data-icon="inline-start" />
-            新建源站
-          </Button>
-        </ProviderOriginFormDialog>
-      </div>
-
-      {endpoints.length === 0 ? (
-        <SectionEmpty
-          icon={ActivityIcon}
-          title="暂无源站"
-          description="创建一个上游 API Root 后，渠道才能绑定并参与路由"
-        />
-      ) : (
-        <div className="overflow-hidden rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>源站</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>版本</TableHead>
-                <TableHead>渠道</TableHead>
-                <TableHead>熔断 / 错误率</TableHead>
-                <TableHead>运行态同步</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {endpoints.map((endpoint) => (
-                <TableRow key={endpoint.id}>
-                  <TableCell className="max-w-96">
-                    <div className="font-medium">{endpoint.name}</div>
-                    <div className="text-muted-foreground truncate font-mono text-xs">
-                      {endpoint.base_url}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={endpoint.status} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs tabular-nums">
-                    <div>
-                      数据库：地址 v{endpoint.base_url_revision} · 状态 v
-                      {endpoint.status_revision}
-                    </div>
-                    <div className="mt-1">
-                      Redis：地址 v
-                      {endpoint.runtime_active_base_url_revision || "—"} · 状态
-                      v{endpoint.runtime_active_status_revision || "—"}
-                    </div>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    {endpoint.channel_count}
-                  </TableCell>
-                  <TableCell>
-                    <OriginRuntimeSummary endpoint={endpoint} />
-                  </TableCell>
-                  <TableCell>
-                    <RuntimeSyncBadge state={endpointSyncState(endpoint)} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <OriginRuntimeDialog endpoint={endpoint} />
-                      <OriginStatusActions endpoint={endpoint} />
-                      <ProviderOriginFormDialog
-                        providerId={providerId}
-                        endpoint={endpoint}
-                      >
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label={`编辑 ${endpoint.name}`}
-                          title={
-                            endpointSyncState(endpoint) === "active"
-                              ? `编辑 ${endpoint.name}`
-                              : "运行态未同步，暂不能修改"
-                          }
-                          disabled={endpointSyncState(endpoint) !== "active"}
-                        >
-                          <Settings2Icon />
-                        </Button>
-                      </ProviderOriginFormDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </div>
+    <DataTable
+      table={table}
+      emptyMessage={
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ActivityIcon />
+            </EmptyMedia>
+            <EmptyTitle>暂无源站</EmptyTitle>
+            <EmptyDescription>
+              创建一个上游 API Root 后，渠道才能绑定并参与路由
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      }
+    >
+      <DataTableToolbar
+        table={table}
+        leading={
+          <ProviderOriginFormDialog providerId={providerId}>
+            <Button size="sm">
+              <PlusIcon data-icon="inline-start" />
+              新建源站
+            </Button>
+          </ProviderOriginFormDialog>
+        }
+      />
+    </DataTable>
   );
 }
 
@@ -655,7 +760,7 @@ function OriginRuntimeDialog({ endpoint }: { endpoint: ProviderOrigin }) {
   );
 }
 
-function OriginRuntimeSummary({ endpoint }: { endpoint: ProviderOrigin }) {
+function useOriginRuntimeQuery(endpoint: ProviderOrigin) {
   const syncState = endpointSyncState(endpoint);
   const runtime = useQuery({
     queryKey: [ENDPOINTS_QUERY_KEY, endpoint.id, "runtime"],
@@ -665,6 +770,11 @@ function OriginRuntimeSummary({ endpoint }: { endpoint: ProviderOrigin }) {
     refetchIntervalInBackground: false,
     retry: 1,
   });
+  return { syncState, runtime };
+}
+
+function OriginBreakerCell({ endpoint }: { endpoint: ProviderOrigin }) {
+  const { syncState, runtime } = useOriginRuntimeQuery(endpoint);
 
   if (syncState !== "active") {
     return <span className="text-muted-foreground text-xs">—</span>;
@@ -676,7 +786,7 @@ function OriginRuntimeSummary({ endpoint }: { endpoint: ProviderOrigin }) {
         className="text-destructive text-xs"
         title={apiErrorMessage(runtime.error)}
       >
-        基础设施故障，准入已拒绝
+        基础设施故障
       </span>
     );
   }
@@ -684,31 +794,118 @@ function OriginRuntimeSummary({ endpoint }: { endpoint: ProviderOrigin }) {
     return <Badge variant="outline">无运行样本</Badge>;
   }
 
+  const snapshot = runtime.data;
+  const stateLabel =
+    snapshot.state === "closed"
+      ? "闭合"
+      : snapshot.state === "half_open"
+        ? "半开"
+        : "熔断中";
+
   return (
-    <div className="text-xs tabular-nums">
-      <div className="flex items-center gap-1.5">
-        <Badge
-          variant={
-            runtime.data.state === "closed" ? "secondary" : "destructive"
-          }
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="flex cursor-default items-center gap-1.5 text-xs tabular-nums"
+          aria-label={`熔断 ${stateLabel}；查看详情`}
         >
-          {runtime.data.state === "closed"
-            ? "闭合"
-            : runtime.data.state === "half_open"
-              ? "半开"
-              : "熔断中"}
-        </Badge>
-        {runtime.data.state === "open" ? (
-          <span className="text-muted-foreground">
-            {Math.ceil(runtime.data.open_remaining_ms / 1_000)} 秒
-          </span>
-        ) : null}
-      </div>
-      <div className="text-muted-foreground mt-1">
-        错误率 {formatPercent(runtime.data.error_rate)} ·{" "}
-        {runtime.data.sample_count} 个样本
-      </div>
-    </div>
+          <Badge
+            variant={snapshot.state === "closed" ? "secondary" : "destructive"}
+          >
+            {stateLabel}
+          </Badge>
+          {snapshot.state === "open" ? (
+            <span className="text-muted-foreground">
+              {Math.ceil(snapshot.open_remaining_ms / 1_000)} 秒
+            </span>
+          ) : null}
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-64">
+        <div className="flex flex-col gap-2">
+          <div className="text-muted-foreground text-xs font-medium">熔断详情</div>
+          <div className="grid gap-1.5 text-xs">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">状态</span>
+              <span className="tabular-nums">{stateLabel}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground inline-flex items-center gap-1">
+                打开层级
+                <FieldHint text="熔断退避档位。连续熔断会升高，打开时长按配置逐步加长；成功恢复闭合后清零。" />
+              </span>
+              <span className="tabular-nums">{snapshot.open_level}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">连续失败</span>
+              <span className="tabular-nums">{snapshot.consecutive_failures}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">成功 / 失败</span>
+              <span className="tabular-nums">
+                {snapshot.eligible_successes} / {snapshot.eligible_failures}
+              </span>
+            </div>
+            {snapshot.state === "open" ? (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">打开剩余</span>
+                <span className="tabular-nums">
+                  {Math.ceil(snapshot.open_remaining_ms / 1_000)} 秒
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
+  );
+}
+
+function OriginErrorRateCell({ endpoint }: { endpoint: ProviderOrigin }) {
+  const { syncState, runtime } = useOriginRuntimeQuery(endpoint);
+
+  if (syncState !== "active") {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+  if (runtime.isPending) return <Spinner className="size-4" />;
+  if (runtime.isError || !runtime.data.exists) {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+
+  const snapshot = runtime.data;
+
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="cursor-default text-xs tabular-nums underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+          aria-label={`错误率 ${formatPercent(snapshot.error_rate)}；查看详情`}
+        >
+          {formatPercent(snapshot.error_rate)}
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-56">
+        <div className="flex flex-col gap-2">
+          <div className="text-muted-foreground text-xs font-medium">错误率详情</div>
+          <div className="grid gap-1.5 text-xs">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">错误率</span>
+              <span className="tabular-nums">{formatPercent(snapshot.error_rate)}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">样本数</span>
+              <span className="tabular-nums">{snapshot.sample_count}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">错误次数</span>
+              <span className="tabular-nums">{snapshot.eligible_failures}</span>
+            </div>
+          </div>
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
   );
 }
 

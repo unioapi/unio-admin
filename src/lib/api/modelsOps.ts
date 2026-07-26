@@ -28,6 +28,11 @@ export interface ModelOpsRow {
   base_cache_write_30m_input_price: string | null;
   base_output_price: string | null;
   base_reasoning_output_price: string | null;
+  // 当前生效基准价的长上下文阶梯；无基准价或未启用时 enabled=false。
+  base_long_context_enabled: boolean;
+  base_long_context_threshold: number | null;
+  base_long_context_input_multiplier: string | null;
+  base_long_context_output_multiplier: string | null;
 }
 
 export interface ModelOpsDetail {

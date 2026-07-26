@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
 import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProviderOriginsSection } from "@/components/providers/ProviderOriginsSection";
 
@@ -29,7 +31,13 @@ function TestProviders({ children }: { children: ReactNode }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <MemoryRouter>
+      <NuqsAdapter>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </NuqsAdapter>
+    </MemoryRouter>
+  );
 }
 
 const endpoint = {
@@ -121,7 +129,7 @@ describe("ProviderOriginsSection", () => {
     );
 
     expect(await screen.findByText("熔断中")).toBeVisible();
-    expect(screen.getByText("错误率 25.0% · 20 个样本")).toBeVisible();
+    expect(screen.getByText("25.0%")).toBeVisible();
     expect(screen.getByText("已同步")).toBeVisible();
   });
 });

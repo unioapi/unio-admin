@@ -12,7 +12,6 @@ import {
 } from "@/components/routes/RouteOverviewStats";
 import { RouteDetailActions } from "@/components/routes/RouteDetailActions";
 import { ROUTE_MODE_LABEL } from "@/lib/routes/display";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -66,20 +65,7 @@ export function RouteDetailPage() {
         back={{ href: "/routes", label: "返回线路列表" }}
         title={route?.name ?? "详情"}
         titleLoading={entityLoading}
-        badge={
-          route ? (
-            <>
-              <StatusBadge status={route.status} />
-              {detail && route.status === "enabled" ? (
-                detail.serviceable ? (
-                  <Badge variant="default">可服务</Badge>
-                ) : (
-                  <Badge variant="destructive">异常</Badge>
-                )
-              ) : null}
-            </>
-          ) : null
-        }
+        badge={route ? <StatusBadge status={route.status} /> : null}
         subtitle={route ? subtitle : null}
         actions={
           route ? (

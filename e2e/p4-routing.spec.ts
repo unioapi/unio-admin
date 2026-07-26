@@ -80,8 +80,6 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
           no_channel_total: 0,
           latency_p50: 800,
           latency_p95: 1200,
-          serviceable: state === "active",
-          abnormal: state !== "active",
           route_status: "enabled",
         },
       });

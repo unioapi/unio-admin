@@ -18,6 +18,8 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   actionBar?: React.ReactNode;
   emptyMessage?: React.ReactNode;
   onRowClick?: (row: TData) => void;
+  /** 隐藏底部分页器（用于不分页的小快照表）。 */
+  hidePagination?: boolean;
 }
 
 export function DataTable<TData>({
@@ -25,6 +27,7 @@ export function DataTable<TData>({
   actionBar,
   emptyMessage = "暂无数据",
   onRowClick,
+  hidePagination = false,
   children,
   className,
   ...props
@@ -102,7 +105,7 @@ export function DataTable<TData>({
         </Table>
       </div>
       <div className="flex flex-col gap-2.5">
-        <DataTablePagination table={table} />
+        {!hidePagination && <DataTablePagination table={table} />}
         {actionBar &&
           table.getFilteredSelectedRowModel().rows.length > 0 &&
           actionBar}

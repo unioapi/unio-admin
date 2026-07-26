@@ -193,6 +193,7 @@ export interface RequestListParams {
   sort?: string;
   status?: string;
   model?: string;
+  requestId?: string;
   userId?: number;
   apiKeyId?: number;
   from?: string;
@@ -211,6 +212,7 @@ export async function listRequests(
         sort: params.sort,
         status: params.status,
         model: params.model,
+        request_id: params.requestId,
         user_id: params.userId,
         api_key_id: params.apiKeyId,
         from: params.from,

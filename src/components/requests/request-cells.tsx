@@ -19,29 +19,13 @@ import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { Badge } from "@/components/ui/badge";
+import { LongContextBadge } from "@/components/common/LongContextBadge";
 import { SecretCopyCell, copySecretToClipboard } from "@/components/common/SecretCopyCell";
 import { ROUTE_MODE_LABEL } from "@/lib/routes/display";
 import { RequestCostBreakdown } from "@/components/requests/cost-breakdown";
 import { cn } from "@/lib/utils";
 
 const Dash = () => <span className="text-muted-foreground">—</span>;
-
-/** 长上下文计费标记：奶油色小胶囊 + Long。 */
-function LongContextBadge() {
-  return (
-    <span
-      className={cn(
-        "inline-flex h-[15px] shrink-0 items-center rounded-full border px-[5px]",
-        "border-[#ECD9A8] bg-[#FBF4E3] text-[10px] font-medium leading-none text-[#C47B2D]",
-        "dark:border-[#6B5428] dark:bg-[#2C2416] dark:text-[#E0B56A]",
-      )}
-      title="长上下文计费：输入 ×2 / 输出 ×1.5"
-      aria-label="长上下文计费"
-    >
-      Long
-    </span>
-  );
-}
 
 function ttftClass(ms: number, th: MetricThresholds): string {
   if (ms > th.ttftDangerMs) return "text-red-600 dark:text-red-400";

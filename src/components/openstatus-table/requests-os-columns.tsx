@@ -201,7 +201,12 @@ export function requestOsColumns(
         <DataTableColumnHeader column={column} label="请求 ID" />
       ),
       enableSorting: false,
-      meta: { label: "请求 ID" },
+      enableColumnFilter: true,
+      meta: {
+        label: "请求 ID",
+        variant: "text",
+        placeholder: "请求 ID",
+      },
       cell: ({ row }) => <RequestIdCell row={row.original} />,
     },
     {

@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
   AlertTriangleIcon,
   CheckCircle2Icon,
   EyeIcon,
-  RefreshCwIcon,
   ServerIcon,
 } from "lucide-react";
 import {
@@ -19,13 +26,17 @@ import {
 } from "@/lib/api/routesOps";
 import { ROUTE_MODE_LABEL } from "@/lib/routes/display";
 import {
-  formatClock,
   formatCompact,
   formatDateTime,
   formatLatencyMs,
   formatPercent,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useQueryState } from "nuqs";
+import { getSortingStateParser } from "@/components/tablecn/lib/parsers";
+import { sortingToApiSort } from "@/lib/api/list-params";
+import { RefreshControl } from "@/components/common/RefreshControl";
+import { useRefreshSettings } from "@/hooks/useRefreshSettings";
 import {
   ErrorBox,
   SectionEmpty,
@@ -58,6 +69,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable } from "@/components/tablecn/data-table";
+import { DataTableColumnHeader } from "@/components/tablecn/data-table-column-header";
+import { useDataTable } from "@/components/tablecn/hooks/use-data-table";
 import {
   Tooltip,
   TooltipContent,
@@ -65,7 +79,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const POLL_INTERVAL_MS = 3_000;
 const STALE_AFTER_MS = 10_000;
 const DECISION_PAGE_SIZE = 20;
 
@@ -272,6 +285,16 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
   const [protocol, setProtocol] = useState<"" | "openai" | "anthropic">("");
   const [selectedDecision, setSelectedDecision] =
     useState<RoutingDecision | null>(null);
+  // 与子表 useDataTable 共用同一 URL 键（rtSort），把排序透传到服务端查询。
+  const [runtimeSorting] = useQueryState(
+    "rtSort",
+    getSortingStateParser<RouteRuntimeChannel>().withDefault([
+      { id: "order", desc: false },
+    ]),
+  );
+  const runtimeSort = sortingToApiSort(runtimeSorting);
+  const { autoRefresh, intervalSec, setAutoRefresh, setIntervalSec } =
+    useRefreshSettings("route-runtime", { autoRefresh: true, intervalSec: 1 });
 
   const modelsQuery = useQuery({
     queryKey: ["route", routeId, "ops-reachable-models"],
@@ -298,15 +321,16 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
   }, [modelId, models]);
 
   const runtimeQuery = useQuery({
-    queryKey: ["route", routeId, "ops-runtime", modelId, protocol],
+    queryKey: ["route", routeId, "ops-runtime", modelId, protocol, runtimeSort],
     queryFn: () =>
       getRouteRuntime(routeId, {
         model_id: modelId,
         protocol: protocol || undefined,
+        sort: runtimeSort,
       }),
     enabled: modelId !== "",
     placeholderData: keepPreviousData,
-    refetchInterval: visible ? POLL_INTERVAL_MS : false,
+    refetchInterval: visible && autoRefresh ? intervalSec * 1000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -318,7 +342,7 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
         page_size: DECISION_PAGE_SIZE,
       }),
     placeholderData: keepPreviousData,
-    refetchInterval: visible ? POLL_INTERVAL_MS : false,
+    refetchInterval: visible && autoRefresh ? intervalSec * 1000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -347,9 +371,17 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
     ? runtime.breaker_store_admission === "denied" ||
       runtime.sources.some((source) => !source.available)
     : false;
-  const updatedAt = Math.max(
-    runtimeQuery.dataUpdatedAt,
-    decisionsQuery.dataUpdatedAt,
+  const refreshControl = (
+    <RefreshControl
+      autoRefresh={autoRefresh}
+      intervalSec={intervalSec}
+      onAutoRefreshChange={setAutoRefresh}
+      onIntervalChange={setIntervalSec}
+      onRefresh={refresh}
+      spinning={
+        autoRefresh || runtimeQuery.isFetching || decisionsQuery.isFetching
+      }
+    />
   );
   const channelNames = new Map(
     runtime?.channels.map((channel) => [
@@ -402,28 +434,6 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
             </Select>
           </label>
         </div>
-
-        <div className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
-          <span>
-            {updatedAt > 0 ? `最后刷新 ${formatClock(updatedAt)}` : "正在读取"}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="刷新实时路由"
-            title="刷新实时路由"
-            onClick={refresh}
-            disabled={runtimeQuery.isFetching || decisionsQuery.isFetching}
-          >
-            <RefreshCwIcon
-              className={cn(
-                (runtimeQuery.isFetching || decisionsQuery.isFetching) &&
-                  "animate-spin",
-              )}
-            />
-          </Button>
-        </div>
       </div>
 
       {runtimeQuery.isError ? (
@@ -432,6 +442,10 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
         <TableSkeleton rows={5} cols={7} />
       ) : runtime ? (
         <>
+          <div className="flex items-center justify-between gap-2">
+            <RuntimeSources runtime={runtime} />
+            {refreshControl}
+          </div>
           {infrastructureDenied ? (
             <Alert variant="destructive">
               <AlertTriangleIcon />
@@ -452,7 +466,7 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
           ) : null}
 
           <RuntimeSummary runtime={runtime} />
-          <RuntimeSources runtime={runtime} />
+          <RouteUsageSummary runtime={runtime} />
           <RuntimeChannelTable
             channels={runtime.channels}
             mode={runtime.mode}
@@ -535,6 +549,34 @@ function RuntimeSummary({ runtime }: { runtime: RouteRuntime }) {
   );
 }
 
+function RouteUsageSummary({ runtime }: { runtime: RouteRuntime }) {
+  const usage = runtime.route_usage;
+  const unavailable =
+    runtime.breaker_store_admission !== "normal" || usage == null;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-muted-foreground text-xs font-medium">
+        线路实时合计（全用户）
+      </div>
+      {unavailable ? (
+        <div className="rounded-lg border px-3 py-3">
+          <div className="text-destructive text-sm font-semibold">
+            事实不可用
+          </div>
+        </div>
+      ) : (
+        <div className="grid overflow-hidden rounded-lg border sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryItem label="并发" value={formatCompact(usage.concurrency)} />
+          <SummaryItem label="RPM" value={formatCompact(usage.rpm)} />
+          <SummaryItem label="RPD" value={formatCompact(usage.rpd)} />
+          <SummaryItem label="TPM" value={formatCompact(usage.tpm)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummaryItem({
   label,
   value,
@@ -583,6 +625,148 @@ function RuntimeSources({ runtime }: { runtime: RouteRuntime }) {
   );
 }
 
+type CapacityDimension = {
+  key: string;
+  label: string;
+  used: number;
+  limit: number;
+  remaining: number | null;
+};
+
+function capacityDimensions(channel: RouteRuntimeChannel): CapacityDimension[] {
+  return [
+    {
+      key: "concurrency",
+      label: "并发",
+      used: channel.concurrency_used,
+      limit: channel.concurrency_limit,
+      remaining: channel.concurrency_remaining,
+    },
+    {
+      key: "rpm",
+      label: "RPM",
+      used: channel.rpm_used,
+      limit: channel.rpm_limit,
+      remaining: channel.rpm_remaining,
+    },
+    {
+      key: "rpd",
+      label: "RPD",
+      used: channel.rpd_used,
+      limit: channel.rpd_limit,
+      remaining: channel.rpd_remaining,
+    },
+    {
+      key: "tpm",
+      label: "TPM",
+      used: channel.tpm_used,
+      limit: channel.tpm_limit,
+      remaining: channel.tpm_remaining,
+    },
+  ];
+}
+
+function dimensionRemaining(dim: CapacityDimension): number {
+  if (dim.remaining == null) return 1;
+  return Math.max(0, Math.min(1, dim.remaining));
+}
+
+// CapacityDimCell：单维余量条——满格绿=充足（含不限流），逼近上限缩短并转黄/红。
+function CapacityDimCell({
+  channel,
+  dim,
+  usable,
+}: {
+  channel: RouteRuntimeChannel;
+  dim: CapacityDimension;
+  usable: boolean;
+}) {
+  if (!usable) return <span className="text-muted-foreground">—</span>;
+  if (channel.capacity_read_failed) {
+    return <Badge variant="destructive">失败</Badge>;
+  }
+
+  const unlimited = dim.limit <= 0;
+  const fraction = unlimited ? 1 : dimensionRemaining(dim);
+  const tone =
+    unlimited || fraction >= 0.5 ? "ok" : fraction >= 0.2 ? "warn" : "danger";
+  const barClass =
+    tone === "ok"
+      ? "bg-emerald-500"
+      : tone === "warn"
+        ? "bg-amber-500"
+        : "bg-red-500";
+  const width = Math.round(fraction * 100);
+  const label = unlimited
+    ? "不限"
+    : formatCapacity(dim.used, dim.limit);
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex w-full max-w-32 cursor-help items-center gap-1.5">
+            <div className="bg-muted h-1.5 w-12 shrink-0 overflow-hidden rounded-full">
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  barClass,
+                  unlimited && "opacity-40",
+                )}
+                style={{ width: `${width}%` }}
+              />
+            </div>
+            <span className="text-muted-foreground truncate text-xs tabular-nums">
+              {label}
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent align="start">
+          <div className="text-xs">
+            <div className="font-medium">
+              {dim.label}（渠道级，所有用户累加）
+            </div>
+            <div className="mt-1 tabular-nums">
+              {unlimited
+                ? "未设限"
+                : `${formatCapacity(dim.used, dim.limit)} · 剩 ${formatPercent(dim.remaining)}`}
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function capacityColumn(
+  key: CapacityDimension["key"],
+  label: string,
+  usableOf: (channel: RouteRuntimeChannel) => boolean,
+): ColumnDef<RouteRuntimeChannel> {
+  return {
+    id: key,
+    enableHiding: false,
+    accessorFn: (row) => {
+      const dim = capacityDimensions(row).find((d) => d.key === key);
+      return dim ? dimensionRemaining(dim) : 1;
+    },
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label={label} />
+    ),
+    cell: ({ row }) => {
+      const dim = capacityDimensions(row.original).find((d) => d.key === key);
+      if (!dim) return <span className="text-muted-foreground">—</span>;
+      return (
+        <CapacityDimCell
+          channel={row.original}
+          dim={dim}
+          usable={usableOf(row.original)}
+        />
+      );
+    },
+  };
+}
+
 function RuntimeChannelTable({
   channels,
   mode,
@@ -592,340 +776,430 @@ function RuntimeChannelTable({
   mode: RouteRuntime["mode"];
   infrastructureDenied: boolean;
 }) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const usableOf = useCallback(
+    (channel: RouteRuntimeChannel) =>
+      channel.breaker_store_admission === "normal" &&
+      runtimeStateForChannel(channel, infrastructureDenied) === "active",
+    [infrastructureDenied],
+  );
+
+  const columns = useMemo<ColumnDef<RouteRuntimeChannel>[]>(
+    () => [
+      {
+        id: "order",
+        enableHiding: false,
+        // accessorFn 仅为让 tanstack 认定该列可排序（实际排序在后端 manualSorting）。
+        accessorFn: (row) =>
+          row.eligible ? row.current_order : Number.MAX_SAFE_INTEGER,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} label="顺序" />
+        ),
+        cell: ({ row }) => (
+          <span className="font-mono text-xs tabular-nums">
+            {row.original.eligible ? row.original.current_order : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "channel",
+        header: "渠道 / 源站",
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => {
+          const channel = row.original;
+          const state = runtimeStateForChannel(channel, infrastructureDenied);
+          const originLabel =
+            channel.provider_origin_name || `#${channel.provider_origin_id}`;
+          const originStatus =
+            channel.provider_origin_status !== "enabled"
+              ? ` · ${channel.provider_origin_status}`
+              : "";
+          return (
+            <div>
+              <div className="max-w-56 truncate font-medium">
+                {channel.channel_name}
+              </div>
+              <div className="text-muted-foreground mt-0.5 max-w-56 truncate text-xs">
+                {originLabel}
+                {originStatus}
+              </div>
+              {state !== "active" ? (
+                <div className="mt-1">
+                  <RuntimeSyncBadge state={state} />
+                </div>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        id: "eligibility",
+        header: "资格",
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => {
+          const channel = row.original;
+          return (
+            <div>
+              {channel.eligible ? (
+                <Badge variant="outline">
+                  <CheckCircle2Icon data-icon="inline-start" />
+                  候选
+                </Badge>
+              ) : (
+                <Badge variant="destructive">
+                  {reasonLabel(channel.excluded_reason || "excluded")}
+                </Badge>
+              )}
+              {channel.margin_status !== "safe" ? (
+                <div className="text-muted-foreground mt-1 text-xs">
+                  毛利 {marginStatusLabel(channel.margin_status)}
+                </div>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      capacityColumn("concurrency", "并发", usableOf),
+      capacityColumn("rpm", "RPM", usableOf),
+      capacityColumn("rpd", "RPD", usableOf),
+      capacityColumn("tpm", "TPM", usableOf),
+      {
+        id: "weight",
+        enableHiding: false,
+        accessorFn: (row) => row.final_weight,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} label="权重 / 分流" />
+        ),
+        cell: ({ row }) => {
+          const channel = row.original;
+          if (!usableOf(channel)) {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          return (
+            <div className="font-mono text-xs tabular-nums">
+              <div>权重 {channel.final_weight.toFixed(4)}</div>
+              <div className="text-muted-foreground mt-1">
+                分流 {formatPercent(channel.selected_share_1m)}
+                {channel.fallback_1m > 0 ? (
+                  <span className="text-destructive">
+                    {" · "}回退 {channel.fallback_1m}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        enableSorting: false,
+        enableHiding: false,
+        header: () => <span className="text-muted-foreground">操作</span>,
+        cell: ({ row }) => (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="查看详情"
+            title="查看详情"
+            onClick={() => setSelectedId(row.original.channel_id)}
+          >
+            <EyeIcon />
+          </Button>
+        ),
+      },
+    ],
+    [infrastructureDenied, usableOf],
+  );
+
+  const { table } = useDataTable({
+    data: channels,
+    columns,
+    pageCount: 1,
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sorting: [{ id: "order", desc: false }],
+    },
+    // 命名空间化，避免与页面其它表/深链的 page/sort 键冲突。
+    queryKeys: {
+      page: "rtPage",
+      perPage: "rtPerPage",
+      sort: "rtSort",
+      filters: "rtFilters",
+    },
+    getRowId: (row) => String(row.channel_id),
+  });
+
+  const selected =
+    selectedId == null
+      ? null
+      : (channels.find((c) => c.channel_id === selectedId) ?? null);
+
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-14">顺序</TableHead>
-            <TableHead>渠道</TableHead>
-            <TableHead>源站</TableHead>
-            <TableHead>资格</TableHead>
-            <TableHead>并发</TableHead>
-            <TableHead>RPM / RPD</TableHead>
-            <TableHead>TPM</TableHead>
-            <TableHead>429 / 权限</TableHead>
-            <TableHead>源站 熔断</TableHead>
-            <TableHead>渠道熔断</TableHead>
-            <TableHead>错误率</TableHead>
-            <TableHead>流式 TTFT</TableHead>
-            <TableHead>成本占比 / 影响</TableHead>
-            <TableHead>容量 / 最终权重</TableHead>
-            <TableHead>1m / 5m 分流</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {channels.map((channel) => {
-            const runtimeState = runtimeStateForChannel(
-              channel,
-              infrastructureDenied,
-            );
-            const runtimeUsable =
-              channel.breaker_store_admission === "normal" &&
-              runtimeState === "active";
-            return (
-              <TableRow
-                key={channel.channel_id}
-                className={!channel.eligible ? "opacity-70" : undefined}
-              >
-                <TableCell className="text-center font-mono text-xs tabular-nums">
-                  {channel.eligible ? channel.current_order : "—"}
-                </TableCell>
-                <TableCell>
-                  <div className="max-w-52 truncate font-medium">
-                    {channel.channel_name}
-                  </div>
-                  <div className="text-muted-foreground mt-0.5 max-w-52 truncate text-xs">
-                    {channel.provider_name} · {channel.protocol}/
-                    {channel.adapter_key} · #{channel.channel_id}
-                  </div>
-                  <div className="text-muted-foreground mt-1 text-xs tabular-nums">
-                    渠道 {formatRuntimeRevision(channel.channel_config_revision)}
-                    /{formatRuntimeRevision(channel.runtime_channel_config_revision)}
-                    {" · "}准入{" "}
-                    {formatRuntimeRevision(
-                      channel.channel_admission_limits_revision,
-                    )}
-                    /{formatRuntimeRevision(
-                      channel.runtime_channel_admission_limits_revision,
-                    )}
-                  </div>
-                  <div
-                    className="text-muted-foreground mt-1 text-xs tabular-nums"
-                    title="线路默认限流 / 渠道默认限流 revision"
-                  >
-                    默认限流 线路{" "}
-                    {formatRuntimeRevision(channel.route_rate_limits_revision)} · 渠道{" "}
-                    {formatRuntimeRevision(channel.channel_rate_limits_revision)}
-                  </div>
-                  <div
-                    className="text-muted-foreground mt-1 text-xs tabular-nums"
-                    title="全局并发 / 熔断策略 / 均衡策略 revision"
-                  >
-                    控制 并发{" "}
-                    {formatRuntimeRevision(channel.global_concurrency_revision)} · 熔断{" "}
-                    {formatRuntimeRevision(channel.circuit_breaker_revision)} · 均衡{" "}
-                    {formatRuntimeRevision(channel.routing_balance_revision)}
-                  </div>
-                  <div className="mt-1">
-                    <RuntimeSyncBadge state={runtimeState} />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="max-w-48 truncate font-medium">
-                    {channel.provider_origin_name ||
-                      `源站 #${channel.provider_origin_id}`}
-                  </div>
-                  <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-                    #{channel.provider_origin_id} ·{" "}
-                    {channel.provider_origin_status}
-                  </div>
-                  <div className="text-muted-foreground mt-1 text-xs tabular-nums">
-                    URL {formatRuntimeRevision(channel.origin_base_url_revision)}/
-                    {formatRuntimeRevision(
-                      channel.runtime_origin_base_url_revision,
-                    )}
-                    {" · "}状态{" "}
-                    {formatRuntimeRevision(channel.origin_status_revision)}/
-                    {formatRuntimeRevision(channel.runtime_origin_status_revision)}
-                  </div>
-                  {channel.pending_origin_base_url_revision != null ||
-                  channel.pending_origin_status_revision != null ? (
-                    <div className="text-amber-700 mt-1 text-xs tabular-nums dark:text-amber-400">
-                      待提交 URL{" "}
-                      {formatRuntimeRevision(
-                        channel.pending_origin_base_url_revision,
-                      )}
-                      {" · "}状态{" "}
-                      {formatRuntimeRevision(
-                        channel.pending_origin_status_revision,
-                      )}
-                    </div>
-                  ) : null}
-                  {!channel.origin_base_url_revision_current ||
-                  !channel.origin_status_revision_current ? (
-                    <div className="text-destructive mt-1 text-xs">
-                      源站 版本不一致
-                    </div>
-                  ) : null}
-                </TableCell>
-                <TableCell>
-                  {channel.eligible ? (
-                    <Badge variant="outline">
-                      <CheckCircle2Icon data-icon="inline-start" />
-                      候选
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive">
-                      {reasonLabel(channel.excluded_reason || "excluded")}
-                    </Badge>
-                  )}
-                  <div className="text-muted-foreground mt-1 text-xs">
-                    毛利 {marginStatusLabel(channel.margin_status)}
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>
-                        {formatCapacity(
-                          channel.concurrency_used,
-                          channel.concurrency_limit,
-                        )}
-                      </div>
-                      <div className="text-muted-foreground mt-1">
-                        剩余 {formatPercent(channel.concurrency_remaining)}
-                      </div>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>
-                        RPM {formatCapacity(channel.rpm_used, channel.rpm_limit)}
-                        {" · "}剩余 {formatPercent(channel.rpm_remaining)}
-                      </div>
-                      <div className="text-muted-foreground mt-1">
-                        RPD {formatCapacity(channel.rpd_used, channel.rpd_limit)}
-                        {" · "}剩余 {formatPercent(channel.rpd_remaining)}
-                      </div>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>
-                        {formatCapacity(channel.tpm_used, channel.tpm_limit)}
-                      </div>
-                      <div className="text-muted-foreground mt-1">
-                        剩余 {formatPercent(channel.tpm_remaining)}
-                      </div>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>
-                        {channel.cooldown_remaining_ms > 0
-                          ? `429 冷却 ${formatOpenRemaining(channel.cooldown_remaining_ms)}`
-                          : "429 无冷却"}
-                      </div>
-                      <div
-                        className={cn(
-                          "mt-1",
-                          channel.model_permission_paused
-                            ? "text-destructive"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {channel.model_permission_paused
-                          ? `权限暂停 · ${permissionStateLabel(channel.model_permission_recheck_state)}`
-                          : "权限正常"}
-                      </div>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <BreakerBadge
-                      state={channel.origin_breaker_state}
-                      openRemainingMs={channel.origin_open_remaining_ms}
-                    />
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <BreakerBadge
-                      state={channel.channel_breaker_state}
-                      openRemainingMs={channel.channel_open_remaining_ms}
-                    />
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>{formatPercent(channel.error_rate)}</div>
-                      <div className="text-muted-foreground mt-1">
-                        {channel.error_samples} 个样本
-                      </div>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable &&
-                  channel.ttft_samples > 0 &&
-                  channel.ttft_ewma_ms != null ? (
-                    <TooltipProvider delayDuration={150}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="cursor-help underline decoration-dotted underline-offset-4">
-                            {formatLatencyMs(channel.ttft_ewma_ms)}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs leading-relaxed">
-                          仅由流式请求的有效 FirstToken
-                          样本计算，不包含非流式响应头延迟。
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    "—"
-                  )}
-                  {runtimeUsable && channel.ttft_samples > 0 ? (
-                    <div className="text-muted-foreground mt-1">
-                      {channel.ttft_samples} 个流式样本
-                    </div>
-                  ) : null}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>
-                        {channel.cost_ratio == null
-                          ? "—"
-                          : `成本占售价 ${formatPercent(channel.cost_ratio)}`}
-                      </div>
-                      <div className="text-muted-foreground mt-1">
-                        成本系数 {(channel.cost_factor ?? 1).toFixed(4)} · 成本权重{" "}
-                        {(channel.cost_weight ?? 0).toFixed(4)}
-                      </div>
-                      {mode === "fixed" ? (
-                        <div className="text-muted-foreground mt-1 whitespace-nowrap">
-                          固定策略不参与成本排序
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {runtimeUsable ? (
-                    <>
-                      <div>容量 {formatPercent(channel.capacity_score)}</div>
-                      <div className="text-muted-foreground mt-1">
-                        <TooltipProvider delayDuration={150}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-help underline decoration-dotted underline-offset-4">
-                                最终权重 {channel.final_weight.toFixed(4)}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs leading-relaxed">
-                              {mode === "fixed"
-                                ? "固定策略锁定单条渠道，成本因子保持中性，不参与渠道排序。"
-                                : "均衡策略的当前权重由容量、错误率、仅含流式 FirstToken 样本的 TTFT EWMA 和成本因子共同计算；流式和非流式调度共用。"}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                  {runtimeUsable &&
-                  (channel.capacity_unknown || channel.capacity_read_failed) ? (
-                    <div className="text-destructive mt-1">
-                      {channel.capacity_read_failed ? "读取失败" : "容量未知"}
-                    </div>
-                  ) : null}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  <div>
-                    {channel.selected_1m} / {channel.selected_5m} 次
-                  </div>
-                  <div className="text-muted-foreground mt-1">
-                    {formatPercent(channel.selected_share_1m)} /{" "}
-                    {formatPercent(channel.selected_share_5m)}
-                  </div>
-                  {channel.fallback_1m > 0 ? (
-                    <div className="text-destructive mt-1">
-                      回退 {channel.fallback_1m}
-                    </div>
-                  ) : null}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+    <>
+      <DataTable table={table} emptyMessage="线路池暂无渠道" hidePagination />
+
+      <RuntimeChannelDetailSheet
+        channel={selected}
+        mode={mode}
+        infrastructureDenied={infrastructureDenied}
+        onOpenChange={(open) => {
+          if (!open) setSelectedId(null);
+        }}
+      />
+    </>
+  );
+}
+
+function RuntimeChannelDetailSheet({
+  channel,
+  mode,
+  infrastructureDenied,
+  onOpenChange,
+}: {
+  channel: RouteRuntimeChannel | null;
+  mode: RouteRuntime["mode"];
+  infrastructureDenied: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const runtimeState = channel
+    ? runtimeStateForChannel(channel, infrastructureDenied)
+    : "active";
+  const runtimeUsable =
+    channel != null &&
+    channel.breaker_store_admission === "normal" &&
+    runtimeState === "active";
+
+  return (
+    <Sheet open={channel != null} onOpenChange={onOpenChange}>
+      <DetailSheetContent side="right" size="lg">
+        {channel ? (
+          <>
+            <SheetHeader>
+              <SheetTitle>{channel.channel_name}</SheetTitle>
+              <SheetDescription className="text-xs">
+                {channel.provider_name} · {channel.protocol}/
+                {channel.adapter_key} · 源站{" "}
+                {channel.provider_origin_name ||
+                  `#${channel.provider_origin_id}`}
+              </SheetDescription>
+            </SheetHeader>
+            <SheetMain className="pt-4">
+              <RuntimeChannelDetail
+                channel={channel}
+                mode={mode}
+                runtimeState={runtimeState}
+                runtimeUsable={runtimeUsable}
+              />
+            </SheetMain>
+          </>
+        ) : null}
+      </DetailSheetContent>
+    </Sheet>
+  );
+}
+
+function DetailKV({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{children}</span>
+    </div>
+  );
+}
+
+function DetailBlock({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RuntimeChannelDetail({
+  channel,
+  mode,
+  runtimeState,
+  runtimeUsable,
+}: {
+  channel: RouteRuntimeChannel;
+  mode: RouteRuntime["mode"];
+  runtimeState: string;
+  runtimeUsable: boolean;
+}) {
+  const dims = capacityDimensions(channel);
+  return (
+    <div className="grid gap-x-8 gap-y-5 py-2 sm:grid-cols-2">
+      <DetailBlock title="限流明细">
+        {dims.map((d) => (
+          <DetailKV key={d.key} label={d.label}>
+            {!runtimeUsable
+              ? "—"
+              : d.limit > 0
+                ? `${formatCapacity(d.used, d.limit)} · 剩 ${formatPercent(d.remaining)}`
+                : "未设限"}
+          </DetailKV>
+        ))}
+      </DetailBlock>
+
+      <DetailBlock title="熔断与拦截">
+        <DetailKV label="源站熔断">
+          {runtimeUsable ? (
+            <BreakerBadge
+              state={channel.origin_breaker_state}
+              openRemainingMs={channel.origin_open_remaining_ms}
+            />
+          ) : (
+            "—"
+          )}
+        </DetailKV>
+        <DetailKV label="渠道熔断">
+          {runtimeUsable ? (
+            <BreakerBadge
+              state={channel.channel_breaker_state}
+              openRemainingMs={channel.channel_open_remaining_ms}
+            />
+          ) : (
+            "—"
+          )}
+        </DetailKV>
+        <DetailKV label="429 冷却">
+          {!runtimeUsable
+            ? "—"
+            : channel.cooldown_remaining_ms > 0
+              ? formatOpenRemaining(channel.cooldown_remaining_ms)
+              : "无"}
+        </DetailKV>
+        <DetailKV label="模型权限">
+          {!runtimeUsable ? (
+            "—"
+          ) : channel.model_permission_paused ? (
+            <span className="text-destructive">
+              暂停 · {permissionStateLabel(channel.model_permission_recheck_state)}
+            </span>
+          ) : (
+            "正常"
+          )}
+        </DetailKV>
+      </DetailBlock>
+
+      <DetailBlock title="健康指标">
+        <DetailKV label="错误率">
+          {runtimeUsable
+            ? `${formatPercent(channel.error_rate)} · ${channel.error_samples} 样本`
+            : "—"}
+        </DetailKV>
+        <DetailKV label="流式 TTFT">
+          {runtimeUsable && channel.ttft_samples > 0 && channel.ttft_ewma_ms != null
+            ? `${formatLatencyMs(channel.ttft_ewma_ms)} · ${channel.ttft_samples} 样本`
+            : "—"}
+        </DetailKV>
+        <DetailKV label="容量分">
+          {runtimeUsable ? formatPercent(channel.capacity_score) : "—"}
+        </DetailKV>
+      </DetailBlock>
+
+      <DetailBlock title="成本与权重">
+        <DetailKV label="成本占售价">
+          {runtimeUsable && channel.cost_ratio != null
+            ? formatPercent(channel.cost_ratio)
+            : "—"}
+        </DetailKV>
+        <DetailKV label="成本系数">
+          {runtimeUsable ? (channel.cost_factor ?? 1).toFixed(4) : "—"}
+        </DetailKV>
+        <DetailKV label="成本权重">
+          {runtimeUsable ? (channel.cost_weight ?? 0).toFixed(4) : "—"}
+        </DetailKV>
+        <DetailKV label="最终权重">
+          {runtimeUsable ? channel.final_weight.toFixed(4) : "—"}
+        </DetailKV>
+        {mode === "fixed" ? (
+          <div className="text-muted-foreground text-[11px]">
+            固定策略不参与成本排序
+          </div>
+        ) : null}
+      </DetailBlock>
+
+      <DetailBlock title="分流">
+        <DetailKV label="1m / 5m 次数">
+          {channel.selected_1m} / {channel.selected_5m}
+        </DetailKV>
+        <DetailKV label="1m / 5m 占比">
+          {formatPercent(channel.selected_share_1m)} /{" "}
+          {formatPercent(channel.selected_share_5m)}
+        </DetailKV>
+        <DetailKV label="1m 回退">
+          {channel.fallback_1m > 0 ? (
+            <span className="text-destructive">{channel.fallback_1m}</span>
+          ) : (
+            "0"
+          )}
+        </DetailKV>
+      </DetailBlock>
+
+      <DetailBlock title="版本 / 同步">
+        <DetailKV label="同步状态">
+          <RuntimeSyncBadge state={runtimeState} />
+        </DetailKV>
+        <DetailKV label="渠道配置 r（库/运行）">
+          {formatRuntimeRevision(channel.channel_config_revision)} /{" "}
+          {formatRuntimeRevision(channel.runtime_channel_config_revision)}
+        </DetailKV>
+        <DetailKV label="准入限流 r（库/运行）">
+          {formatRuntimeRevision(channel.channel_admission_limits_revision)} /{" "}
+          {formatRuntimeRevision(
+            channel.runtime_channel_admission_limits_revision,
+          )}
+        </DetailKV>
+        <DetailKV label="默认限流 r（线路/渠道）">
+          {formatRuntimeRevision(channel.route_rate_limits_revision)} /{" "}
+          {formatRuntimeRevision(channel.channel_rate_limits_revision)}
+        </DetailKV>
+        <DetailKV label="控制 r（并发/熔断/均衡）">
+          {formatRuntimeRevision(channel.global_concurrency_revision)} /{" "}
+          {formatRuntimeRevision(channel.circuit_breaker_revision)} /{" "}
+          {formatRuntimeRevision(channel.routing_balance_revision)}
+        </DetailKV>
+        <DetailKV label="源站 URL r（库/运行）">
+          {formatRuntimeRevision(channel.origin_base_url_revision)} /{" "}
+          {formatRuntimeRevision(channel.runtime_origin_base_url_revision)}
+        </DetailKV>
+        <DetailKV label="源站 状态 r（库/运行）">
+          {formatRuntimeRevision(channel.origin_status_revision)} /{" "}
+          {formatRuntimeRevision(channel.runtime_origin_status_revision)}
+        </DetailKV>
+        {channel.pending_origin_base_url_revision != null ||
+        channel.pending_origin_status_revision != null ? (
+          <div className="text-amber-700 text-xs tabular-nums dark:text-amber-400">
+            待提交 URL{" "}
+            {formatRuntimeRevision(channel.pending_origin_base_url_revision)}
+            {" · "}状态{" "}
+            {formatRuntimeRevision(channel.pending_origin_status_revision)}
+          </div>
+        ) : null}
+        {!channel.origin_base_url_revision_current ||
+        !channel.origin_status_revision_current ? (
+          <div className="text-destructive text-xs">源站版本不一致</div>
+        ) : null}
+      </DetailBlock>
     </div>
   );
 }

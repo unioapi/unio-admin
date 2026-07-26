@@ -17,6 +17,7 @@ import { ChannelModelsDialog } from "@/components/channels/ChannelModelsDialog";
 import { ChannelTestDialog } from "@/components/channels/ChannelTestDialog";
 import { ChannelPricesDialog } from "@/components/channels/ChannelPricesDialog";
 import { ChannelCostMultiplierDialog } from "@/components/channels/ChannelCostMultiplierDialog";
+import { DuplicateChannelDialog } from "@/components/channels/DuplicateChannelDialog";
 import { RotateCredentialDialog } from "@/components/channels/RotateCredentialDialog";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -35,6 +36,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
   const [costMultOpen, setCostMultOpen] = useState(false);
   const [credOpen, setCredOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
 
@@ -45,6 +47,7 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
     costMultOpen ||
     credOpen ||
     testOpen ||
+    duplicateOpen ||
     archiveOpen ||
     menuOpen ||
     statusConfirmOpen;
@@ -144,6 +147,12 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
               <>
                 <DropdownMenuItem onClick={() => openDialog(setTestOpen)}>检测</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(setEditOpen)}>编辑</DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!channel}
+                  onClick={() => openDialog(setDuplicateOpen)}
+                >
+                  复制
+                </DropdownMenuItem>
                 <DropdownMenuItem disabled={!channel} onClick={requestStatusChange}>
                   {channel?.status === "enabled" ? "停用" : "启用"}
                 </DropdownMenuItem>
@@ -168,6 +177,11 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
           <ChannelPricesDialog open={pricesOpen} onOpenChange={setPricesOpen} channel={channel} />
           <ChannelCostMultiplierDialog open={costMultOpen} onOpenChange={setCostMultOpen} channel={channel} />
           <RotateCredentialDialog open={credOpen} onOpenChange={setCredOpen} channel={channel} />
+          <DuplicateChannelDialog
+            open={duplicateOpen}
+            onOpenChange={setDuplicateOpen}
+            channel={channel}
+          />
           <StatusChangeConfirmDialog
             open={statusConfirmOpen}
             onOpenChange={setStatusConfirmOpen}

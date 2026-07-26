@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-export const REFRESH_INTERVAL_OPTIONS = [2, 5, 10, 15, 30, 60] as const;
+export const REFRESH_INTERVAL_OPTIONS = [1, 2, 5, 10, 15, 30, 60] as const;
 export type RefreshIntervalSec = (typeof REFRESH_INTERVAL_OPTIONS)[number];
 
 export type RefreshSettings = {
@@ -24,19 +24,22 @@ function isIntervalSec(n: unknown): n is RefreshIntervalSec {
   );
 }
 
-function readSettings(scope: string): RefreshSettings {
+function readSettings(scope: string, defaults: RefreshSettings): RefreshSettings {
   try {
     const raw = localStorage.getItem(storageKey(scope));
-    if (!raw) return DEFAULT_SETTINGS;
+    if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<RefreshSettings>;
     return {
-      autoRefresh: Boolean(parsed.autoRefresh),
+      autoRefresh:
+        typeof parsed.autoRefresh === "boolean"
+          ? parsed.autoRefresh
+          : defaults.autoRefresh,
       intervalSec: isIntervalSec(parsed.intervalSec)
         ? parsed.intervalSec
-        : DEFAULT_SETTINGS.intervalSec,
+        : defaults.intervalSec,
     };
   } catch {
-    return DEFAULT_SETTINGS;
+    return defaults;
   }
 }
 
@@ -48,15 +51,26 @@ function writeSettings(scope: string, next: RefreshSettings) {
   }
 }
 
-/** 列表刷新设置（自动刷新开关 + 间隔），按 scope 写入 localStorage。 */
-export function useRefreshSettings(scope: string) {
+/** 列表刷新设置（自动刷新开关 + 间隔），按 scope 写入 localStorage。
+ * defaults 覆盖首次（无本地存储时）的默认值；用户改过后以本地存储为准。 */
+export function useRefreshSettings(
+  scope: string,
+  defaults?: Partial<RefreshSettings>,
+) {
+  const defaultAutoRefresh = defaults?.autoRefresh ?? DEFAULT_SETTINGS.autoRefresh;
+  const defaultIntervalSec = defaults?.intervalSec ?? DEFAULT_SETTINGS.intervalSec;
+  const resolvedDefaults = useMemo<RefreshSettings>(
+    () => ({ autoRefresh: defaultAutoRefresh, intervalSec: defaultIntervalSec }),
+    [defaultAutoRefresh, defaultIntervalSec],
+  );
+
   const [settings, setSettings] = useState<RefreshSettings>(() =>
-    readSettings(scope),
+    readSettings(scope, resolvedDefaults),
   );
 
   useEffect(() => {
-    setSettings(readSettings(scope));
-  }, [scope]);
+    setSettings(readSettings(scope, resolvedDefaults));
+  }, [scope, resolvedDefaults]);
 
   const update = useCallback(
     (patch: Partial<RefreshSettings>) => {

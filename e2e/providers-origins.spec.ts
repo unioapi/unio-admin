@@ -63,53 +63,64 @@ async function mockProviders(page: Page) {
     if (path === "/admin/v1/providers/ops" && request.method() === "GET") {
       listCalls++;
       const createdAt = "2026-07-23T12:00:00Z";
+      const url = new URL(request.url());
+      const status = url.searchParams.get("status") ?? "";
+      const all = [
+        {
+          id: 1,
+          slug: "starapi",
+          name: "StarAPI",
+          status: "enabled",
+          created_at: createdAt,
+          origins: endpoints.get(1),
+          channel_total: 0,
+          models_count: 0,
+          routes_count: 0,
+        },
+        {
+          id: 2,
+          slug: "empty-ai",
+          name: "EmptyAI",
+          status: "enabled",
+          created_at: createdAt,
+          origins: endpoints.get(2),
+          channel_total: 0,
+          models_count: 0,
+          routes_count: 0,
+        },
+        {
+          id: 3,
+          slug: "legacy-response",
+          name: "LegacyResponse",
+          status: "enabled",
+          created_at: createdAt,
+          channel_total: 0,
+          models_count: 0,
+          routes_count: 0,
+        },
+        {
+          id: 4,
+          slug: "archived-ai",
+          name: "ArchivedAI",
+          status: "archived",
+          created_at: createdAt,
+          origins: [],
+          channel_total: 0,
+          models_count: 0,
+          routes_count: 0,
+        },
+      ];
+      const filtered = status
+        ? all.filter((row) => row.status === status)
+        : all;
       await fulfillJSON(route, {
-        data: [
-          {
-            id: 1,
-            slug: "starapi",
-            name: "StarAPI",
-            status: "enabled",
-            created_at: createdAt,
-            endpoints: endpoints.get(1),
-            channel_total: 0,
-            models_count: 0,
-            routes_count: 0,
-          },
-          {
-            id: 2,
-            slug: "empty-ai",
-            name: "EmptyAI",
-            status: "enabled",
-            created_at: createdAt,
-            endpoints: endpoints.get(2),
-            channel_total: 0,
-            models_count: 0,
-            routes_count: 0,
-          },
-          {
-            id: 3,
-            slug: "legacy-response",
-            name: "LegacyResponse",
-            status: "enabled",
-            created_at: createdAt,
-            channel_total: 0,
-            models_count: 0,
-            routes_count: 0,
-          },
-          {
-            id: 4,
-            slug: "archived-ai",
-            name: "ArchivedAI",
-            status: "archived",
-            created_at: createdAt,
-            endpoints: [],
-            channel_total: 0,
-            models_count: 0,
-            routes_count: 0,
-          },
-        ],
-        meta: { page: 1, page_size: 20, total: 4, total_pages: 1 },
+        data: filtered,
+        meta: {
+          page: 1,
+          page_size: 20,
+          total: filtered.length,
+          total_pages: 1,
+        },
       });
       return;
     }
@@ -173,24 +184,34 @@ test("shows Endpoint facts and creates one from the row menu", async ({
   const state = await mockProviders(page);
   await page.goto("/providers");
 
-  await expect(page.getByRole("columnheader", { name: "源站" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /源站/ })).toBeVisible();
   const starAPI = page.getByRole("row", { name: /StarAPI/ });
-  await expect(starAPI.getByText("Primary", { exact: true })).toBeVisible();
-  await expect(starAPI.getByText("https://primary.example.com/v1", { exact: true })).toBeVisible();
-  await expect(starAPI.getByText("Backup", { exact: true })).toBeVisible();
-  await starAPI.getByRole("button", { name: "另有 1 个源站" }).click();
+  await expect(starAPI.getByRole("button", { name: "查看 3 个源站" })).toBeVisible();
+  await starAPI.getByRole("button", { name: "查看 3 个源站" }).hover();
+  await expect(page.getByText("源站（3）")).toBeVisible();
+  await expect(page.getByText("Primary", { exact: true })).toBeVisible();
+  await expect(page.getByText("https://primary.example.com/v1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Backup", { exact: true })).toBeVisible();
   await expect(page.getByText("Legacy", { exact: true })).toBeVisible();
   await expect(page.getByText("https://legacy.example.com/v1", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
 
   const emptyAI = page.getByRole("row", { name: /EmptyAI/ });
-  await expect(emptyAI.getByText("暂无源站", { exact: true })).toBeVisible();
+  await expect(emptyAI.getByText("0", { exact: true }).first()).toBeVisible();
   const legacyResponse = page.getByRole("row", { name: /LegacyResponse/ });
-  await expect(legacyResponse.getByText("暂无源站", { exact: true })).toBeVisible();
+  await expect(legacyResponse.getByText("0", { exact: true }).first()).toBeVisible();
+
+  // 默认状态筛选为「启用」；切到「已归档」再验证归档行无「新建源站」。
+  await page.getByRole("button", { name: /状态/ }).click();
+  await page.getByRole("option", { name: "已归档" }).click();
   const archivedAI = page.getByRole("row", { name: /ArchivedAI/ });
   await archivedAI.getByRole("button", { name: "更多" }).hover();
   await expect(page.getByRole("menuitem", { name: "新建源站" })).toHaveCount(0);
   await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: /状态/ }).click();
+  await page.getByRole("option", { name: "启用" }).click();
+  await expect(page.getByRole("row", { name: /EmptyAI/ })).toBeVisible();
 
   await emptyAI.getByRole("button", { name: "更多" }).hover();
   await page.getByRole("menuitem", { name: "新建源站" }).click();
@@ -202,8 +223,10 @@ test("shows Endpoint facts and creates one from the row menu", async ({
   await dialog.getByRole("button", { name: "创建" }).click();
 
   await expect(dialog).toBeHidden();
-  await expect(emptyAI.getByText("Primary", { exact: true })).toBeVisible();
-  await expect(emptyAI.getByText("https://empty.example.com/v1", { exact: true })).toBeVisible();
+  await expect(emptyAI.getByRole("button", { name: "查看 1 个源站" })).toBeVisible();
+  await emptyAI.getByRole("button", { name: "查看 1 个源站" }).hover();
+  await expect(page.getByText("Primary", { exact: true })).toBeVisible();
+  await expect(page.getByText("https://empty.example.com/v1", { exact: true })).toBeVisible();
   expect(state.createdProviderID).toBe(2);
   expect(state.listCalls).toBeGreaterThanOrEqual(2);
 });

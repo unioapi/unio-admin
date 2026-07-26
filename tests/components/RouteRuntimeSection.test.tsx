@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
+import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouteRuntimeSection } from "@/components/routes/RouteRuntimeSection";
@@ -25,7 +27,13 @@ function TestProviders({ children }: { children: ReactNode }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <MemoryRouter>
+      <NuqsAdapter>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </NuqsAdapter>
+    </MemoryRouter>
+  );
 }
 
 function runtimeFixture(): RouteRuntime {
@@ -114,6 +122,13 @@ function runtimeFixture(): RouteRuntime {
     all_capacity_zero: false,
     runtime_sync_state: "active",
     breaker_store_admission: "normal",
+    route_usage: {
+      concurrency: 4,
+      rpm: 18,
+      rpd: 90,
+      tpm: 2500,
+      active_users: 2,
+    },
     sources: [
       {
         name: "redis",
@@ -235,6 +250,14 @@ function legacyDecisionFixture(): RoutingDecision {
   };
 }
 
+async function openChannelDetail(name: string): Promise<HTMLElement> {
+  const cell = await screen.findByText(name, { exact: true });
+  const row = cell.closest("tr");
+  if (!row) throw new Error(`row for ${name} not found`);
+  await userEvent.click(within(row).getByRole("button", { name: "查看详情" }));
+  return await screen.findByRole("dialog");
+}
+
 describe("RouteRuntimeSection", () => {
   beforeEach(() => {
     mocks.getModels.mockResolvedValue([
@@ -244,7 +267,7 @@ describe("RouteRuntimeSection", () => {
     mocks.getDecisions.mockResolvedValue({ items: [], total: 0 });
   });
 
-  it("marks observations older than ten seconds stale and shows hard exclusions", async () => {
+  it("shows a compact routing table with split capacity headroom and hard exclusions", async () => {
     render(
       <TestProviders>
         <RouteRuntimeSection routeId={7} />
@@ -253,46 +276,95 @@ describe("RouteRuntimeSection", () => {
 
     expect(await screen.findByText("运行态数据已陈旧")).toBeVisible();
     expect(screen.getByText("无冗余")).toBeVisible();
+    // 资格列：候选 + 硬排除原因。
+    expect(screen.getByText("候选")).toBeVisible();
     expect(screen.getByText("服务商停用")).toBeVisible();
-    expect(screen.getByText("最终权重 0.7200")).toBeVisible();
-    expect(screen.getByText("成本占售价 25.0%")).toBeVisible();
+    // 权重/分流列精简后用「权重 x」。
+    expect(screen.getByText("权重 0.7200")).toBeVisible();
+    // 四维余量拆列：条后显示 used / limit（两条渠道各一套）；合计卡也会出现同名标签。
+    expect(screen.getAllByText("并发").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("RPM").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("RPD").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("TPM").length).toBeGreaterThan(0);
+    expect(screen.getByText("线路实时合计（全用户）")).toBeVisible();
+    expect(screen.getAllByText("1 / 10")).toHaveLength(2);
+    expect(screen.getAllByText("12 / 60")).toHaveLength(2);
+    expect(screen.getAllByText("30 / 300")).toHaveLength(2);
+    expect(screen.getAllByText("100 / 1K")).toHaveLength(2);
+    expect(screen.getAllByText(/primary-endpoint/)).toHaveLength(2);
+    // 精简后这些细节列不再出现在主表（收进展开区）。
+    expect(screen.queryByText("成本占售价 25.0%")).not.toBeInTheDocument();
     expect(
-      screen.getByText("成本系数 0.8750 · 成本权重 0.5000"),
-    ).toBeVisible();
-    expect(screen.getByText("毛利 负毛利")).toBeVisible();
-    expect(screen.getAllByText("primary-endpoint")).toHaveLength(2);
-    expect(screen.getByText("120ms")).toBeVisible();
-    expect(screen.getByText("4 个流式样本")).toBeVisible();
-    expect(screen.getAllByText("429 冷却 3 秒")).toHaveLength(2);
-    expect(screen.getAllByText("权限暂停 · 待复检")).toHaveLength(2);
-    expect(screen.getAllByText(/RPM 12 \/ 60 · 剩余 80\.0%/)).toHaveLength(2);
-    expect(screen.getAllByText(/RPD 30 \/ 300 · 剩余 90\.0%/)).toHaveLength(2);
-    expect(
-      screen.getAllByText("默认限流 线路 r9 · 渠道 r13", { exact: true }),
-    ).toHaveLength(2);
-    expect(
-      screen.getAllByText("控制 并发 r10 · 熔断 r11 · 均衡 r12", {
-        exact: true,
-      }),
-    ).toHaveLength(2);
-    expect(
-      screen.getByRole("columnheader", { name: "源站 熔断" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("columnheader", { name: "渠道熔断" }),
-    ).toBeVisible();
+      screen.queryByRole("columnheader", { name: "源站 熔断" }),
+    ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(mocks.getRuntime).toHaveBeenCalledWith(7, {
         model_id: "openai/gpt-test",
         protocol: undefined,
+        sort: "order",
       }),
     );
+  });
+
+  it("reveals runtime facts in the per-channel detail drawer", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    const detail = await openChannelDetail("primary");
+    expect(within(detail).getByText("成本占售价")).toBeVisible();
+    expect(within(detail).getByText("25.0%")).toBeVisible();
+    expect(within(detail).getByText("120ms · 4 样本")).toBeVisible();
+    expect(within(detail).getByText("3 秒")).toBeVisible();
+    expect(within(detail).getByText("暂停 · 待复检")).toBeVisible();
+    expect(within(detail).getByText(/12 \/ 60 · 剩 80\.0%/)).toBeVisible();
+  });
+
+  it("renders route-level usage totals for all users", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    expect(await screen.findByText("线路实时合计（全用户）")).toBeVisible();
+    expect(screen.getByText("4")).toBeVisible();
+    expect(screen.getByText("18")).toBeVisible();
+    expect(screen.getByText("90")).toBeVisible();
+    expect(screen.getByText("2.5K")).toBeVisible();
+  });
+
+  it("shows route usage unavailable when aggregate is missing", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    runtime.route_usage = null;
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    expect(await screen.findByText("线路实时合计（全用户）")).toBeVisible();
+    expect(screen.getAllByText("事实不可用").length).toBeGreaterThan(0);
   });
 
   it("hides stale routing facts when BreakerStore admission is denied", async () => {
     const runtime = runtimeFixture();
     runtime.breaker_store_admission = "denied";
     runtime.runtime_sync_state = "store_unavailable";
+    runtime.route_usage = null;
     runtime.sources[0] = { ...runtime.sources[0], available: false };
     mocks.getRuntime.mockResolvedValue(runtime);
 
@@ -303,8 +375,8 @@ describe("RouteRuntimeSection", () => {
     );
 
     expect(await screen.findByText("基础设施故障，准入已拒绝")).toBeVisible();
-    expect(screen.queryByText("最终权重 0.7200")).not.toBeInTheDocument();
-    expect(screen.queryByText("120ms")).not.toBeInTheDocument();
+    expect(screen.queryByText("权重 0.7200")).not.toBeInTheDocument();
+    expect(screen.getByText("线路实时合计（全用户）")).toBeVisible();
   });
 
   it("hides facts from a mismatched runtime revision", async () => {
@@ -326,9 +398,7 @@ describe("RouteRuntimeSection", () => {
     expect(row).not.toBeNull();
     if (!row) return;
     expect(within(row).getByText("版本不一致")).toBeVisible();
-    expect(within(row).getByText(/渠道 r8\/r7/)).toBeVisible();
-    expect(within(row).queryByText("最终权重 0.7200")).not.toBeInTheDocument();
-    expect(within(row).queryByText("120ms")).not.toBeInTheDocument();
+    expect(within(row).queryByText("权重 0.7200")).not.toBeInTheDocument();
   });
 
   it("labels invalid pricing exclusions in Chinese", async () => {
@@ -360,15 +430,14 @@ describe("RouteRuntimeSection", () => {
       </TestProviders>,
     );
 
-    expect(
-      await screen.findAllByText("固定策略不参与成本排序"),
-    ).toHaveLength(2);
-    expect(
-      screen.getAllByText("成本系数 1.0000 · 成本权重 0.5000"),
-    ).toHaveLength(2);
+    const detail = await openChannelDetail("primary");
+    expect(within(detail).getByText("固定策略不参与成本排序")).toBeVisible();
+    // 成本系数中性 1.0000、成本权重 0.5000 在明细抽屉里分列展示。
+    expect(within(detail).getByText("1.0000")).toBeVisible();
+    expect(within(detail).getByText("0.5000")).toBeVisible();
   });
 
-  it("keeps the runtime table usable while an older backend omits cost fields", async () => {
+  it("keeps the runtime detail usable while an older backend omits cost fields", async () => {
     const runtime = runtimeFixture();
     runtime.observed_at = new Date().toISOString();
     delete runtime.channels[0].cost_ratio;
@@ -382,15 +451,11 @@ describe("RouteRuntimeSection", () => {
       </TestProviders>,
     );
 
-    const channelName = await screen.findByText("primary", { exact: true });
-    const row = channelName.closest("tr");
-    expect(row).not.toBeNull();
-    if (!row) return;
-    expect(within(row).getByText("—")).toBeVisible();
-    expect(
-      within(row).getByText("成本系数 1.0000 · 成本权重 0.0000"),
-    ).toBeVisible();
-    expect(within(row).getByText("最终权重 0.7200")).toBeVisible();
+    const detail = await openChannelDetail("primary");
+    // 成本系数缺省中性 1.0000、成本权重 0.0000、最终权重仍为 0.7200。
+    expect(within(detail).getByText("1.0000")).toBeVisible();
+    expect(within(detail).getByText("0.0000")).toBeVisible();
+    expect(within(detail).getByText("0.7200")).toBeVisible();
   });
 
   it("uses neutral cost defaults when an older routing trace has no cost fields", async () => {

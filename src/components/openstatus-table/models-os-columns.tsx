@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { getModelOpsChannels } from "@/lib/api/modelsOps";
 import type { ModelOpsRow } from "@/lib/api/modelsOps";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
+import { LongContextBadge } from "@/components/common/LongContextBadge";
 import { ModelCapabilitiesCountCell } from "@/components/models/ModelCapabilitiesCountCell";
 import { ModelIOCapabilityCell } from "@/components/models/ModelIOCapabilityCell";
 import { ModelRowActions } from "@/components/models/ModelRowActions";
@@ -85,30 +86,73 @@ function BasePriceCell({ row }: { row: ModelOpsRow }) {
   });
   breakdown.push({ label: "币种", value: row.base_currency ?? "USD" });
 
+  const longEnabled = row.base_long_context_enabled;
+  const longTitle = longEnabled
+    ? [
+        "长上下文计费",
+        row.base_long_context_threshold != null
+          ? `>${row.base_long_context_threshold.toLocaleString()} tokens`
+          : null,
+        row.base_long_context_input_multiplier != null
+          ? `输入 ×${trimDecimal(row.base_long_context_input_multiplier)}`
+          : null,
+        row.base_long_context_output_multiplier != null
+          ? `输出 ×${trimDecimal(row.base_long_context_output_multiplier)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
+
   return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="cursor-default tabular-nums underline decoration-dotted underline-offset-2"
-        >
-          {trimDecimal(input)} / {output == null ? "—" : trimDecimal(output)}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent align="start" className="max-w-xs">
-        <div className="flex flex-col gap-1.5">
-          <div className="font-medium">基准价 · 每 1M tokens</div>
-          <div className="flex flex-col gap-0.5">
-            {breakdown.map(({ label, value }) => (
-              <div key={label} className="flex items-center justify-between gap-4">
-                <span className="text-background/70">{label}</span>
-                <span className="tabular-nums">{value}</span>
-              </div>
-            ))}
+    <div className="flex items-center gap-1.5">
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="cursor-default tabular-nums underline decoration-dotted underline-offset-2"
+          >
+            {trimDecimal(input)} / {output == null ? "—" : trimDecimal(output)}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent align="start" className="max-w-xs">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 font-medium">
+              <span>基准价 · 每 1M tokens</span>
+              {longEnabled ? <LongContextBadge title={longTitle} /> : null}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {breakdown.map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between gap-4">
+                  <span className="text-background/70">{label}</span>
+                  <span className="tabular-nums">{value}</span>
+                </div>
+              ))}
+              {longEnabled ? (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-background/70">长上下文</span>
+                  <span className="tabular-nums">
+                    {row.base_long_context_threshold != null
+                      ? `>${row.base_long_context_threshold.toLocaleString()}`
+                      : "—"}
+                    {" · "}
+                    入×
+                    {row.base_long_context_input_multiplier != null
+                      ? trimDecimal(row.base_long_context_input_multiplier)
+                      : "—"}
+                    {" / 出×"}
+                    {row.base_long_context_output_multiplier != null
+                      ? trimDecimal(row.base_long_context_output_multiplier)
+                      : "—"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </TooltipContent>
-    </Tooltip>
+        </TooltipContent>
+      </Tooltip>
+      {longEnabled ? <LongContextBadge title={longTitle} /> : null}
+    </div>
   );
 }
 

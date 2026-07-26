@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ColumnDef, FilterFn } from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { Provider } from "@/lib/api/providers";
 import type {
   ProviderOpsOrigin,
@@ -12,16 +12,12 @@ import {
 } from "@/components/providers/ProviderListCountCells";
 import { ProviderRowActions } from "@/components/providers/ProviderRowActions";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { STATUS_LABEL } from "@/components/dashboard/breakdown-table/constants";
 import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import { ColumnHeader } from "./column-header";
+import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
+import { DataTableColumnHeader } from "@/components/tablecn/data-table-column-header";
 import { TruncateCell } from "./truncate-cell";
 import type { FacetOption } from "./types";
 
@@ -47,12 +43,6 @@ function toProvider(row: ProviderOpsRow): Provider {
   };
 }
 
-const facetedFilter: FilterFn<ProviderOpsRow> = (row, columnId, filterValue) => {
-  const selected = filterValue as string[] | undefined;
-  if (!selected?.length) return true;
-  return selected.includes(String(row.getValue(columnId)));
-};
-
 export const PROVIDER_OS_COLUMN_LABELS: Record<string, string> = {
   name: "服务商",
   status: "状态",
@@ -69,10 +59,15 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     {
       id: "name",
       accessorKey: "name",
-      header: ({ column }) => <ColumnHeader column={column} title="服务商" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="服务商" />
+      ),
       enableHiding: false,
+      enableColumnFilter: true,
       meta: {
-        autoSizeValue: (row: ProviderOpsRow) => `${row.name} ${row.slug}`,
+        label: "服务商",
+        variant: "text",
+        placeholder: "搜索名称 / slug",
       },
       cell: ({ row }) => (
         <TruncateCell
@@ -85,14 +80,16 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     {
       id: "status",
       accessorKey: "status",
-      header: ({ column }) => <ColumnHeader column={column} title="状态" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="状态" />
+      ),
       enableHiding: false,
+      enableColumnFilter: true,
       meta: {
         label: "状态",
-        autoSizeValue: (row: ProviderOpsRow) =>
-          STATUS_LABEL[row.status] ?? row.status,
+        variant: "select",
+        options: PROVIDER_STATUS_OPTIONS,
       },
-      filterFn: facetedFilter,
       cell: ({ row }) =>
         row.original.status ? (
           <Badge variant={row.original.status === "enabled" ? "default" : "secondary"}>
@@ -104,15 +101,12 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     },
     {
       id: "origins",
-      accessorFn: (row) => row.origins,
-      header: () => <span className="text-muted-foreground">源站</span>,
+      accessorFn: (row) => (row.origins ?? []).length,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="源站" />
+      ),
       enableSorting: false,
-      meta: {
-        autoSizeValue: (row: ProviderOpsRow) =>
-          (row.origins ?? [])
-            .map((endpoint) => `${endpoint.name} ${endpoint.base_url}`)
-            .join(" "),
-      },
+      meta: { label: "源站" },
       cell: ({ row }) => (
         <ProviderOriginsCell origins={row.original.origins ?? []} />
       ),
@@ -120,7 +114,10 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     {
       id: "channels",
       accessorFn: (r) => r.channel_total,
-      header: ({ column }) => <ColumnHeader column={column} title="渠道" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="渠道" />
+      ),
+      meta: { label: "渠道" },
       cell: ({ row }) => (
         <ProviderChannelsCountCell
           providerId={row.original.id}
@@ -131,8 +128,11 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     {
       id: "models",
       accessorFn: (r) => r.models_count,
-      header: () => <span className="text-muted-foreground">模型</span>,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="模型" />
+      ),
       enableSorting: false,
+      meta: { label: "模型" },
       cell: ({ row }) => (
         <ProviderModelsCountCell providerId={row.original.id} count={row.original.models_count} />
       ),
@@ -140,8 +140,11 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     {
       id: "routes",
       accessorFn: (r) => r.routes_count,
-      header: () => <span className="text-muted-foreground">线路</span>,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="线路" />
+      ),
       enableSorting: false,
+      meta: { label: "线路" },
       cell: ({ row }) => (
         <ProviderRoutesCountCell providerId={row.original.id} count={row.original.routes_count} />
       ),
@@ -149,7 +152,10 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
     {
       id: "created_at",
       accessorKey: "created_at",
-      header: ({ column }) => <ColumnHeader column={column} title="创建时间" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="创建时间" />
+      ),
+      meta: { label: "创建时间" },
       cell: ({ row }) => (
         <span className="text-muted-foreground text-xs tabular-nums">
           {formatDateTime(row.original.created_at)}
@@ -171,65 +177,45 @@ function ProviderOriginsCell({
 }: {
   origins: ProviderOpsOrigin[];
 }) {
-  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const count = origins.length;
 
-  if (origins.length === 0) {
-    return <span className="text-muted-foreground text-xs">暂无源站</span>;
+  if (count === 0) {
+    return <span className="text-muted-foreground tabular-nums">0</span>;
   }
 
-  const visible = origins.slice(0, 2);
-  const hidden = origins.slice(2);
-
   return (
-    <div className="flex min-w-56 max-w-80 flex-col gap-1.5 py-0.5">
-      {visible.map((endpoint) => (
-        <OriginSummary key={endpoint.id} endpoint={endpoint} />
-      ))}
-      {hidden.length > 0 ? (
-        <HoverCard
-          open={hiddenOpen}
-          onOpenChange={setHiddenOpen}
-          openDelay={150}
-          closeDelay={100}
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="cursor-default tabular-nums underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+          aria-label={`查看 ${count} 个源站`}
         >
-          <HoverCardTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="w-fit"
-              aria-expanded={hiddenOpen}
-              onClick={() => setHiddenOpen(true)}
-            >
-              另有 {hidden.length} 个源站
-            </Button>
-          </HoverCardTrigger>
-          <HoverCardContent align="start" className="w-96">
-            <div className="flex flex-col gap-2">
-              {hidden.map((endpoint) => (
-                <OriginSummary key={endpoint.id} endpoint={endpoint} />
-              ))}
-            </div>
-          </HoverCardContent>
-        </HoverCard>
-      ) : null}
-    </div>
-  );
-}
-
-function OriginSummary({ endpoint }: { endpoint: ProviderOpsOrigin }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-sm font-medium">{endpoint.name}</span>
-        <StatusBadge status={endpoint.status} />
-      </div>
-      <div
-        className="text-muted-foreground truncate font-mono text-xs"
-        title={endpoint.base_url}
-      >
-        {endpoint.base_url}
-      </div>
-    </div>
+          {count}
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-80">
+        <div className="flex flex-col gap-2">
+          <div className="text-muted-foreground text-xs font-medium">源站（{count}）</div>
+          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+            {origins.map((endpoint) => (
+              <li key={endpoint.id} className="rounded-md border px-2 py-1.5">
+                <div className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="truncate text-xs font-medium">{endpoint.name}</span>
+                  <StatusBadge status={endpoint.status} />
+                </div>
+                <div
+                  className="text-muted-foreground truncate font-mono text-[10px]"
+                  title={endpoint.base_url}
+                >
+                  {endpoint.base_url}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
   );
 }

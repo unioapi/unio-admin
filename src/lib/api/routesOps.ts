@@ -36,8 +36,6 @@ export interface RouteOpsDetail {
   no_channel_total: number;
   latency_p50: number;
   latency_p95: number;
-  serviceable: boolean;
-  abnormal: boolean;
   route_status: string;
 }
 
@@ -184,6 +182,14 @@ export interface RouteRuntimeChannel {
   margin_status: string;
 }
 
+export interface RouteUsage {
+  concurrency: number;
+  rpm: number;
+  rpd: number;
+  tpm: number;
+  active_users: number;
+}
+
 export interface RouteRuntime {
   route_id: number;
   mode: RouteMode;
@@ -198,6 +204,7 @@ export interface RouteRuntime {
   all_capacity_zero: boolean;
   runtime_sync_state: RuntimeSyncState;
   breaker_store_admission: BreakerStoreAdmission;
+  route_usage?: RouteUsage | null;
   sources: RouteRuntimeSource[];
   channels: RouteRuntimeChannel[];
 }
@@ -374,7 +381,12 @@ export async function getRouteOpsRequests(
 
 export async function getRouteRuntime(
   id: number,
-  params: { model_id: string; protocol?: "openai" | "anthropic" },
+  params: {
+    model_id: string;
+    protocol?: "openai" | "anthropic";
+    /** 后端排序：order / weight / capacity；前缀 `-` 表示降序。 */
+    sort?: string;
+  },
 ): Promise<RouteRuntime> {
   const res = await api.get<{ data: RouteRuntime }>(
     `/admin/v1/routes/${id}/ops/runtime`,

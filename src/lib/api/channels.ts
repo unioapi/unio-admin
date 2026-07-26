@@ -214,6 +214,28 @@ export async function restoreChannel(id: number): Promise<void> {
   await api.post(`/admin/v1/channels/${id}/restore`);
 }
 
+// 整份复制渠道到同服务商另一源站（新行，非引用）。
+// 复制：壳（含凭据/限流）、模型绑定、当前生效的成本价/价格倍率/充值倍率。
+// 不复制：线路池成员、检测历史、熔断运行态。
+export interface DuplicateChannelInput {
+  id: number;
+  provider_origin_id: number;
+  name: string;
+  /** 省略则沿用源渠道 status。 */
+  status?: string;
+}
+
+export async function duplicateChannel({
+  id,
+  ...body
+}: DuplicateChannelInput): Promise<Channel> {
+  const res = await api.post<{ data: Channel }>(
+    `/admin/v1/channels/${id}/duplicate`,
+    body,
+  );
+  return res.data.data;
+}
+
 // 与后端 channelTestResultDTO 对齐：一次渠道检测结果。
 // 始终代表「检测已执行」（HTTP 200）；success 表达本次上游调用是否成功，error_code 成功时为 null。
 export interface ChannelTestResult {

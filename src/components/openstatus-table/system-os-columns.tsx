@@ -272,7 +272,7 @@ export function recoveryJobOsColumns(): ColumnDef<RecoveryJobSummary, unknown>[]
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-sm" aria-label="查看对应请求记录" asChild>
-                    <Link to={`/requests?request_id=${encodeURIComponent(requestId)}`}>
+                    <Link to={`/requests?q=${encodeURIComponent(requestId)}`}>
                       <SquareArrowOutUpRightIcon />
                     </Link>
                   </Button>

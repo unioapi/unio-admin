@@ -53,7 +53,10 @@ export interface RequestsListProps {
   rangeParams?: { from?: string; to?: string };
   /** 是否在表格工具栏展示时间筛选；详情页由页头控制时应为 false。 */
   showRangeFilter?: boolean;
-  /** 是否同步 URL 上的 request_id / q 深链打开详情（请求中心用）。 */
+  /**
+   * 是否同步 URL 深链打开详情（请求中心用）。
+   * 详情深链用 `q`；`request_id` 留给列表筛选，避免互相抢 URL 键。
+   */
   syncUrlDeepLink?: boolean;
 }
 
@@ -66,14 +69,12 @@ export function RequestsList({
   syncUrlDeepLink = false,
 }: RequestsListProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const deepRequestId = syncUrlDeepLink
-    ? (searchParams.get("request_id") ?? searchParams.get("q"))
-    : null;
+  // 详情深链只用 q；request_id 是列表精确筛选。
+  const deepRequestId = syncUrlDeepLink ? searchParams.get("q") : null;
   const closeDeep = () => {
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
-        sp.delete("request_id");
         sp.delete("q");
         return sp;
       },
@@ -114,6 +115,10 @@ export function RequestsList({
     parseAsArrayOf(parseAsString).withDefault([]),
   );
   const [modelFilter] = useQueryState("model", parseAsString.withDefault(""));
+  const [requestIdFilter] = useQueryState(
+    "request_id",
+    parseAsString.withDefault(""),
+  );
   const [userIdFilter] = useQueryState(
     "user_id",
     parseAsString.withDefault(""),
@@ -126,6 +131,7 @@ export function RequestsList({
 
   const status = statusFilter[0] ?? "";
   const model = modelFilter.trim();
+  const requestId = requestIdFilter.trim();
   const parsedUserId = parsePositiveInt(userIdFilter);
   const userId = fixedUserId ?? parsedUserId;
   const sort = sortingToApiSort(sorting);
@@ -161,7 +167,16 @@ export function RequestsList({
       "requests",
       storageKey,
       "tablecn",
-      { status, model, userId, page, perPage, sort, range: rangeParams },
+      {
+        status,
+        model,
+        requestId,
+        userId,
+        page,
+        perPage,
+        sort,
+        range: rangeParams,
+      },
     ],
     queryFn: () =>
       listRequests({
@@ -170,6 +185,7 @@ export function RequestsList({
         sort,
         status: status || undefined,
         model: model || undefined,
+        requestId: requestId || undefined,
         userId,
         from: rangeParams.from,
         to: rangeParams.to,
