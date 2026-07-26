@@ -122,4 +122,29 @@ describe("RequestDetailDialog upstream timing", () => {
     expect(screen.queryByText(/上游 TTFT/)).not.toBeInTheDocument();
     expect(screen.queryByText(/首字 \(TTFT\)/)).not.toBeInTheDocument();
   });
+
+  it("hides the internal-error toggle when the request has no errors", async () => {
+    renderDetail(detailFixture(true, attemptFixture()));
+
+    expect(await screen.findByText(/上游尝试/)).toBeVisible();
+    expect(screen.queryByLabelText("显示内部错误")).not.toBeInTheDocument();
+  });
+
+  it("shows a concise internal-error toggle beside upstream attempts when failed", async () => {
+    renderDetail(
+      detailFixture(
+        true,
+        attemptFixture({
+          status: "failed",
+          error_code: "upstream_error",
+          error_message: "boom",
+          upstream_status_code: 500,
+        }),
+      ),
+    );
+
+    expect(await screen.findByLabelText("显示内部错误")).toBeVisible();
+    expect(screen.getByText("内部错误")).toBeVisible();
+    expect(screen.queryByText(/仅排查用/)).not.toBeInTheDocument();
+  });
 });

@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +47,7 @@ export function RequestDetailDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-3xl">
         {open && <DetailBody requestId={requestId} />}
       </DialogContent>
     </Dialog>
@@ -68,38 +69,39 @@ function DetailBody({ requestId }: { requestId: string }) {
   });
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>请求详情</DialogTitle>
-        <DialogDescription className="font-mono text-xs break-all">
-          {requestId}
-        </DialogDescription>
-      </DialogHeader>
+    <div className="flex flex-col">
+      <div className="space-y-1 px-6 pt-6 pr-12">
+        <DialogHeader>
+          <DialogTitle>请求详情</DialogTitle>
+          <DialogDescription className="font-mono text-xs break-all">
+            {requestId}
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <Switch
-          checked={includeInternal}
-          onCheckedChange={setIncludeInternal}
-          aria-label="显示内部错误详情"
-        />
-        显示内部错误详情（仅排查用）
-      </label>
-
-      {query.isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription>{query.error.message}</AlertDescription>
-        </Alert>
-      ) : query.isPending ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
+      <ScrollArea className="max-h-[min(68vh,32rem)]">
+        <div className="px-6 py-5">
+          {query.isError ? (
+            <Alert variant="destructive">
+              <AlertTitle>加载失败</AlertTitle>
+              <AlertDescription>{query.error.message}</AlertDescription>
+            </Alert>
+          ) : query.isPending ? (
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : (
+            <DetailContent
+              detail={query.data}
+              includeInternal={includeInternal}
+              onIncludeInternalChange={setIncludeInternal}
+            />
+          )}
         </div>
-      ) : (
-        <DetailContent detail={query.data} />
-      )}
-    </>
+      </ScrollArea>
+    </div>
   );
 }
 
@@ -139,7 +141,25 @@ function TimingSection({ detail }: { detail: RequestDetail }) {
   );
 }
 
-function DetailContent({ detail }: { detail: RequestDetail }) {
+function hasRequestError(detail: RequestDetail): boolean {
+  if (detail.status === "failed") return true;
+  if (detail.error_code || detail.error_message) return true;
+  return detail.attempts.some(
+    (a) => a.status === "failed" || Boolean(a.error_code || a.error_message),
+  );
+}
+
+function DetailContent({
+  detail,
+  includeInternal,
+  onIncludeInternalChange,
+}: {
+  detail: RequestDetail;
+  includeInternal: boolean;
+  onIncludeInternalChange: (checked: boolean) => void;
+}) {
+  const showInternalToggle = hasRequestError(detail);
+
   return (
     <div className="flex flex-col gap-5">
       <Section title="基本信息">
@@ -189,15 +209,21 @@ function DetailContent({ detail }: { detail: RequestDetail }) {
         </Section>
       )}
 
-      {detail.internal_error_detail && (
-        <Section title="内部错误详情">
-          <pre className="bg-muted max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-            {detail.internal_error_detail}
-          </pre>
-        </Section>
-      )}
-
-      <Section title={`上游尝试（${detail.attempts.length}）`}>
+      <Section
+        title={`上游尝试（${detail.attempts.length}）`}
+        action={
+          showInternalToggle ? (
+            <label className="flex items-center gap-2 text-xs font-normal normal-case tracking-normal text-foreground">
+              <Switch
+                checked={includeInternal}
+                onCheckedChange={onIncludeInternalChange}
+                aria-label="显示内部错误"
+              />
+              内部错误
+            </label>
+          ) : null
+        }
+      >
         {detail.attempts.length === 0 ? (
           <p className="text-muted-foreground text-sm">无上游尝试</p>
         ) : (
@@ -439,12 +465,23 @@ function BillingExceptionBlock({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          {title}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   );
