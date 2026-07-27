@@ -40,7 +40,7 @@ export function providerOpsChannelColumns(): ColumnDef<ProviderOpsChannel, unkno
       cell: ({ row }) => (
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{row.original.name}</div>
-          <div className="text-muted-foreground truncate text-xs">{row.original.base_url}</div>
+          <div className="text-muted-foreground truncate text-xs">{row.original.origin}</div>
         </div>
       ),
     }),

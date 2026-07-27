@@ -26,7 +26,7 @@ describe("RuntimeDiagnosticsPanel", () => {
       readiness: { ready: false, reason: "marker_mismatch" },
       runtime_state_epoch: { state: "ready", revision: 7, match: false },
       operations: {
-        origin_routing: { nonterminal_count: 1, oldest_age_seconds: 17 },
+        provider_routing: { nonterminal_count: 1, oldest_age_seconds: 17 },
         runtime_control: { nonterminal_count: 2, oldest_age_seconds: 125 },
       },
     });

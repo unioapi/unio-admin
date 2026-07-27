@@ -7,13 +7,10 @@ export interface Channel {
   id: number;
   provider_id: number;
   provider_name: string;
-  provider_origin_id: number;
-  provider_origin_name: string;
-  provider_origin_status: string;
   name: string;
   protocol: string;
   adapter_key: string;
-  base_url: string;
+  origin: string;
   config_revision: number;
   admission_limits_revision: number;
   // 明文上游 API key（产品决策：明文存储，管理端可查看/复制/编辑）。
@@ -79,7 +76,6 @@ export async function getChannel(id: number): Promise<Channel> {
 // 创建入参与后端 createChannelRequest 对齐；credential 为明文，后端加密落库。
 export interface CreateChannelInput {
   provider_id: number;
-  provider_origin_id: number;
   name: string;
   protocol: string;
   adapter_key: string;
@@ -126,7 +122,7 @@ export async function listAdapterKeys(): Promise<AdapterKeyOption[]> {
 export interface UpdateChannelInput {
   id: number;
   name: string;
-  provider_origin_id: number;
+  provider_id: number;
   status: string;
   priority: number;
   timeout_ms: number | null;
@@ -165,8 +161,8 @@ export type CredentialVerificationState =
 
 export interface CredentialVerification {
   state: CredentialVerificationState;
-  tested_origin_base_url_revision: number | null;
-  tested_origin_status_revision: number | null;
+  tested_origin_revision: number | null;
+  tested_status_revision: number | null;
   tested_config_revision: number | null;
   state_change_applied: boolean;
   credential_valid_after: boolean;
@@ -198,42 +194,13 @@ export async function deleteChannel(id: number): Promise<void> {
 }
 
 // 归档渠道：可在同一事务中把替代渠道加入受影响线路，避免启用线路空池。
-export async function archiveChannel(
-  id: number,
-  replacementChannelId?: number,
-): Promise<void> {
-  await api.post(`/admin/v1/channels/${id}/archive`,
-    replacementChannelId == null
-      ? {}
-      : { replacement_channel_id: replacementChannelId },
-  );
+export async function archiveChannel(id: number): Promise<void> {
+  await api.post(`/admin/v1/channels/${id}/archive`, {});
 }
 
 // 恢复渠道：archived → disabled（护栏：所属服务商归档时后端拦截，需先恢复服务商）。
 export async function restoreChannel(id: number): Promise<void> {
   await api.post(`/admin/v1/channels/${id}/restore`);
-}
-
-// 整份复制渠道到同服务商另一源站（新行，非引用）。
-// 复制：壳（含凭据/限流）、模型绑定、当前生效的成本价/价格倍率/充值倍率。
-// 不复制：线路池成员、检测历史、熔断运行态。
-export interface DuplicateChannelInput {
-  id: number;
-  provider_origin_id: number;
-  name: string;
-  /** 省略则沿用源渠道 status。 */
-  status?: string;
-}
-
-export async function duplicateChannel({
-  id,
-  ...body
-}: DuplicateChannelInput): Promise<Channel> {
-  const res = await api.post<{ data: Channel }>(
-    `/admin/v1/channels/${id}/duplicate`,
-    body,
-  );
-  return res.data.data;
 }
 
 // 与后端 channelTestResultDTO 对齐：一次渠道检测结果。
@@ -250,7 +217,7 @@ export interface ChannelTestResult {
   tested_at: string;
 }
 
-// 触发一次渠道主动检测：用渠道自己的 base_url + 凭据挑一个绑定模型向真实上游发一个最小请求，
+// 触发一次渠道主动检测：用 Provider origin + 渠道凭据挑一个绑定模型向真实上游发一个最小请求，
 // 验证「连得上 + 凭据有效 + 模型可用」。model 省略时后端自动取第一个启用绑定模型；stream 阶段一忽略。
 export async function testChannel(
   id: number,

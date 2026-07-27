@@ -90,7 +90,7 @@ export function ProviderDetailPage() {
           </AlertDescription>
         </Alert>
       ) : providerEntity ? (
-        <ProviderDetailContent providerId={providerEntity.id} range={rangeQuery} />
+        <ProviderDetailContent providerId={providerEntity.id} provider={providerEntity} range={rangeQuery} />
       ) : null}
     </div>
   );

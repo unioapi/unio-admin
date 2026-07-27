@@ -28,23 +28,26 @@ import {
   TableSkeleton,
 } from "@/components/common/detail-section";
 import { PerformanceCharts, type PerfPoint } from "@/components/common/PerformanceCharts";
-import { ProviderOriginsSection } from "@/components/providers/ProviderOriginsSection";
+import { ProviderRuntimeSection } from "@/components/providers/ProviderRuntimeSection";
+import type { Provider } from "@/lib/api/providers";
 
 const PAGE_SIZE = 10;
 
 export function ProviderDetailContent({
   providerId,
+  provider,
   range,
 }: {
   providerId: number;
+  provider: Provider;
   range: RangeQuery;
 }) {
   const sections = useMemo(
     () => [
       {
-        id: "endpoints",
-        label: "源站",
-        content: <ProviderOriginsSection providerId={providerId} />,
+        id: "configuration",
+        label: "配置与运行态",
+        content: <ProviderRuntimeSection provider={provider} />,
       },
       {
         id: "channels",
@@ -62,10 +65,10 @@ export function ProviderDetailContent({
         content: <ErrorsSection id={providerId} range={range} />,
       },
     ],
-    [providerId, range],
+    [provider, providerId, range],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="endpoints" />;
+  return <DetailSideNav sections={sections} defaultSectionId="configuration" />;
 }
 
 function ChannelsSection({ id, range }: { id: number; range: RangeQuery }) {

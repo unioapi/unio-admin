@@ -1,22 +1,15 @@
-import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { Provider } from "@/lib/api/providers";
-import type {
-  ProviderOpsOrigin,
-  ProviderOpsRow,
-} from "@/lib/api/providersOps";
+import type { ProviderOpsRow } from "@/lib/api/providersOps";
 import {
   ProviderChannelsCountCell,
   ProviderModelsCountCell,
   ProviderRoutesCountCell,
 } from "@/components/providers/ProviderListCountCells";
 import { ProviderRowActions } from "@/components/providers/ProviderRowActions";
-import { StatusBadge } from "@/components/common/StatusBadge";
-import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { STATUS_LABEL } from "@/components/dashboard/breakdown-table/constants";
 import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { DataTableColumnHeader } from "@/components/tablecn/data-table-column-header";
 import { TruncateCell } from "./truncate-cell";
 import type { FacetOption } from "./types";
@@ -33,20 +26,22 @@ function toProvider(row: ProviderOpsRow): Provider {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    origin: row.origin,
+    origin_revision: row.origin_revision,
     status: row.status,
+    status_revision: row.status_revision,
     created_at: row.created_at,
     updated_at: "",
     // ops 行不带归档时间；行操作只按 status 判断，archived_at 置空即可满足类型。
     archived_at: null,
     runtime_sync_pending: false,
-    affected_origin_count: 0,
   };
 }
 
 export const PROVIDER_OS_COLUMN_LABELS: Record<string, string> = {
   name: "服务商",
   status: "状态",
-  origins: "源站",
+  origin: "API Root",
   channels: "渠道",
   models: "模型",
   routes: "线路",
@@ -100,15 +95,19 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
         ),
     },
     {
-      id: "origins",
-      accessorFn: (row) => (row.origins ?? []).length,
+      id: "origin",
+      accessorKey: "origin",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} label="源站" />
+        <DataTableColumnHeader column={column} label="API Root" />
       ),
       enableSorting: false,
-      meta: { label: "源站" },
+      meta: { label: "API Root" },
       cell: ({ row }) => (
-        <ProviderOriginsCell origins={row.original.origins ?? []} />
+        <TruncateCell
+          text={row.original.origin}
+          className="font-mono text-xs"
+          subtext={`origin v${row.original.origin_revision} · status v${row.original.status_revision}`}
+        />
       ),
     },
     {
@@ -170,52 +169,4 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       cell: ({ row }) => <ProviderRowActions provider={toProvider(row.original)} />,
     },
   ];
-}
-
-function ProviderOriginsCell({
-  origins,
-}: {
-  origins: ProviderOpsOrigin[];
-}) {
-  const [open, setOpen] = useState(false);
-  const count = origins.length;
-
-  if (count === 0) {
-    return <span className="text-muted-foreground tabular-nums">0</span>;
-  }
-
-  return (
-    <HoverCard open={open} onOpenChange={setOpen} openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className="cursor-default tabular-nums underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
-          aria-label={`查看 ${count} 个源站`}
-        >
-          {count}
-        </button>
-      </HoverCardTrigger>
-      <TipHoverCardContent align="start" className="w-80">
-        <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground text-xs font-medium">源站（{count}）</div>
-          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-            {origins.map((endpoint) => (
-              <li key={endpoint.id} className="rounded-md border px-2 py-1.5">
-                <div className="flex min-w-0 items-center justify-between gap-2">
-                  <span className="truncate text-xs font-medium">{endpoint.name}</span>
-                  <StatusBadge status={endpoint.status} />
-                </div>
-                <div
-                  className="text-muted-foreground truncate font-mono text-[10px]"
-                  title={endpoint.base_url}
-                >
-                  {endpoint.base_url}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </TipHoverCardContent>
-    </HoverCard>
-  );
 }

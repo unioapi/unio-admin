@@ -85,7 +85,7 @@ export function RuntimeDiagnosticsPanel() {
             </span>
           }
         />
-        <OperationFact label="源站 围栏" summary={diagnostics.operations.origin_routing} />
+        <OperationFact label="Provider 围栏" summary={diagnostics.operations.provider_routing} />
         <OperationFact label="运行态控制" summary={diagnostics.operations.runtime_control} />
       </CardContent>
     </Card>

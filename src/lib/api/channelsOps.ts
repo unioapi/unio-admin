@@ -14,7 +14,7 @@ export interface ChannelOpsRow {
   created_at: string;
   protocol: string;
   adapter_key: string;
-  base_url: string;
+  origin: string;
   priority: number;
   timeout_ms: number | null;
   provider_name: string;
@@ -66,15 +66,15 @@ export interface ChannelBreakerSnapshot {
 
 export interface ChannelRuntime {
   id: number;
-  provider_origin_id: number;
-  origin_base_url_revision: number;
-  origin_status_revision: number;
+  provider_id: number;
+  origin_revision: number;
+  provider_status_revision: number;
   config_revision: number;
   admission_limits_revision: number;
   runtime_sync_state: RuntimeSyncState;
-  runtime_provider_origin_id: number | null;
-  runtime_origin_base_url_revision: number | null;
-  runtime_origin_status_revision: number | null;
+  runtime_provider_id: number | null;
+  runtime_origin_revision: number | null;
+  runtime_provider_status_revision: number | null;
   runtime_config_revision: number | null;
   runtime_admission_active_revision: number | null;
   runtime_admission_pending_revision: number | null;

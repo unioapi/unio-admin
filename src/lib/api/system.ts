@@ -151,7 +151,7 @@ export interface RuntimeDiagnostics {
     match: boolean;
   };
   operations: {
-    origin_routing: RuntimeOperationSummary;
+    provider_routing: RuntimeOperationSummary;
     runtime_control: RuntimeOperationSummary;
   };
 }

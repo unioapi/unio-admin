@@ -41,7 +41,7 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
           tpm_limit: null,
           rpd_limit: null,
           sticky_enabled: null,
-          description: "ProviderOrigin 全局运行态",
+          description: "Provider 全局运行态",
           channels: [
             {
               channel_id: 7,
@@ -52,14 +52,14 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
             {
               channel_id: 8,
               channel_name: "备用渠道",
-              provider_id: 3,
-              provider_slug: "starapi",
+              provider_id: 4,
+              provider_slug: "relayapi",
             },
             {
               channel_id: 9,
               channel_name: "版本落后渠道",
-              provider_id: 3,
-              provider_slug: "starapi",
+              provider_id: 5,
+              provider_slug: "staleapi",
             },
           ],
           created_at: observedAt,
@@ -108,6 +108,15 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
           all_capacity_zero: false,
           runtime_sync_state: denied ? "store_unavailable" : "active",
           breaker_store_admission: denied ? "denied" : "normal",
+          route_usage: denied
+            ? null
+            : {
+                concurrency: 2,
+                rpm: 240,
+                rpd: 60,
+                tpm: 50_000,
+                active_users: 2,
+              },
           sources: [
             {
               name: "postgres",
@@ -132,12 +141,12 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
             runtimeChannel({
               channel_id: 7,
               channel_name: "主渠道",
-              provider_origin_id: 11,
-              provider_origin_name: "Primary Endpoint",
+              provider_id: 3,
+              provider_name: "Primary Provider",
               eligible: false,
               excluded_reason: denied ? "store_unavailable" : "breaker_open",
-              origin_breaker_state: denied ? null : "open",
-              origin_open_remaining_ms: denied ? null : 12_400,
+              provider_breaker_state: denied ? null : "open",
+              provider_open_remaining_ms: denied ? null : 12_400,
               channel_breaker_state: denied ? null : "closed",
               cooldown_remaining_ms: denied ? 0 : 12_400,
               model_permission_paused: !denied,
@@ -150,8 +159,8 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
             runtimeChannel({
               channel_id: 9,
               channel_name: "版本落后渠道",
-              provider_origin_id: 13,
-              provider_origin_name: "Stale Endpoint",
+              provider_id: 5,
+              provider_name: "Stale Provider",
               eligible: !denied,
               excluded_reason: denied ? "store_unavailable" : undefined,
               channel_config_revision: 6,
@@ -165,11 +174,11 @@ async function mockRouteOperations(page: Page, state: RuntimeState) {
             runtimeChannel({
               channel_id: 8,
               channel_name: "备用渠道",
-              provider_origin_id: 12,
-              provider_origin_name: "Backup Endpoint",
+              provider_id: 4,
+              provider_name: "Backup Provider",
               eligible: !denied,
               excluded_reason: denied ? "store_unavailable" : undefined,
-              origin_breaker_state: denied ? null : "closed",
+              provider_breaker_state: denied ? null : "closed",
               channel_breaker_state: denied ? null : "closed",
               current_order: denied ? 0 : 1,
               runtime_sync_state: denied ? "store_unavailable" : "active",
@@ -207,7 +216,7 @@ async function mockRuntimeSettings(page: Page) {
           readiness: { ready: true, reason: "ready" },
           runtime_state_epoch: { state: "ready", revision: 4, match: true },
           operations: {
-            origin_routing: { nonterminal_count: 0, oldest_age_seconds: null },
+            provider_routing: { nonterminal_count: 0, oldest_age_seconds: null },
             runtime_control: { nonterminal_count: 0, oldest_age_seconds: null },
           },
         },
@@ -266,20 +275,17 @@ function runtimeChannel(overrides: Record<string, unknown>) {
     provider_id: 3,
     provider_name: "StarAPI",
     provider_status: "enabled",
-    provider_origin_id: 11,
-    provider_origin_name: "Primary Endpoint",
-    provider_origin_status: "enabled",
-    origin_base_url_revision: 3,
-    origin_status_revision: 4,
-    runtime_origin_base_url_revision: 3,
-    runtime_origin_status_revision: 4,
-    pending_origin_base_url_revision: null,
-    pending_origin_status_revision: null,
-    origin_base_url_revision_current: true,
-    origin_status_revision_current: true,
-    origin_state_generation: 2,
-    origin_base_url_fence_generation: 2,
-    origin_status_fence_generation: 2,
+    origin_revision: 3,
+    provider_status_revision: 4,
+    runtime_origin_revision: 3,
+    runtime_provider_status_revision: 4,
+    pending_origin_revision: null,
+    pending_provider_status_revision: null,
+    origin_revision_current: true,
+    provider_status_revision_current: true,
+    provider_state_generation: 2,
+    origin_fence_generation: 2,
+    status_fence_generation: 2,
     channel_config_revision: 5,
     runtime_channel_config_revision: 5,
     channel_config_revision_current: true,
@@ -314,8 +320,8 @@ function runtimeChannel(overrides: Record<string, unknown>) {
     pressure: 0.175,
     capacity_unknown: false,
     capacity_read_failed: false,
-    origin_breaker_state: "closed",
-    origin_open_remaining_ms: null,
+    provider_breaker_state: "closed",
+    provider_open_remaining_ms: null,
     channel_breaker_state: "closed",
     channel_open_remaining_ms: null,
     error_rate: 0.1,
@@ -345,56 +351,45 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("shows ProviderOrigin breaker facts and stream-only TTFT", async ({
+test("shows Provider breaker facts and stream-only TTFT", async ({
   page,
 }) => {
   await mockRouteOperations(page, "active");
   await page.goto(`/routes/${routeID}`);
 
   await expect(page.getByRole("heading", { name: "实时路由" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Endpoint 熔断" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "渠道熔断" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "流式 TTFT" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "RPM / RPD" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "429 / 权限" })).toBeVisible();
-  await expect(page.getByText("Primary Endpoint", { exact: true })).toBeVisible();
-  await expect(page.getByText("Backup Endpoint", { exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "渠道 / Provider" })).toBeVisible();
+  await expect(page.getByText("Primary Provider", { exact: true })).toBeVisible();
+  await expect(page.getByText("Backup Provider", { exact: true })).toBeVisible();
   const backup = page.getByRole("row", { name: /备用渠道/ });
-  await expect(
-    backup.getByText("18 个流式样本", { exact: true }),
-  ).toBeVisible();
-  await expect(backup.getByText("820ms", { exact: true })).toBeVisible();
-  await expect(backup.getByText(/RPM 120 \/ 600 · 剩余 80\.0%/)).toBeVisible();
-  await expect(backup.getByText(/RPD 30 \/ 300 · 剩余 90\.0%/)).toBeVisible();
-  await expect(
-    backup.getByText("运行态已同步", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    backup.getByText("默认限流 线路 r7 · 渠道 r11", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    backup.getByText("控制 并发 r8 · 熔断 r9 · 均衡 r10", { exact: true }),
-  ).toBeVisible();
+  await expect(backup.getByText("权重 0.6060", { exact: true })).toBeVisible();
+  await backup.getByRole("button", { name: "查看详情" }).click();
+  let detail = page.getByRole("dialog");
+  await expect(detail.getByText("820ms · 18 样本", { exact: true })).toBeVisible();
+  await expect(detail.getByText("120 / 600 · 剩 80.0%", { exact: true })).toBeVisible();
+  await expect(detail.getByText("r7 / r11", { exact: true })).toBeVisible();
+  await expect(detail.getByText("r8 / r9 / r10", { exact: true })).toBeVisible();
+  await expect(detail.getByText("r3 / r3", { exact: true })).toBeVisible();
+  await expect(detail.getByText("r4 / r4", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   const primary = page.getByRole("row", { name: /主渠道/ });
-  await expect(
-    primary.getByText("429 冷却 13 秒", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    primary.getByText("权限暂停 · 待复检", { exact: true }),
-  ).toBeVisible();
+  await primary.getByRole("button", { name: "查看详情" }).click();
+  detail = page.getByRole("dialog");
+  await expect(detail.getByText("熔断中", { exact: true })).toBeVisible();
+  await expect(detail.getByText("剩余 13 秒", { exact: true })).toBeVisible();
+  await expect(detail.getByText("暂停 · 待复检", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   const stale = page.getByRole("row", { name: /版本落后渠道/ });
   await expect(stale.getByText("版本不一致", { exact: true })).toBeVisible();
-  await expect(stale.getByText(/渠道 r6\/r5/)).toBeVisible();
   await expect(stale.getByText("820ms", { exact: true })).toHaveCount(0);
   await expect(stale.getByText("最终权重 0.6060", { exact: true })).toHaveCount(0);
   await expect(page.getByText("容量读取降级", { exact: true })).toHaveCount(0);
+  await stale.getByRole("button", { name: "查看详情" }).click();
+  detail = page.getByRole("dialog");
+  await expect(detail.getByText("r6 / r5", { exact: true })).toBeVisible();
 
-  await backup.getByText("最终权重 0.6060", { exact: true }).hover();
-  await expect(
-    page.getByText(/流式和非流式调度共用/),
-  ).toBeVisible();
 });
 
 test("renders infrastructure failure as denied admission", async ({ page }) => {
@@ -405,7 +400,7 @@ test("renders infrastructure failure as denied admission", async ({ page }) => {
     page.getByText("基础设施故障，准入已拒绝", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("已拒绝", { exact: true })).toBeVisible();
-  await expect(page.getByText("事实不可用", { exact: true })).toBeVisible();
+  await expect(page.getByText("事实不可用", { exact: true })).toHaveCount(2);
   await expect(page.getByText("820ms", { exact: true })).toHaveCount(0);
   await expect(page.getByText("读取降级", { exact: true })).toHaveCount(0);
 });

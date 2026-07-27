@@ -7,7 +7,6 @@ import {
   type Provider,
 } from "@/lib/api/providers";
 import { apiErrorMessage } from "@/lib/api/client";
-import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { HintLabel } from "@/components/common/field-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +40,7 @@ const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 interface FieldErrors {
   slug?: string;
   name?: string;
+  origin?: string;
 }
 
 // 同一个弹窗承担新建与编辑：传了 provider 即编辑（slug 只读），否则新建。
@@ -66,16 +66,16 @@ export function ProviderFormDialog({
   };
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [origin, setOrigin] = useState("");
   const [status, setStatus] = useState("enabled");
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: (vars: { slug: string; name: string; status: string }) =>
+    mutationFn: (vars: { slug: string; name: string; origin: string; status: string }) =>
       provider
-        ? updateProvider({ id: provider.id, name: vars.name, status: vars.status })
+        ? updateProvider({ id: provider.id, name: vars.name })
         : createProvider(vars),
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
@@ -83,7 +83,6 @@ export function ProviderFormDialog({
       // 新建不影响已有渠道，无需刷。
       if (isEdit) {
         queryClient.invalidateQueries({ queryKey: ["channels"] });
-        queryClient.invalidateQueries({ queryKey: ["provider-origins"] });
       }
       toast.success(saved.runtime_sync_pending
         ? "已保存，运行态同步中"
@@ -104,10 +103,10 @@ export function ProviderFormDialog({
     if (!open) return;
     setSlug(provider?.slug ?? "");
     setName(provider?.name ?? "");
+    setOrigin(provider?.origin ?? "");
     setStatus(provider?.status ?? "enabled");
     setErrors({});
     mutation.reset();
-    setStatusConfirmOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, provider?.id]);
 
@@ -124,6 +123,9 @@ export function ProviderFormDialog({
     if (name.trim() === "") {
       next.name = "名称不能为空";
     }
+    if (!isEdit && !isValidOrigin(origin)) {
+      next.origin = "请输入不含参数或片段的 http(s) API Root";
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -131,11 +133,7 @@ export function ProviderFormDialog({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!validate()) return;
-    if (isEdit && provider && status !== provider.status) {
-      setStatusConfirmOpen(true);
-      return;
-    }
-    mutation.mutate({ slug: slug.trim(), name: name.trim(), status });
+    mutation.mutate({ slug: slug.trim(), name: name.trim(), origin: origin.trim(), status });
   }
 
   return (
@@ -187,7 +185,26 @@ export function ProviderFormDialog({
               <FieldError>{errors.name}</FieldError>
             </Field>
 
-            <Field>
+            {!isEdit ? (
+            <Field data-invalid={!!errors.origin}>
+              <HintLabel
+                htmlFor="origin"
+                hint="Provider 唯一的上游 API Root；后续修改需经过独立地址版本围栏。"
+              >
+                API Root
+              </HintLabel>
+              <Input
+                id="origin"
+                value={origin}
+                onChange={(event) => setOrigin(event.target.value)}
+                placeholder="https://api.example.com/v1"
+                aria-invalid={!!errors.origin}
+              />
+              <FieldError>{errors.origin}</FieldError>
+            </Field>
+            ) : null}
+
+            {!isEdit ? <Field>
               <HintLabel
                 htmlFor="status"
                 hint="停用后其下渠道不参与路由，新请求不再走这些渠道。"
@@ -203,7 +220,7 @@ export function ProviderFormDialog({
                   <SelectItem value="disabled">停用</SelectItem>
                 </SelectContent>
               </Select>
-            </Field>
+            </Field> : null}
           </FieldGroup>
 
           <DialogFooter className="mt-6">
@@ -224,19 +241,21 @@ export function ProviderFormDialog({
         </form>
       </DialogContent>
     </Dialog>
-    {isEdit && provider ? (
-      <StatusChangeConfirmDialog
-        open={statusConfirmOpen}
-        onOpenChange={setStatusConfirmOpen}
-        entityLabel="服务商"
-        entityName={name.trim() || provider.name}
-        enabling={status === "enabled"}
-        pending={mutation.isPending}
-        onConfirm={() =>
-          mutation.mutate({ slug: slug.trim(), name: name.trim(), status })
-        }
-      />
-    ) : null}
     </>
   );
+}
+
+function isValidOrigin(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim());
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
 }

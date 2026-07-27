@@ -9,19 +9,14 @@ export interface ProviderOpsRow {
   id: number;
   slug: string;
   name: string;
+  origin: string;
+  origin_revision: number;
   status: string;
+  status_revision: number;
   created_at: string;
-  origins: ProviderOpsOrigin[];
   channel_total: number;
   models_count: number;
   routes_count: number;
-}
-
-export interface ProviderOpsOrigin {
-  id: number;
-  name: string;
-  base_url: string;
-  status: string;
 }
 
 export interface ProviderOpsDetail {
@@ -60,7 +55,7 @@ export interface ProviderOpsRouteCatalogItem {
 export interface ProviderOpsChannel {
   id: number;
   name: string;
-  base_url: string;
+  origin: string;
   status: string;
   attempt_total: number;
   attempt_succeeded: number;
@@ -100,10 +95,7 @@ export async function getProvidersOpsTable(
     { params: buildListQuery(params) },
   );
   return {
-    items: res.data.data.map((provider) => ({
-      ...provider,
-      origins: provider.origins ?? [],
-    })),
+    items: res.data.data,
     total: res.data.meta.total,
   };
 }

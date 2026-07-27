@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -32,7 +32,7 @@ const DEFAULT_SORT = [{ id: "name", desc: false }] as const;
 
 export function ProvidersPage() {
   const [searchParams] = useSearchParams();
-  const defaultStatusApplied = useRef(false);
+  const [defaultStatusApplied, setDefaultStatusApplied] = useState(false);
   const [page] = useQueryState("page", parseAsInteger.withDefault(1));
   const [perPage] = useQueryState(
     "perPage",
@@ -51,7 +51,7 @@ export function ProvidersPage() {
   // 首屏 URL 无 status 时按「启用」查；用户清空筛选后保持空（看全部）。
   const status =
     statusFilter[0] ??
-    (!defaultStatusApplied.current && searchParams.get("status") === null
+    (!defaultStatusApplied && searchParams.get("status") === null
       ? "enabled"
       : "");
   const search = nameFilter.trim();
@@ -93,11 +93,11 @@ export function ProvidersPage() {
   });
 
   useEffect(() => {
-    if (searchParams.get("status") === null && !defaultStatusApplied.current) {
-      defaultStatusApplied.current = true;
+    if (searchParams.get("status") === null && !defaultStatusApplied) {
+      setDefaultStatusApplied(true);
       void table.getColumn("status")?.setFilterValue(["enabled"]);
     } else {
-      defaultStatusApplied.current = true;
+      setDefaultStatusApplied(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

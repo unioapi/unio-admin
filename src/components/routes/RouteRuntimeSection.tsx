@@ -233,8 +233,8 @@ function runtimeStateForChannel(
     return channel.runtime_control_state;
   }
   if (
-    !channel.origin_base_url_revision_current ||
-    !channel.origin_status_revision_current ||
+    !channel.origin_revision_current ||
+    !channel.provider_status_revision_current ||
     !channel.channel_config_revision_current ||
     !channel.channel_admission_limits_revision_current ||
     !channel.runtime_revision_current
@@ -804,17 +804,16 @@ function RuntimeChannelTable({
       },
       {
         id: "channel",
-        header: "渠道 / 源站",
+        header: "渠道 / Provider",
         enableSorting: false,
         enableHiding: false,
         cell: ({ row }) => {
           const channel = row.original;
           const state = runtimeStateForChannel(channel, infrastructureDenied);
-          const originLabel =
-            channel.provider_origin_name || `#${channel.provider_origin_id}`;
-          const originStatus =
-            channel.provider_origin_status !== "enabled"
-              ? ` · ${channel.provider_origin_status}`
+          const providerLabel = channel.provider_name || `#${channel.provider_id}`;
+          const providerStatus =
+            channel.provider_status !== "enabled"
+              ? ` · ${channel.provider_status}`
               : "";
           return (
             <div>
@@ -822,8 +821,8 @@ function RuntimeChannelTable({
                 {channel.channel_name}
               </div>
               <div className="text-muted-foreground mt-0.5 max-w-56 truncate text-xs">
-                {originLabel}
-                {originStatus}
+                {providerLabel}
+                {providerStatus}
               </div>
               {state !== "active" ? (
                 <div className="mt-1">
@@ -981,9 +980,7 @@ function RuntimeChannelDetailSheet({
               <SheetTitle>{channel.channel_name}</SheetTitle>
               <SheetDescription className="text-xs">
                 {channel.provider_name} · {channel.protocol}/
-                {channel.adapter_key} · 源站{" "}
-                {channel.provider_origin_name ||
-                  `#${channel.provider_origin_id}`}
+                {channel.adapter_key} · Provider #{channel.provider_id}
               </SheetDescription>
             </SheetHeader>
             <SheetMain className="pt-4">
@@ -1060,11 +1057,11 @@ function RuntimeChannelDetail({
       </DetailBlock>
 
       <DetailBlock title="熔断与拦截">
-        <DetailKV label="源站熔断">
+        <DetailKV label="Provider 熔断">
           {runtimeUsable ? (
             <BreakerBadge
-              state={channel.origin_breaker_state}
-              openRemainingMs={channel.origin_open_remaining_ms}
+              state={channel.provider_breaker_state}
+              openRemainingMs={channel.provider_open_remaining_ms}
             />
           ) : (
             "—"
@@ -1178,26 +1175,26 @@ function RuntimeChannelDetail({
           {formatRuntimeRevision(channel.circuit_breaker_revision)} /{" "}
           {formatRuntimeRevision(channel.routing_balance_revision)}
         </DetailKV>
-        <DetailKV label="源站 URL r（库/运行）">
-          {formatRuntimeRevision(channel.origin_base_url_revision)} /{" "}
-          {formatRuntimeRevision(channel.runtime_origin_base_url_revision)}
+        <DetailKV label="Provider origin r（库/运行）">
+          {formatRuntimeRevision(channel.origin_revision)} /{" "}
+          {formatRuntimeRevision(channel.runtime_origin_revision)}
         </DetailKV>
-        <DetailKV label="源站 状态 r（库/运行）">
-          {formatRuntimeRevision(channel.origin_status_revision)} /{" "}
-          {formatRuntimeRevision(channel.runtime_origin_status_revision)}
+        <DetailKV label="Provider 状态 r（库/运行）">
+          {formatRuntimeRevision(channel.provider_status_revision)} /{" "}
+          {formatRuntimeRevision(channel.runtime_provider_status_revision)}
         </DetailKV>
-        {channel.pending_origin_base_url_revision != null ||
-        channel.pending_origin_status_revision != null ? (
+        {channel.pending_origin_revision != null ||
+        channel.pending_provider_status_revision != null ? (
           <div className="text-amber-700 text-xs tabular-nums dark:text-amber-400">
-            待提交 URL{" "}
-            {formatRuntimeRevision(channel.pending_origin_base_url_revision)}
+            待提交 origin{" "}
+            {formatRuntimeRevision(channel.pending_origin_revision)}
             {" · "}状态{" "}
-            {formatRuntimeRevision(channel.pending_origin_status_revision)}
+            {formatRuntimeRevision(channel.pending_provider_status_revision)}
           </div>
         ) : null}
-        {!channel.origin_base_url_revision_current ||
-        !channel.origin_status_revision_current ? (
-          <div className="text-destructive text-xs">源站版本不一致</div>
+        {!channel.origin_revision_current ||
+        !channel.provider_status_revision_current ? (
+          <div className="text-destructive text-xs">Provider 版本不一致</div>
         ) : null}
       </DetailBlock>
     </div>
