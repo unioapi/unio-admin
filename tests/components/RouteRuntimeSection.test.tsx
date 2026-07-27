@@ -398,6 +398,32 @@ describe("RouteRuntimeSection", () => {
     expect(within(row).queryByText("权重 0.7200")).not.toBeInTheDocument();
   });
 
+  it("treats a missing Channel runtime revision as no sample", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    runtime.channels[0].runtime_channel_config_revision = null;
+    runtime.channels[0].channel_config_revision_current = false;
+    runtime.channels[0].channel_breaker_state = null;
+    runtime.channels[0].error_rate = null;
+    runtime.channels[0].error_samples = 0;
+    runtime.channels[0].ttft_ewma_ms = null;
+    runtime.channels[0].ttft_samples = 0;
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    const channelName = await screen.findByText("primary", { exact: true });
+    const row = channelName.closest("tr");
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(within(row).queryByText("版本不一致")).not.toBeInTheDocument();
+    expect(within(row).getByText("权重 0.7200")).toBeVisible();
+  });
+
   it("labels invalid pricing exclusions in Chinese", async () => {
     const runtime = runtimeFixture();
     runtime.channels[1].excluded_reason = "pricing_invalid";

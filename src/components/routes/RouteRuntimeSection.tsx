@@ -235,7 +235,8 @@ function runtimeStateForChannel(
   if (
     !channel.origin_revision_current ||
     !channel.provider_status_revision_current ||
-    !channel.channel_config_revision_current ||
+    (channel.runtime_channel_config_revision != null &&
+      !channel.channel_config_revision_current) ||
     !channel.channel_admission_limits_revision_current ||
     !channel.runtime_revision_current
   ) {
