@@ -10,6 +10,12 @@ import {
 import { listAllProviders } from "@/lib/api/providers";
 import { apiErrorMessage, apiErrorStatus } from "@/lib/api/client";
 import { HintLabel } from "@/components/common/field-hint";
+import {
+  DurationInput,
+  composeDurationMs,
+  decomposeDurationMs,
+  durationError,
+} from "@/components/common/duration-input";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import {
   RateLimitInput,
@@ -75,11 +81,14 @@ interface FieldErrors {
   credential?: string;
   priority?: string;
   timeout_ms?: string;
+  sticky_ttl_ms?: string;
   rpm_limit?: string;
   tpm_limit?: string;
   rpd_limit?: string;
   concurrency_limit?: string;
 }
+
+const PRIORITY_OPTIONS = Array.from({ length: 11 }, (_, index) => index * 10);
 
 // 限流输入回填：null（继承渠道默认限流）→ 空串；数字（含 0=不限）→ 字符串。
 function rateLimitToInput(v: number | null | undefined): string {
@@ -132,6 +141,16 @@ function ChannelForm({
   const [priority, setPriority] = useState(String(channel?.priority ?? 0));
   const [timeoutMs, setTimeoutMs] = useState(
     channel?.timeout_ms != null ? String(channel.timeout_ms) : "",
+  );
+  const [stickyMode, setStickyMode] = useState<"inherit" | "on" | "off">(
+    channel?.sticky_enabled == null
+      ? "inherit"
+      : channel.sticky_enabled
+        ? "on"
+        : "off",
+  );
+  const [stickyTTL, setStickyTTL] = useState(() =>
+    decomposeDurationMs(channel?.sticky_ttl_ms ?? 30 * 60 * 1_000),
   );
   const [rpmLimit, setRpmLimit] = useState(rateLimitToInput(channel?.rpm_limit));
   const [concurrencyLimit, setConcurrencyLimit] = useState(
@@ -200,6 +219,9 @@ function ChannelForm({
     mutationFn: () => {
       const timeout = timeoutMs.trim() === "" ? null : Number(timeoutMs);
       const prio = Number(priority);
+      const stickyEnabled =
+        stickyMode === "inherit" ? null : stickyMode === "on";
+      const stickyTTLms = stickyMode === "on" ? composeDurationMs(stickyTTL) : null;
       const rateLimits = {
         rpm: parseRateLimit(rpmLimit),
         tpm: composeRateLimit(tpmLimit),
@@ -214,6 +236,8 @@ function ChannelForm({
           status,
           priority: prio,
           timeout_ms: timeout,
+          sticky_enabled: stickyEnabled,
+          sticky_ttl_ms: stickyTTLms,
           rateLimits,
           billsOnDisconnect,
         });
@@ -227,6 +251,8 @@ function ChannelForm({
         status,
         priority: prio,
         timeout_ms: timeout,
+        sticky_enabled: stickyEnabled,
+        sticky_ttl_ms: stickyTTLms,
         rateLimits,
         billsOnDisconnect,
       });
@@ -269,8 +295,11 @@ function ChannelForm({
       next.credential = "凭据不能为空";
     }
     const prio = Number(priority);
-    if (!Number.isInteger(prio) || prio < 0) {
-      next.priority = "优先级需为 ≥ 0 的整数";
+    if (!PRIORITY_OPTIONS.includes(prio)) {
+      next.priority = "优先级只能选择 0、10、20 ... 100";
+    }
+    if (stickyMode === "on") {
+      next.sticky_ttl_ms = durationError(stickyTTL, false);
     }
     if (timeoutMs.trim() !== "") {
       const t = Number(timeoutMs);
@@ -526,18 +555,28 @@ function ChannelForm({
               <Field data-invalid={!!errors.priority}>
                 <HintLabel
                   htmlFor="priority"
-                  hint="候选基础顺序，数值越小越靠前（0 最高）；balanced 会按容量、错误率、流式首字和成本权重动态调度，不保证小数值渠道每次先命中。"
+                  hint="Priority 参与客观评分，0 最高、100 最低；只能选择 10 的倍数。"
                 >
                   优先级
                 </HintLabel>
-                <Input
-                  id="priority"
-                  type="number"
-                  min={0}
+                <Select
                   value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  aria-invalid={!!errors.priority}
-                />
+                  onValueChange={setPriority}
+                >
+                  <SelectTrigger id="priority" className="w-full" aria-invalid={!!errors.priority}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {PRIORITY_OPTIONS.map((value) => (
+                        <SelectItem key={value} value={String(value)}>
+                          {value}
+                          {value === 0 ? "（最高）" : value === 100 ? "（最低）" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <FieldError>{errors.priority}</FieldError>
               </Field>
 
@@ -560,6 +599,46 @@ function ChannelForm({
                 <FieldError>{errors.timeout_ms}</FieldError>
               </Field>
             </div>
+
+            <Field data-invalid={!!errors.sticky_ttl_ms}>
+              <HintLabel
+                htmlFor="sticky_mode"
+                hint="同一会话优先复用上次成功渠道。系统默认当前为开启、TTL 30 分钟；显式开启时使用本渠道 TTL。"
+              >
+                会话粘性
+              </HintLabel>
+              <Select
+                value={stickyMode}
+                onValueChange={(value) =>
+                  setStickyMode(value as "inherit" | "on" | "off")
+                }
+              >
+                <SelectTrigger id="sticky_mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="inherit">系统默认</SelectItem>
+                    <SelectItem value="on">开启</SelectItem>
+                    <SelectItem value="off">关闭</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {stickyMode === "on" ? (
+                <div className="flex flex-col gap-1.5">
+                  <HintLabel htmlFor="sticky_ttl" hint="从绑定成功开始绝对计时，命中不会续期。">
+                    渠道 Sticky TTL
+                  </HintLabel>
+                  <DurationInput
+                    id="sticky_ttl"
+                    value={stickyTTL}
+                    onChange={setStickyTTL}
+                    ariaInvalid={!!errors.sticky_ttl_ms}
+                  />
+                </div>
+              ) : null}
+              <FieldError>{errors.sticky_ttl_ms}</FieldError>
+            </Field>
 
             <Field data-invalid={rateLimitInvalid}>
               <HintLabel hint="限制本网关调用该上游渠道的速率（网关→上游），命中自动跳过该渠道回退到下一个。留空=继承渠道默认限流，0=不限；TPM、RPD 可带单位 K/M/B（默认 K）。">

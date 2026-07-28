@@ -22,20 +22,40 @@ function rateLimitDetail(
   return formatInt(v);
 }
 
+function concurrencyDetail(
+  v: number | null | undefined,
+  defaultScope?: string,
+): string {
+  if (v == null) {
+    return defaultScope ? `继承${defaultScope}默认` : "继承默认";
+  }
+  if (v === 0) return "不限";
+  return formatInt(v);
+}
+
 export function RateLimitSummaryCell({
   rpm,
   tpm,
   rpd,
+  concurrency,
   scopeLabel = "限流",
   defaultScope,
 }: {
   rpm: number | null | undefined;
   tpm: number | null | undefined;
   rpd: number | null | undefined;
+  /** 渠道在途并发；线路级限流无此维时可不传。 */
+  concurrency?: number | null;
   scopeLabel?: string;
   defaultScope?: string;
 }) {
-  if (rpm == null && tpm == null && rpd == null) {
+  const showConcurrency = concurrency !== undefined;
+  if (
+    rpm == null &&
+    tpm == null &&
+    rpd == null &&
+    (!showConcurrency || concurrency == null)
+  ) {
     return (
       <span className="text-muted-foreground text-xs">
         {defaultScope ? `${defaultScope}默认` : "默认"}
@@ -64,9 +84,18 @@ export function RateLimitSummaryCell({
             <span className="text-muted-foreground">每日请求 RPD</span>
             <span className="tabular-nums">{rateLimitDetail(rpd, defaultScope)}</span>
           </li>
+          {showConcurrency ? (
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">并发</span>
+              <span className="tabular-nums">
+                {concurrencyDetail(concurrency, defaultScope)}
+              </span>
+            </li>
+          ) : null}
         </ul>
         <p className="text-muted-foreground mt-1.5 text-[11px]">
-          留空{defaultScope ? `继承${defaultScope}默认限流` : "继承默认限流"}，0 表示不限。
+          留空{defaultScope ? `继承${defaultScope}默认限流` : "继承默认限流"}
+          {showConcurrency ? "／默认并发" : ""}，0 表示不限。
         </p>
       </TipHoverCardContent>
     </HoverCard>

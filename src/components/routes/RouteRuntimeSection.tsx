@@ -49,6 +49,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -205,6 +206,17 @@ function formatCapacity(used: number, limit: number): string {
 
 function formatRuntimeRevision(revision: number | null | undefined): string {
   return revision != null && revision > 0 ? `r${revision}` : "—";
+}
+
+function isObjectiveScore(value: {
+  algorithm_version?: string;
+  final_score?: number;
+}): boolean {
+  return value.algorithm_version === "objective_v1" || value.final_score != null;
+}
+
+function formatObjectiveScore(value: number | null | undefined): string {
+  return value != null && Number.isFinite(value) ? value.toFixed(2) : "—";
 }
 
 function permissionStateLabel(state: string): string {
@@ -404,11 +416,13 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {models.map((model) => (
-                  <SelectItem key={model.model_id} value={model.model_id}>
-                    {model.display_name || model.model_id}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {models.map((model) => (
+                    <SelectItem key={model.model_id} value={model.model_id}>
+                      {model.display_name || model.model_id}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </label>
@@ -428,9 +442,11 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">全部协议</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
+                <SelectGroup>
+                  <SelectItem value="all">全部协议</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </label>
@@ -871,7 +887,7 @@ function RuntimeChannelTable({
         enableHiding: false,
         accessorFn: (row) => row.final_weight,
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="权重 / 分流" />
+          <DataTableColumnHeader column={column} label="得分 / 分流" />
         ),
         cell: ({ row }) => {
           const channel = row.original;
@@ -880,7 +896,11 @@ function RuntimeChannelTable({
           }
           return (
             <div className="font-mono text-xs tabular-nums">
-              <div>权重 {channel.final_weight.toFixed(4)}</div>
+              <div>
+                {isObjectiveScore(channel)
+                  ? `得分 ${formatObjectiveScore(channel.final_score)}`
+                  : `权重 ${channel.final_weight.toFixed(4)}`}
+              </div>
               <div className="text-muted-foreground mt-1">
                 分流 {formatPercent(channel.selected_share_1m)}
                 {channel.fallback_1m > 0 ? (
@@ -1110,28 +1130,57 @@ function RuntimeChannelDetail({
             : "—"}
         </DetailKV>
         <DetailKV label="容量分">
-          {runtimeUsable ? formatPercent(channel.capacity_score) : "—"}
+          {runtimeUsable
+            ? isObjectiveScore(channel)
+              ? formatObjectiveScore(channel.capacity_score)
+              : formatPercent(channel.capacity_score)
+            : "—"}
         </DetailKV>
       </DetailBlock>
 
-      <DetailBlock title="成本与权重">
-        <DetailKV label="成本占售价">
-          {runtimeUsable && channel.cost_ratio != null
-            ? formatPercent(channel.cost_ratio)
-            : "—"}
-        </DetailKV>
-        <DetailKV label="成本系数">
-          {runtimeUsable ? (channel.cost_factor ?? 1).toFixed(4) : "—"}
-        </DetailKV>
-        <DetailKV label="成本权重">
-          {runtimeUsable ? (channel.cost_weight ?? 0).toFixed(4) : "—"}
-        </DetailKV>
-        <DetailKV label="最终权重">
-          {runtimeUsable ? channel.final_weight.toFixed(4) : "—"}
-        </DetailKV>
+      <DetailBlock title={isObjectiveScore(channel) ? "客观评分" : "成本与权重"}>
+        {isObjectiveScore(channel) ? (
+          <>
+            <DetailKV label="经济 / 健康">
+              {runtimeUsable
+                ? `${formatObjectiveScore(channel.economic_score)} / ${formatObjectiveScore(channel.health_score)}`
+                : "—"}
+            </DetailKV>
+            <DetailKV label="容量 / Priority">
+              {runtimeUsable
+                ? `${formatObjectiveScore(channel.capacity_score)} / ${formatObjectiveScore(channel.priority_score)}`
+                : "—"}
+            </DetailKV>
+            <DetailKV label="权重（经/健/容/P）">
+              {runtimeUsable
+                ? `${channel.economic_weight_pct ?? 0}% / ${channel.health_weight_pct ?? 0}% / ${channel.capacity_weight_pct ?? 0}% / ${channel.priority_weight_pct ?? 0}%`
+                : "—"}
+            </DetailKV>
+            <DetailKV label="最终得分">
+              {runtimeUsable ? formatObjectiveScore(channel.final_score) : "—"}
+            </DetailKV>
+          </>
+        ) : (
+          <>
+            <DetailKV label="成本占售价">
+              {runtimeUsable && channel.cost_ratio != null
+                ? formatPercent(channel.cost_ratio)
+                : "—"}
+            </DetailKV>
+            <DetailKV label="成本系数">
+              {runtimeUsable ? (channel.cost_factor ?? 1).toFixed(4) : "—"}
+            </DetailKV>
+            <DetailKV label="成本权重">
+              {runtimeUsable ? (channel.cost_weight ?? 0).toFixed(4) : "—"}
+            </DetailKV>
+            <DetailKV label="最终权重">
+              {runtimeUsable ? channel.final_weight.toFixed(4) : "—"}
+            </DetailKV>
+          </>
+        )}
         {mode === "fixed" ? (
           <div className="text-muted-foreground text-[11px]">
-            固定策略不参与成本排序
+            固定策略展示评分事实，但不按分数重排
           </div>
         ) : null}
       </DetailBlock>
@@ -1530,6 +1579,7 @@ function DecisionScoreTable({
   scores: RoutingCandidateScore[];
   channelNames: Map<number, string>;
 }) {
+  const objective = scores.some(isObjectiveScore);
   return (
     <DecisionSection title={`完整线路池评分（${scores.length}）`}>
       <div className="overflow-hidden rounded-lg border">
@@ -1539,11 +1589,23 @@ function DecisionScoreTable({
               <TableHead>渠道</TableHead>
               <TableHead>资格</TableHead>
               <TableHead>并发 / TPM 剩余</TableHead>
-              <TableHead>容量</TableHead>
-              <TableHead>成本占比</TableHead>
-              <TableHead>成本权重</TableHead>
-              <TableHead>成本系数</TableHead>
-              <TableHead>最终权重</TableHead>
+              {objective ? (
+                <>
+                  <TableHead>经济</TableHead>
+                  <TableHead>健康</TableHead>
+                  <TableHead>容量</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>总分</TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead>容量</TableHead>
+                  <TableHead>成本占比</TableHead>
+                  <TableHead>成本权重</TableHead>
+                  <TableHead>成本系数</TableHead>
+                  <TableHead>最终权重</TableHead>
+                </>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1570,23 +1632,25 @@ function DecisionScoreTable({
                   {formatPercent(score.concurrency_remaining)} /{" "}
                   {formatPercent(score.tpm_remaining)}
                 </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {formatPercent(score.capacity_score)}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {score.cost_ratio == null
-                    ? "—"
-                    : formatPercent(score.cost_ratio)}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {(score.cost_weight ?? 0).toFixed(4)}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {(score.cost_factor ?? 1).toFixed(4)}
-                </TableCell>
-                <TableCell className="font-mono text-xs tabular-nums">
-                  {score.final_weight.toFixed(4)}
-                </TableCell>
+                {objective ? (
+                  <>
+                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.economic_score)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.health_score)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.capacity_score)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.priority_score)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.final_score)}</TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className="font-mono text-xs tabular-nums">{formatPercent(score.capacity_score)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {score.cost_ratio == null ? "—" : formatPercent(score.cost_ratio)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{(score.cost_weight ?? 0).toFixed(4)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{(score.cost_factor ?? 1).toFixed(4)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">{score.final_weight.toFixed(4)}</TableCell>
+                  </>
+                )}
               </TableRow>
             ))}
           </TableBody>

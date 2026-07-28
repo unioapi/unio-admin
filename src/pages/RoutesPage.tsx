@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, RouteIcon } from "lucide-react";
 import { getRoutesOpsTable } from "@/lib/api/routesOps";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import {
@@ -10,6 +10,13 @@ import {
 } from "@/components/openstatus-table/routes-os-columns";
 import { RouteFormDialog } from "@/components/routes/RouteFormDialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useServerTable } from "@/hooks/useServerTable";
 
@@ -47,7 +54,7 @@ export function RoutesPage() {
           getRowId={(r) => String(r.id)}
           loading={table.query.isPending}
           refetching={table.query.isFetching && !table.query.isPending}
-          emptyMessage="暂无线路"
+          emptyContent={<RoutesEmpty />}
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索线路名"
@@ -79,5 +86,19 @@ export function RoutesPage() {
         }}
       />
     </div>
+  );
+}
+
+function RoutesEmpty() {
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <RouteIcon />
+        </EmptyMedia>
+        <EmptyTitle>暂无线路</EmptyTitle>
+        <EmptyDescription>没有匹配当前筛选条件的线路。</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }

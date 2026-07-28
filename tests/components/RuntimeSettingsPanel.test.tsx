@@ -70,10 +70,12 @@ describe("RuntimeSettingsPanel", () => {
         description: "均衡路由参数",
         hot_reload: true,
         default: {
+          economic_weight_pct: 45,
+          health_weight_pct: 25,
+          capacity_weight_pct: 20,
+          priority_weight_pct: 10,
           ttft_target_ms: 800,
           ttft_weight: 0.25,
-          cost_weight: 0.5,
-          minimum_routing_factor: 0.05,
           ttft_ewma_alpha: 0.2,
         },
         value: {
@@ -85,6 +87,30 @@ describe("RuntimeSettingsPanel", () => {
         source: "redis" as const,
         revision: 8,
         runtime_active_revision: 8,
+        runtime_pending_revision: 0,
+        runtime_sync_state: "active" as const,
+      },
+      {
+        key: "gateway.routing_sticky",
+        category: "gateway",
+        label: "会话粘性",
+        description: "渠道会话粘性默认",
+        hot_reload: true,
+        default: {
+          enabled_default: true,
+          ttl_ms: 1_800_000,
+          tpm_wait_ms: 500,
+          tpm_wait_jitter_ms: 100,
+        },
+        value: {
+          enabled_default: true,
+          ttl_ms: 1_800_000,
+          tpm_wait_ms: 500,
+          tpm_wait_jitter_ms: 100,
+        },
+        source: "db" as const,
+        revision: 1,
+        runtime_active_revision: 0,
         runtime_pending_revision: 0,
         runtime_sync_state: "active" as const,
       },
@@ -151,7 +177,7 @@ describe("RuntimeSettingsPanel", () => {
     );
   });
 
-  it("treats a legacy routing balance payload as zero cost weight and saves it explicitly", async () => {
+  it("normalizes a legacy balance payload and only saves four weights totaling 100%", async () => {
     const user = userEvent.setup();
     render(<RuntimeSettingsPanel />, { wrapper });
 
@@ -160,25 +186,47 @@ describe("RuntimeSettingsPanel", () => {
     expect(balanceCard).not.toBeNull();
     if (!balanceCard) return;
 
-    const costWeight = within(balanceCard).getByDisplayValue("0");
-    expect(costWeight).toBeVisible();
-    await user.clear(costWeight);
-    await user.type(costWeight, "0.4");
-    await user.click(
-      within(balanceCard).getByRole("button", { name: "保存" }),
-    );
+    const economic = within(balanceCard).getByRole("textbox", { name: "经济权重（%）" });
+    const health = within(balanceCard).getByRole("textbox", { name: "健康权重（%）" });
+    expect(economic).toHaveValue("45");
+    expect(health).toHaveValue("25");
+    expect(within(balanceCard).getByText("评分权重合计：100%")) .toBeVisible();
+
+    await user.clear(economic);
+    await user.type(economic, "40");
+    expect(within(balanceCard).getByText("评分权重合计：95%")) .toBeVisible();
+    expect(within(balanceCard).getByRole("button", { name: "保存" })).toBeDisabled();
+
+    await user.clear(health);
+    await user.type(health, "30");
+    expect(within(balanceCard).getByText("评分权重合计：100%")) .toBeVisible();
+    await user.click(within(balanceCard).getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
       expect(mocks.updateSetting).toHaveBeenCalledWith(
         "gateway.routing_balance",
         {
+          economic_weight_pct: 40,
+          health_weight_pct: 30,
+          capacity_weight_pct: 20,
+          priority_weight_pct: 10,
           ttft_target_ms: 800,
           ttft_weight: 0.25,
-          cost_weight: 0.4,
-          minimum_routing_factor: 0.05,
           ttft_ewma_alpha: 0.2,
         },
       ),
     );
+  });
+
+  it("shows the global sticky default as enabled with a 30 minute TTL", async () => {
+    render(<RuntimeSettingsPanel />, { wrapper });
+    const title = await screen.findByText("会话粘性");
+    const card = title.closest('[data-slot="card"]');
+    expect(card).not.toBeNull();
+    if (!card) return;
+
+    expect(within(card).getByRole("switch", { name: "渠道默认开启会话粘性" })).toBeChecked();
+    expect(within(card).getByDisplayValue("30")).toBeVisible();
+    expect(within(card).getByText("分钟")).toBeVisible();
   });
 });

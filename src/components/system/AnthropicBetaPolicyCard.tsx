@@ -167,14 +167,19 @@ export function AnthropicBetaPolicyCard() {
           <Button
             variant="ghost"
             onClick={() => {
-              if (query.data) {
-                setMode(query.data.mode);
-                setListText(toText(query.data.list));
+              const defaults = betaEffective?.default as
+                | AnthropicBetaPolicy
+                | undefined;
+              if (!defaults) {
+                toast.error("尚未拿到代码默认值，请稍后重试");
+                return;
               }
+              setMode(defaults.mode);
+              setListText(toText(defaults.list ?? []));
             }}
             disabled={mutation.isPending}
           >
-            重置
+            恢复默认
           </Button>
         </div>
       </CardContent>

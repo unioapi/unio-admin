@@ -302,16 +302,19 @@ function ChannelRateLimitCell({
   rpm,
   tpm,
   rpd,
+  concurrency,
 }: {
   rpm: number | null;
   tpm: number | null;
   rpd: number | null;
+  concurrency: number | null;
 }) {
   return (
     <RateLimitSummaryCell
       rpm={rpm}
       tpm={tpm}
       rpd={rpd}
+      concurrency={concurrency}
       scopeLabel="渠道级限流"
       defaultScope="渠道"
     />
@@ -596,7 +599,8 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
           if (
             row.rpm_limit == null &&
             row.tpm_limit == null &&
-            row.rpd_limit == null
+            row.rpd_limit == null &&
+            row.concurrency_limit == null
           ) {
             return "默认";
           }
@@ -609,6 +613,7 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
           rpm={row.original.rpm_limit}
           tpm={row.original.tpm_limit}
           rpd={row.original.rpd_limit}
+          concurrency={row.original.concurrency_limit}
         />
       ),
     },

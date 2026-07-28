@@ -86,6 +86,7 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
           rpm={row.original.rpm_limit}
           tpm={row.original.tpm_limit}
           rpd={row.original.rpd_limit}
+          concurrency={row.original.concurrency_limit}
           scopeLabel="线路级限流"
           defaultScope="线路"
         />

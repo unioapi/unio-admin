@@ -240,10 +240,34 @@ function legacyDecisionFixture(): RoutingDecision {
       { channel_id: 10, upstream_endpoint: "chat_completions" },
     ],
     final_channel_id: 10,
-    algorithm_version: "p4-balanced-v1",
     sampled: true,
     created_at: "2026-07-23T12:00:00Z",
     updated_at: "2026-07-23T12:00:00Z",
+  };
+}
+
+function objectiveDecisionFixture(): RoutingDecision {
+  const decision = legacyDecisionFixture();
+  const score = decision.candidate_scores[0];
+  return {
+    ...decision,
+    request_id: "req-objective-trace",
+    algorithm_version: "objective_v1",
+    candidate_scores: [
+      {
+        ...score,
+        algorithm_version: "objective_v1",
+        economic_score: 92,
+        health_score: 80,
+        capacity_score: 70,
+        priority_score: 100,
+        final_score: 85.4,
+        economic_weight_pct: 45,
+        health_weight_pct: 25,
+        capacity_weight_pct: 20,
+        priority_weight_pct: 10,
+      },
+    ],
   };
 }
 
@@ -440,7 +464,7 @@ describe("RouteRuntimeSection", () => {
     expect(screen.getByText("毛利 价格无效")).toBeVisible();
   });
 
-  it("makes the cost factor neutral and explicit for fixed routes", async () => {
+  it("explains that fixed routes expose scores without reordering", async () => {
     const runtime = runtimeFixture();
     runtime.mode = "fixed";
     runtime.observed_at = new Date().toISOString();
@@ -454,7 +478,9 @@ describe("RouteRuntimeSection", () => {
     );
 
     const detail = await openChannelDetail("primary");
-    expect(within(detail).getByText("固定策略不参与成本排序")).toBeVisible();
+    expect(
+      within(detail).getByText("固定策略展示评分事实，但不按分数重排"),
+    ).toBeVisible();
     // 成本系数中性 1.0000、成本权重 0.5000 在明细抽屉里分列展示。
     expect(within(detail).getByText("1.0000")).toBeVisible();
     expect(within(detail).getByText("0.5000")).toBeVisible();
@@ -518,5 +544,72 @@ describe("RouteRuntimeSection", () => {
     expect(within(scoreRow).getByText("—")).toBeVisible();
     expect(within(scoreRow).getByText("0.0000")).toBeVisible();
     expect(within(scoreRow).getByText("1.0000")).toBeVisible();
+  });
+
+  it("shows objective scores and configured weights in runtime facts", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    Object.assign(runtime.channels[0], {
+      algorithm_version: "objective_v1",
+      economic_score: 92,
+      health_score: 80,
+      capacity_score: 70,
+      priority_score: 100,
+      final_score: 85.4,
+      economic_weight_pct: 45,
+      health_weight_pct: 25,
+      capacity_weight_pct: 20,
+      priority_weight_pct: 10,
+    });
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    expect(await screen.findByText("得分 85.40")).toBeVisible();
+    const detail = await openChannelDetail("primary");
+    expect(within(detail).getByText("92.00 / 80.00")).toBeVisible();
+    expect(within(detail).getByText("70.00 / 100.00")).toBeVisible();
+    expect(within(detail).getByText("45% / 25% / 20% / 10%")).toBeVisible();
+    expect(within(detail).getByText("85.40")).toBeVisible();
+  });
+
+  it("shows objective score dimensions in a routing decision", async () => {
+    mocks.getDecisions.mockResolvedValue({
+      items: [objectiveDecisionFixture()],
+      total: 1,
+    });
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    await screen.findByText("req-objective-trace");
+    await userEvent.click(
+      screen.getByRole("button", { name: "查看路由决策" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    const scoreTable = within(dialog)
+      .getByRole("columnheader", { name: "总分" })
+      .closest("table");
+    expect(scoreTable).not.toBeNull();
+    if (!scoreTable) return;
+    expect(within(scoreTable).getByRole("columnheader", { name: "经济" })).toBeVisible();
+    expect(within(scoreTable).getByRole("columnheader", { name: "健康" })).toBeVisible();
+    expect(within(scoreTable).getByRole("columnheader", { name: "容量" })).toBeVisible();
+    expect(within(scoreTable).getByRole("columnheader", { name: "Priority" })).toBeVisible();
+    const scoreRow = within(scoreTable).getByText("primary (#10)").closest("tr");
+    expect(scoreRow).not.toBeNull();
+    if (!scoreRow) return;
+    expect(within(scoreRow).getByText("92.00")).toBeVisible();
+    expect(within(scoreRow).getByText("80.00")).toBeVisible();
+    expect(within(scoreRow).getByText("70.00")).toBeVisible();
+    expect(within(scoreRow).getByText("100.00")).toBeVisible();
+    expect(within(scoreRow).getByText("85.40")).toBeVisible();
   });
 });

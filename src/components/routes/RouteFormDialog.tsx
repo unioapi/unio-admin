@@ -42,6 +42,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -52,20 +53,20 @@ function rateLimitToInput(v: number | null | undefined): string {
   return v == null ? "" : String(v);
 }
 
-// parseRpmLimit：空串→null（继承默认）；否则取整数（0=不限，>0=上限）。
-function parseRpmLimit(raw: string): number | null {
+// parseIntegerLimit：空串→null（继承默认）；否则取整数（0=不限，>0=上限）。
+function parseIntegerLimit(raw: string): number | null {
   const t = raw.trim();
   if (t === "") return null;
   return Number(t);
 }
 
-// rpmLimitError：空放行；否则须为 ≥0 整数。
-function rpmLimitError(raw: string): string | undefined {
+// integerLimitError：空放行；否则须为 >=0 整数。
+function integerLimitError(raw: string, inheritLabel: string): string | undefined {
   const t = raw.trim();
   if (t === "") return undefined;
   const n = Number(t);
   if (!Number.isInteger(n) || n < 0) {
-    return "需为 ≥ 0 的整数（0=不限，留空=继承线路默认限流）";
+    return `需为 >= 0 的整数（0=不限，留空=${inheritLabel}）`;
   }
   return undefined;
 }
@@ -113,9 +114,8 @@ function RouteForm({
   const [rpdLimit, setRpdLimit] = useState<RateLimitFieldValue>(
     decomposeRateLimit(route?.rpd_limit),
   );
-  // 会话粘性：三态（继承系统设置默认 / 开 / 关），后端 null=继承。
-  const [stickyEnabled, setStickyEnabled] = useState<"inherit" | "on" | "off">(
-    route?.sticky_enabled == null ? "inherit" : route.sticky_enabled ? "on" : "off",
+  const [concurrencyLimit, setConcurrencyLimit] = useState(
+    rateLimitToInput(route?.concurrency_limit),
   );
   const [description, setDescription] = useState(route?.description ?? "");
   const [channelIds, setChannelIds] = useState<number[]>(
@@ -136,10 +136,10 @@ function RouteForm({
         mode,
         status,
         price_ratio: formatRouteRatioInput(priceRatio),
-        rpm_limit: parseRpmLimit(rpmLimit),
+        rpm_limit: parseIntegerLimit(rpmLimit),
         tpm_limit: composeRateLimit(tpmLimit),
         rpd_limit: composeRateLimit(rpdLimit),
-        sticky_enabled: stickyEnabled === "inherit" ? null : stickyEnabled === "on",
+        concurrency_limit: parseIntegerLimit(concurrencyLimit),
         description: description.trim() || null,
         channel_ids: channelIds,
       };
@@ -159,12 +159,14 @@ function RouteForm({
     if (ratio !== "" && (!/^\d+(\.\d+)?$/.test(ratio) || Number(ratio) < 0)) {
       next.price_ratio = "需为 ≥ 0 的倍率（如 1、1.5、0.8）";
     }
-    const rpmErr = rpmLimitError(rpmLimit);
+    const rpmErr = integerLimitError(rpmLimit, "继承线路默认限流");
     if (rpmErr) next.rpm_limit = rpmErr;
     const tpmErr = rateLimitWithUnitError(tpmLimit, "继承线路默认限流");
     if (tpmErr) next.tpm_limit = tpmErr;
     const rpdErr = rateLimitWithUnitError(rpdLimit, "继承线路默认限流");
     if (rpdErr) next.rpd_limit = rpdErr;
+    const concurrencyErr = integerLimitError(concurrencyLimit, "继承全局线路用户并发");
+    if (concurrencyErr) next.concurrency_limit = concurrencyErr;
     if (mode === "fixed" && channelIds.length !== 1) {
       next.channels = "固定线路必须恰好选择一条渠道";
     } else if (channelIds.length === 0) {
@@ -208,7 +210,7 @@ function RouteForm({
         <DialogHeader>
           <DialogTitle>{route ? "编辑线路" : "新建线路"}</DialogTitle>
           <DialogDescription>
-            所有线路使用手动绑定的渠道池；均衡策略按容量、错误率、流式首字和渠道成本分流，固定策略锁定单条渠道。
+            所有线路使用手动绑定的渠道池；均衡策略按经济、健康、容量和 Priority 客观评分排序，固定策略锁定单条渠道。
           </DialogDescription>
         </DialogHeader>
       </div>
@@ -241,8 +243,10 @@ function RouteForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="enabled">启用</SelectItem>
-                <SelectItem value="disabled">停用</SelectItem>
+                <SelectGroup>
+                  <SelectItem value="enabled">启用</SelectItem>
+                  <SelectItem value="disabled">停用</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
@@ -251,7 +255,7 @@ function RouteForm({
         <Field>
             <HintLabel
               htmlFor="rt_mode"
-              hint="均衡策略在线路渠道池内按容量、错误率、流式首字和渠道成本动态分流；固定策略锁定单条渠道且不跨渠道回退。"
+              hint="均衡策略在线路渠道池内按经济、健康、容量和 Priority 客观评分排序；固定策略锁定单条渠道且不跨渠道回退。"
             >
               选路策略
             </HintLabel>
@@ -269,8 +273,10 @@ function RouteForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="balanced">均衡（容量、错误率、首字与成本）</SelectItem>
-                <SelectItem value="fixed">固定（锁定单渠道）</SelectItem>
+                <SelectGroup>
+                  <SelectItem value="balanced">客观评分（经济、健康、容量、Priority）</SelectItem>
+                  <SelectItem value="fixed">固定（锁定单渠道）</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
         </Field>
@@ -321,11 +327,11 @@ function RouteForm({
         </Field>
 
         <Field>
-          <HintLabel hint="线路级限流：绑定该线路的每个用户合计生效（多建 Key 不放大配额），不同用户各自独立。留空=继承线路默认限流，0=不限；TPM、RPD 可带单位 K/M/B。">
+          <HintLabel hint="线路级限流：绑定该线路的每个用户合计生效（多建 Key 不放大配额），不同用户各自独立。留空=继承对应全局默认，0=不限；并发覆盖完整流式响应周期。">
             线路级限流
           </HintLabel>
           <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field data-invalid={!!errors.rpm_limit}>
                 <HintLabel htmlFor="rt_rpm" hint="每分钟请求数。">
                   RPM
@@ -367,30 +373,23 @@ function RouteForm({
                 />
                 <FieldError>{errors.rpd_limit}</FieldError>
               </Field>
+              <Field data-invalid={!!errors.concurrency_limit}>
+                <HintLabel htmlFor="rt_concurrency" hint="同时进行中的请求数，包含完整流式响应周期。">
+                  并发
+                </HintLabel>
+                <Input
+                  id="rt_concurrency"
+                  type="number"
+                  min={0}
+                  value={concurrencyLimit}
+                  onChange={(e) => setConcurrencyLimit(e.target.value)}
+                  placeholder="继承全局并发"
+                  aria-invalid={!!errors.concurrency_limit}
+                />
+                <FieldError>{errors.concurrency_limit}</FieldError>
+              </Field>
             </div>
           </div>
-        </Field>
-
-        <Field>
-          <HintLabel
-            htmlFor="rt_sticky"
-            hint="同一会话的请求钉住上次成功渠道，保住上游 prompt cache（多轮对话话费大幅降低）。留空继承系统设置的全局默认；粘住渠道故障时仍会自动切换。"
-          >
-            会话粘性
-          </HintLabel>
-          <Select
-            value={stickyEnabled}
-            onValueChange={(v) => setStickyEnabled(v as "inherit" | "on" | "off")}
-          >
-            <SelectTrigger id="rt_sticky" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inherit">继承系统默认</SelectItem>
-              <SelectItem value="on">开启</SelectItem>
-              <SelectItem value="off">关闭</SelectItem>
-            </SelectContent>
-          </Select>
         </Field>
 
         <Field>

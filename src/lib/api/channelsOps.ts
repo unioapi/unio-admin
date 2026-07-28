@@ -31,6 +31,8 @@ export interface ChannelOpsRow {
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
+  // 渠道在途并发（DEC-029）：null=继承并发默认 channel_limit，0=不限，>0=具体上限。
+  concurrency_limit: number | null;
   last_tested_at: string | null;
   last_test_ok: boolean | null;
   last_test_latency_ms: number | null;

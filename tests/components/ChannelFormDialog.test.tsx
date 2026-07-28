@@ -47,6 +47,8 @@ const channel = {
   status: "enabled",
   priority: 0,
   timeout_ms: null,
+  sticky_enabled: null,
+  sticky_ttl_ms: null,
   rpm_limit: null,
   tpm_limit: null,
   rpd_limit: null,
@@ -102,5 +104,35 @@ describe("ChannelFormDialog P4 binding", () => {
     const input = mocks.updateChannel.mock.calls[0][0];
     expect(input).toMatchObject({ id: 9, provider_id: 3 });
     expect(input).not.toHaveProperty("provider_origin_id");
+  });
+
+  it("uses fixed Priority options and submits an enabled Channel Sticky TTL", async () => {
+    const user = userEvent.setup();
+    render(
+      <TestProviders>
+        <ChannelFormDialog open onOpenChange={vi.fn()} channel={channel} />
+      </TestProviders>,
+    );
+
+    const priority = await screen.findByRole("combobox", { name: "优先级" });
+    await user.click(priority);
+    expect(screen.getAllByRole("option")).toHaveLength(11);
+    await user.click(screen.getByRole("option", { name: "20" }));
+
+    const sticky = screen.getByRole("combobox", { name: "会话粘性" });
+    await user.click(sticky);
+    await user.click(screen.getByRole("option", { name: "开启" }));
+    const ttl = screen.getByRole("spinbutton", { name: "渠道 Sticky TTL" });
+    expect(ttl).toHaveValue(30);
+    await user.clear(ttl);
+    await user.type(ttl, "15");
+
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(mocks.updateChannel).toHaveBeenCalledTimes(1));
+    expect(mocks.updateChannel.mock.calls[0][0]).toMatchObject({
+      priority: 20,
+      sticky_enabled: true,
+      sticky_ttl_ms: 15 * 60 * 1_000,
+    });
   });
 });

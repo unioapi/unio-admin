@@ -127,6 +127,8 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
       status: enabling ? "enabled" : "disabled",
       priority: channel.priority,
       timeout_ms: channel.timeout_ms,
+      sticky_enabled: channel.sticky_enabled,
+      sticky_ttl_ms: channel.sticky_ttl_ms,
     });
   }
 

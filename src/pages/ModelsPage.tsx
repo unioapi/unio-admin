@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { LibraryIcon, PlusIcon } from "lucide-react";
+import { BoxIcon, LibraryIcon, PlusIcon } from "lucide-react";
 import { getModelsOpsTable } from "@/lib/api/modelsOps";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import {
@@ -10,6 +10,13 @@ import {
 } from "@/components/openstatus-table/models-os-columns";
 import { ModelFormDialog } from "@/components/models/ModelFormDialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useServerTable } from "@/hooks/useServerTable";
 
@@ -67,7 +74,7 @@ export function ModelsPage() {
         getRowId={(r) => String(r.id)}
         loading={table.query.isPending}
         refetching={table.query.isFetching && !table.query.isPending}
-        emptyMessage="暂无模型"
+        emptyContent={<ModelsEmpty />}
         searchValue={table.searchInput}
         onSearchChange={table.onSearchChange}
         searchPlaceholder="搜索模型 ID / 名称"
@@ -97,5 +104,19 @@ export function ModelsPage() {
       />
       <ModelFormDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
+  );
+}
+
+function ModelsEmpty() {
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <BoxIcon />
+        </EmptyMedia>
+        <EmptyTitle>暂无模型</EmptyTitle>
+        <EmptyDescription>没有匹配当前筛选条件的模型。</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }

@@ -58,10 +58,12 @@ describe("P4 admin API contracts", () => {
 
     const [item] = await listSettings();
     const result = await updateSetting("gateway.routing_balance", {
+      economic_weight_pct: 45,
+      health_weight_pct: 25,
+      capacity_weight_pct: 20,
+      priority_weight_pct: 10,
       ttft_target_ms: 2_000,
       ttft_weight: 0.35,
-      cost_weight: 0.5,
-      minimum_routing_factor: 0.05,
       ttft_ewma_alpha: 0.2,
     });
 
@@ -153,6 +155,8 @@ describe("P4 admin API contracts", () => {
       status: "enabled",
       priority: 0,
       timeout_ms: null,
+      sticky_enabled: null,
+      sticky_ttl_ms: null,
     });
     await updateChannel({
       id: 9,
@@ -161,10 +165,20 @@ describe("P4 admin API contracts", () => {
       status: "disabled",
       priority: 0,
       timeout_ms: null,
+      sticky_enabled: false,
+      sticky_ttl_ms: null,
     });
 
-    expect(mocks.post.mock.calls[0][1]).toMatchObject({ provider_id: 3 });
-    expect(mocks.patch.mock.calls[0][1]).toMatchObject({ provider_id: 3 });
+    expect(mocks.post.mock.calls[0][1]).toMatchObject({
+      provider_id: 3,
+      sticky_enabled: null,
+      sticky_ttl_ms: null,
+    });
+    expect(mocks.patch.mock.calls[0][1]).toMatchObject({
+      provider_id: 3,
+      sticky_enabled: false,
+      sticky_ttl_ms: null,
+    });
     expect(mocks.post.mock.calls[0][1]).not.toHaveProperty("provider_origin_id");
     expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty("provider_origin_id");
   });

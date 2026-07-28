@@ -46,4 +46,26 @@ describe("RateLimitSummaryCell", () => {
       screen.getByText("留空继承渠道默认限流，0 表示不限。"),
     ).toBeVisible();
   });
+
+  it("includes concurrency in the hover detail when provided", async () => {
+    const user = userEvent.setup();
+    render(
+      <RateLimitSummaryCell
+        rpm={60}
+        tpm={null}
+        rpd={null}
+        concurrency={8}
+        scopeLabel="渠道级限流"
+        defaultScope="渠道"
+      />,
+    );
+
+    await user.hover(screen.getByText("60"));
+
+    expect(await screen.findByText("并发")).toBeVisible();
+    expect(screen.getByText("8")).toBeVisible();
+    expect(
+      screen.getByText("留空继承渠道默认限流／默认并发，0 表示不限。"),
+    ).toBeVisible();
+  });
 });

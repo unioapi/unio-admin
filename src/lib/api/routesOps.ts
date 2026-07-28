@@ -21,6 +21,7 @@ export interface RouteOpsRow {
   rpm_limit: number | null;
   tpm_limit: number | null;
   rpd_limit: number | null;
+  concurrency_limit: number | null;
   created_at: string;
   bound_keys: number;
   pool_channels: number;
@@ -149,6 +150,15 @@ export interface RouteRuntimeChannel {
   tpm_limit: number;
   tpm_remaining: number | null;
   capacity_score: number;
+  algorithm_version?: string;
+  economic_score?: number;
+  health_score?: number;
+  priority_score?: number;
+  final_score?: number;
+  economic_weight_pct?: number;
+  health_weight_pct?: number;
+  capacity_weight_pct?: number;
+  priority_weight_pct?: number;
   cost_ratio?: number | null;
   cost_weight?: number;
   cost_factor?: number;
@@ -237,6 +247,15 @@ export interface RoutingCandidateScore {
   concurrency_remaining: number | null;
   tpm_remaining: number | null;
   capacity_score: number;
+  algorithm_version?: string;
+  economic_score?: number;
+  health_score?: number;
+  priority_score?: number;
+  final_score?: number;
+  economic_weight_pct?: number;
+  health_weight_pct?: number;
+  capacity_weight_pct?: number;
+  priority_weight_pct?: number;
   error_rate: number;
   error_samples: number;
   ttft_ewma_ms: number;
@@ -279,7 +298,7 @@ export interface RoutingDecision {
   selected_order: number[];
   fallback_chain: unknown[];
   final_channel_id: number | null;
-  algorithm_version: string;
+  algorithm_version?: string;
   sampled: boolean;
   created_at: string;
   updated_at: string;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PlusIcon } from "lucide-react";
+import { CableIcon, PlusIcon } from "lucide-react";
 import { getChannelsOpsTable } from "@/lib/api/channelsOps";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import {
@@ -9,6 +9,13 @@ import {
 } from "@/components/openstatus-table/channels-os-columns";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useServerTable } from "@/hooks/useServerTable";
 
@@ -46,7 +53,7 @@ export function ChannelsPage() {
           getRowId={(r) => String(r.id)}
           loading={table.query.isPending}
           refetching={table.query.isFetching && !table.query.isPending}
-          emptyMessage="暂无渠道"
+          emptyContent={<ChannelsEmpty />}
           searchValue={table.searchInput}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="搜索渠道名"
@@ -70,5 +77,19 @@ export function ChannelsPage() {
 
       <ChannelFormDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
+  );
+}
+
+function ChannelsEmpty() {
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <CableIcon />
+        </EmptyMedia>
+        <EmptyTitle>暂无渠道</EmptyTitle>
+        <EmptyDescription>没有匹配当前筛选条件的渠道。</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }

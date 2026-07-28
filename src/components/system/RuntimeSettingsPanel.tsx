@@ -16,6 +16,12 @@ import {
   type RateLimitFieldValue,
 } from "@/components/common/rate-limit-input";
 import { HintLabel } from "@/components/common/field-hint";
+import {
+  DurationInput,
+  composeDurationMs,
+  decomposeDurationMs,
+  durationError,
+} from "@/components/common/duration-input";
 import { AnthropicBetaPolicyCard } from "@/components/system/AnthropicBetaPolicyCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,13 +32,6 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 // 运行时配置面板：按「域」分 Tab 渲染（batch2 §2/§6.2，对齐 new-api 设置页组织方式）。
 //
@@ -119,108 +118,6 @@ function jsonEquals(a: unknown, b: unknown): boolean {
     );
   }
   return false;
-}
-
-// ---- 时长「数字 + 单位」：入库 int 毫秒 ----
-
-type DurationUnit = "ms" | "s" | "m" | "h";
-
-const DURATION_UNIT_MS: Record<DurationUnit, number> = {
-  ms: 1,
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-};
-
-const DURATION_UNIT_LABEL: Record<DurationUnit, string> = {
-  ms: "毫秒",
-  s: "秒",
-  m: "分钟",
-  h: "小时",
-};
-
-interface DurationFieldValue {
-  num: string;
-  unit: DurationUnit;
-}
-
-/** 把存储的毫秒整数拆成可读的 {数字, 单位}：取能整除的最大单位（600000 → 10 分钟）。 */
-function decomposeDurationMs(ms: number): DurationFieldValue {
-  if (!Number.isFinite(ms) || ms <= 0)
-    return { num: String(ms ?? 0), unit: "ms" };
-  for (const unit of ["h", "m", "s"] as const) {
-    if (ms % DURATION_UNIT_MS[unit] === 0) {
-      return { num: String(ms / DURATION_UNIT_MS[unit]), unit };
-    }
-  }
-  return { num: String(ms), unit: "ms" };
-}
-
-/** 把 {数字, 单位} 折算成入库毫秒整数；非法返回 NaN。 */
-function composeDurationMs(v: DurationFieldValue): number {
-  const t = v.num.trim();
-  if (t === "") return Number.NaN;
-  const n = Number(t);
-  if (!Number.isFinite(n)) return Number.NaN;
-  return Math.round(n * DURATION_UNIT_MS[v.unit]);
-}
-
-/** 校验时长输入：换算后须为整数毫秒且满足下界（allowZero 时 0 合法）。 */
-function durationError(
-  v: DurationFieldValue,
-  allowZero: boolean,
-): string | undefined {
-  const ms = composeDurationMs(v);
-  if (Number.isNaN(ms)) return "请输入数字";
-  if (!Number.isInteger(ms)) return "换算成毫秒后需为整数";
-  if (allowZero ? ms < 0 : ms <= 0) return allowZero ? "需 ≥ 0" : "需 > 0";
-  return undefined;
-}
-
-/** 时长输入：数字 + 时间单位下拉（毫秒/秒/分钟/小时），受控。 */
-function DurationInput({
-  id,
-  value,
-  onChange,
-  ariaInvalid,
-}: {
-  id?: string;
-  value: DurationFieldValue;
-  onChange: (next: DurationFieldValue) => void;
-  ariaInvalid?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Input
-        id={id}
-        type="number"
-        min={0}
-        step="any"
-        value={value.num}
-        onChange={(e) => onChange({ ...value, num: e.target.value })}
-        aria-invalid={ariaInvalid}
-        className="h-8 min-w-0 flex-1 font-mono text-xs"
-      />
-      <Select
-        value={value.unit}
-        onValueChange={(u) => onChange({ ...value, unit: u as DurationUnit })}
-      >
-        <SelectTrigger
-          aria-label="时间单位"
-          className="h-8 w-20 shrink-0 text-xs"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent className="min-w-(--radix-select-trigger-width)">
-          {(Object.keys(DURATION_UNIT_LABEL) as DurationUnit[]).map((u) => (
-            <SelectItem key={u} value={u}>
-              {DURATION_UNIT_LABEL[u]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
 }
 
 /** 运行时配置面板（分域 Tab）。 */
@@ -429,20 +326,22 @@ function RuntimeControlBadge({ state }: { state?: string }) {
 
 function SaveReset({
   saving,
+  saveDisabled = false,
   onSave,
   onReset,
 }: {
   saving: boolean;
+  saveDisabled?: boolean;
   onSave: () => void;
   onReset: () => void;
 }) {
   return (
     <div className="flex items-center gap-3">
-      <Button size="sm" onClick={onSave} disabled={saving}>
+      <Button size="sm" onClick={onSave} disabled={saving || saveDisabled}>
         {saving ? "保存中…" : "保存"}
       </Button>
       <Button size="sm" variant="ghost" onClick={onReset} disabled={saving}>
-        重置
+        恢复默认
       </Button>
     </div>
   );
@@ -470,6 +369,7 @@ interface CircuitBreakerValue {
 
 function CircuitBreakerEditor({ item }: { item: SettingItem }) {
   const server = item.value as CircuitBreakerValue;
+  const defaults = item.default as CircuitBreakerValue;
   const [enabled, setEnabled] = useState(server.enabled);
   const [window_, setWindow] = useState(() =>
     decomposeDurationMs(server.window_ms),
@@ -514,29 +414,29 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
-    setEnabled(server.enabled);
-    setWindow(decomposeDurationMs(server.window_ms));
-    setMinRequests(String(server.min_requests));
-    setFailureRatio(String(server.failure_ratio));
-    setConsecutiveFailures(String(server.consecutive_failures));
-    setConsecutiveWindow(decomposeDurationMs(server.consecutive_window_ms));
-    setHalfOpenSuccesses(String(server.half_open_successes));
-    setPermitTTL(decomposeDurationMs(server.attempt_permit_ttl_ms));
+    setEnabled(defaults.enabled);
+    setWindow(decomposeDurationMs(defaults.window_ms));
+    setMinRequests(String(defaults.min_requests));
+    setFailureRatio(String(defaults.failure_ratio));
+    setConsecutiveFailures(String(defaults.consecutive_failures));
+    setConsecutiveWindow(decomposeDurationMs(defaults.consecutive_window_ms));
+    setHalfOpenSuccesses(String(defaults.half_open_successes));
+    setPermitTTL(decomposeDurationMs(defaults.attempt_permit_ttl_ms));
     setPermitRenew(
-      decomposeDurationMs(server.attempt_permit_renew_interval_ms),
+      decomposeDurationMs(defaults.attempt_permit_renew_interval_ms),
     );
     setPermitTerminalTTL(
-      decomposeDurationMs(server.attempt_permit_terminal_ttl_ms),
+      decomposeDurationMs(defaults.attempt_permit_terminal_ttl_ms),
     );
     setBaseURLOperationTTL(
-      decomposeDurationMs(server.origin_revision_operation_ttl_ms),
+      decomposeDurationMs(defaults.origin_revision_operation_ttl_ms),
     );
     setStatusOperationTTL(
-      decomposeDurationMs(server.status_revision_operation_ttl_ms),
+      decomposeDurationMs(defaults.status_revision_operation_ttl_ms),
     );
-    setOpenDurations(server.open_durations_ms.join(", "));
-    setAmbiguousChannels(String(server.provider_ambiguous_distinct_channels));
-    setAmbiguousModels(String(server.provider_ambiguous_distinct_models));
+    setOpenDurations(defaults.open_durations_ms.join(", "));
+    setAmbiguousChannels(String(defaults.provider_ambiguous_distinct_channels));
+    setAmbiguousModels(String(defaults.provider_ambiguous_distinct_models));
   };
 
   const save = () => {
@@ -751,6 +651,7 @@ interface RoutingStickyValue {
 
 function RoutingStickyEditor({ item }: { item: SettingItem }) {
   const server = item.value as RoutingStickyValue;
+  const defaults = item.default as RoutingStickyValue;
   const [enabledDefault, setEnabledDefault] = useState(server.enabled_default);
   const [ttl, setTtl] = useState(() => decomposeDurationMs(server.ttl_ms));
   const [tpmWait, setTpmWait] = useState(() =>
@@ -762,10 +663,10 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
-    setEnabledDefault(server.enabled_default);
-    setTtl(decomposeDurationMs(server.ttl_ms));
-    setTpmWait(decomposeDurationMs(server.tpm_wait_ms));
-    setTpmWaitJitter(decomposeDurationMs(server.tpm_wait_jitter_ms));
+    setEnabledDefault(defaults.enabled_default);
+    setTtl(decomposeDurationMs(defaults.ttl_ms));
+    setTpmWait(decomposeDurationMs(defaults.tpm_wait_ms));
+    setTpmWaitJitter(decomposeDurationMs(defaults.tpm_wait_jitter_ms));
   };
 
   const save = () => {
@@ -790,9 +691,9 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
       <div className="flex items-center justify-between">
         <HintLabel
           htmlFor={`${item.key}-enabled`}
-          hint="线路未单独配置时的默认开关。打开后，同会话请求会钉住上次成功渠道，保住上游 prompt cache；粘住渠道故障时仍会自动切换。"
+          hint="渠道选择「系统默认」时使用。打开后，同会话请求会优先复用上次成功渠道；粘住渠道故障时仍会自动切换。"
         >
-          新线路默认开启会话粘性
+          渠道默认开启会话粘性
         </HintLabel>
         <Switch
           id={`${item.key}-enabled`}
@@ -808,8 +709,8 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
           <DurationInput value={ttl} onChange={setTtl} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <HintLabel hint="队首候选本地 TPM/并发满时先短等再换渠道。0=不等，满了立刻 failover。">
-            队首短等
+          <HintLabel hint="只有 Sticky 固定的首候选在 TPM/并发满时允许等待一次；普通评分候选会立即 fallback。0=关闭等待。">
+            Sticky 首候选短等
           </HintLabel>
           <DurationInput value={tpmWait} onChange={setTpmWait} />
         </div>
@@ -835,6 +736,7 @@ interface RateLimitValue {
 
 function RateLimitEditor({ item }: { item: SettingItem }) {
   const server = item.value as RateLimitValue;
+  const defaults = item.default as RateLimitValue;
   const isRouteDefault = item.key === "gateway.route_rate_limit_defaults";
   const [rpm, setRpm] = useState(String(server.rpm));
   const [tpm, setTpm] = useState<RateLimitFieldValue>(() =>
@@ -846,9 +748,9 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
-    setRpm(String(server.rpm));
-    setTpm(decomposeRateLimit(server.tpm));
-    setRpd(decomposeRateLimit(server.rpd));
+    setRpm(String(defaults.rpm));
+    setTpm(decomposeRateLimit(defaults.tpm));
+    setRpd(decomposeRateLimit(defaults.rpd));
   };
 
   const save = () => {
@@ -916,6 +818,7 @@ interface ConcurrencyDefaultsValue {
 
 function ConcurrencyDefaultsEditor({ item }: { item: SettingItem }) {
   const server = item.value as ConcurrencyDefaultsValue;
+  const defaults = item.default as ConcurrencyDefaultsValue;
   const [keyLimit, setKeyLimit] = useState(String(server.key_limit));
   const [channelLimit, setChannelLimit] = useState(
     String(server.channel_limit),
@@ -962,8 +865,8 @@ function ConcurrencyDefaultsEditor({ item }: { item: SettingItem }) {
         saving={mutation.isPending}
         onSave={save}
         onReset={() => {
-          setKeyLimit(String(server.key_limit));
-          setChannelLimit(String(server.channel_limit));
+          setKeyLimit(String(defaults.key_limit));
+          setChannelLimit(String(defaults.channel_limit));
         }}
       />
     </div>
@@ -971,31 +874,63 @@ function ConcurrencyDefaultsEditor({ item }: { item: SettingItem }) {
 }
 
 interface RoutingBalanceValue {
+  economic_weight_pct?: number;
+  health_weight_pct?: number;
+  capacity_weight_pct?: number;
+  priority_weight_pct?: number;
   ttft_target_ms: number;
   ttft_weight: number;
+  // 仅用于读取升级前的数据库值；保存永远写 objective_v1 结构。
   cost_weight?: number;
-  minimum_routing_factor: number;
+  minimum_routing_factor?: number;
   ttft_ewma_alpha: number;
+}
+
+function objectiveWeights(value: RoutingBalanceValue) {
+  if (
+    Number.isInteger(value.economic_weight_pct) &&
+    Number.isInteger(value.health_weight_pct) &&
+    Number.isInteger(value.capacity_weight_pct) &&
+    Number.isInteger(value.priority_weight_pct)
+  ) {
+    return {
+      economic: value.economic_weight_pct as number,
+      health: value.health_weight_pct as number,
+      capacity: value.capacity_weight_pct as number,
+      priority: value.priority_weight_pct as number,
+    };
+  }
+  return { economic: 45, health: 25, capacity: 20, priority: 10 };
 }
 
 function RoutingBalanceEditor({ item }: { item: SettingItem }) {
   const server = item.value as RoutingBalanceValue;
+  const defaults = item.default as RoutingBalanceValue;
+  const serverWeights = objectiveWeights(server);
+  const defaultWeights = objectiveWeights(defaults);
   const [target, setTarget] = useState(() =>
     decomposeDurationMs(server.ttft_target_ms),
   );
   const [weight, setWeight] = useState(String(server.ttft_weight));
-  const [costWeight, setCostWeight] = useState(
-    String(server.cost_weight ?? 0),
-  );
-  const [minimum, setMinimum] = useState(String(server.minimum_routing_factor));
+  const [economicWeight, setEconomicWeight] = useState(String(serverWeights.economic));
+  const [healthWeight, setHealthWeight] = useState(String(serverWeights.health));
+  const [capacityWeight, setCapacityWeight] = useState(String(serverWeights.capacity));
+  const [priorityWeight, setPriorityWeight] = useState(String(serverWeights.priority));
   const [alpha, setAlpha] = useState(String(server.ttft_ewma_alpha));
   const mutation = useSaveSetting(item.key);
+  const parsedWeights = [economicWeight, healthWeight, capacityWeight, priorityWeight].map(Number);
+  const weightsInRange = parsedWeights.every(
+    (value) => Number.isInteger(value) && value >= 0 && value <= 100,
+  );
+  const weightTotal = parsedWeights.reduce(
+    (total, value) => total + (Number.isFinite(value) ? value : 0),
+    0,
+  );
+  const weightsValid = weightsInRange && weightTotal === 100;
 
   const save = () => {
     const targetError = durationError(target, false);
     const weightNumber = Number(weight);
-    const costWeightNumber = Number(costWeight);
-    const minimumNumber = Number(minimum);
     const alphaNumber = Number(alpha);
     if (targetError) {
       toast.error(`TTFT 目标：${targetError}`);
@@ -1005,24 +940,24 @@ function RoutingBalanceEditor({ item }: { item: SettingItem }) {
       !Number.isFinite(weightNumber) ||
       weightNumber < 0 ||
       weightNumber > 1 ||
-      !Number.isFinite(costWeightNumber) ||
-      costWeightNumber < 0 ||
-      costWeightNumber > 1 ||
-      !Number.isFinite(minimumNumber) ||
-      minimumNumber <= 0 ||
-      minimumNumber > 1 ||
       !Number.isFinite(alphaNumber) ||
       alphaNumber <= 0 ||
       alphaNumber > 1
     ) {
-      toast.error("TTFT 与成本权重需在 [0,1]，最小路由因子与 EWMA 系数需在 (0,1]");
+      toast.error("TTFT 权重需在 [0,1]，EWMA 系数需在 (0,1]");
+      return;
+    }
+    if (!weightsValid) {
+      toast.error("四项评分权重必须为 0–100 的整数，且合计为 100%");
       return;
     }
     mutation.mutate({
+      economic_weight_pct: parsedWeights[0],
+      health_weight_pct: parsedWeights[1],
+      capacity_weight_pct: parsedWeights[2],
+      priority_weight_pct: parsedWeights[3],
       ttft_target_ms: composeDurationMs(target),
       ttft_weight: weightNumber,
-      cost_weight: costWeightNumber,
-      minimum_routing_factor: minimumNumber,
       ttft_ewma_alpha: alphaNumber,
     } satisfies RoutingBalanceValue);
   };
@@ -1030,12 +965,16 @@ function RoutingBalanceEditor({ item }: { item: SettingItem }) {
   return (
     <div className="flex flex-col gap-3">
       <Alert>
-        <AlertTitle>TTFT 只采集流式首 Token</AlertTitle>
+        <AlertTitle>客观评分确定性排序</AlertTitle>
         <AlertDescription>
-          流式和非流式调度共用这一个流式 TTFT EWMA；非流式响应头不进入样本。
+          普通候选按经济、健康、容量、Priority 总分排序，不进行全量随机；同分时按 Priority、渠道 ID 排序。TTFT 只采集流式首 Token。
         </AlertDescription>
       </Alert>
       <div className="grid gap-3 sm:grid-cols-2">
+        <FieldText id="economic_weight_pct" label="经济权重（%）" value={economicWeight} onChange={setEconomicWeight} inputMode="numeric" />
+        <FieldText id="health_weight_pct" label="健康权重（%）" value={healthWeight} onChange={setHealthWeight} inputMode="numeric" />
+        <FieldText id="capacity_weight_pct" label="容量权重（%）" value={capacityWeight} onChange={setCapacityWeight} inputMode="numeric" />
+        <FieldText id="priority_weight_pct" label="Priority 权重（%）" value={priorityWeight} onChange={setPriorityWeight} inputMode="numeric" />
         <div className="flex flex-col gap-1.5">
           <HintLabel hint="达到该首 Token 时长时，TTFT 项开始降低候选权重。">
             TTFT 目标
@@ -1049,34 +988,30 @@ function RoutingBalanceEditor({ item }: { item: SettingItem }) {
           inputMode="decimal"
         />
         <FieldText
-          label="成本权重 [0,1]"
-          hint="按渠道真实成本调整 balanced 抽中概率；0 不参与，1 影响最大，但不会绕过熔断、限流或负毛利保护。"
-          value={costWeight}
-          onChange={setCostWeight}
-          inputMode="decimal"
-        />
-        <FieldText
-          label="最小路由因子 (0,1]"
-          value={minimum}
-          onChange={setMinimum}
-          inputMode="decimal"
-        />
-        <FieldText
           label="TTFT EWMA 系数 (0,1]"
           value={alpha}
           onChange={setAlpha}
           inputMode="decimal"
         />
       </div>
+      <Alert variant={weightsValid ? "default" : "destructive"}>
+        <AlertTitle>评分权重合计：{weightTotal}%</AlertTitle>
+        <AlertDescription>
+          {weightsValid ? "配置有效。" : "四项必须是 0–100 的整数，且合计正好为 100%。"}
+        </AlertDescription>
+      </Alert>
       <SaveReset
         saving={mutation.isPending}
+        saveDisabled={!weightsValid}
         onSave={save}
         onReset={() => {
-          setTarget(decomposeDurationMs(server.ttft_target_ms));
-          setWeight(String(server.ttft_weight));
-          setCostWeight(String(server.cost_weight ?? 0));
-          setMinimum(String(server.minimum_routing_factor));
-          setAlpha(String(server.ttft_ewma_alpha));
+          setTarget(decomposeDurationMs(defaults.ttft_target_ms));
+          setWeight(String(defaults.ttft_weight));
+          setEconomicWeight(String(defaultWeights.economic));
+          setHealthWeight(String(defaultWeights.health));
+          setCapacityWeight(String(defaultWeights.capacity));
+          setPriorityWeight(String(defaultWeights.priority));
+          setAlpha(String(defaults.ttft_ewma_alpha));
         }}
       />
     </div>
@@ -1092,6 +1027,7 @@ interface CooldownValue {
 
 function CooldownEditor({ item }: { item: SettingItem }) {
   const server = item.value as CooldownValue;
+  const defaults = item.default as CooldownValue;
   const [cooldown, setCooldown] = useState(() =>
     decomposeDurationMs(server.cooldown_ms),
   );
@@ -1128,8 +1064,8 @@ function CooldownEditor({ item }: { item: SettingItem }) {
         saving={mutation.isPending}
         onSave={save}
         onReset={() => {
-          setCooldown(decomposeDurationMs(server.cooldown_ms));
-          setCap(decomposeDurationMs(server.cap_ms));
+          setCooldown(decomposeDurationMs(defaults.cooldown_ms));
+          setCap(decomposeDurationMs(defaults.cap_ms));
         }}
       />
     </div>
@@ -1140,6 +1076,7 @@ function CooldownEditor({ item }: { item: SettingItem }) {
 
 function DurationMsEditor({ item }: { item: SettingItem }) {
   const server = item.value as number;
+  const defaults = item.default as number;
   const [value, setValue] = useState(() => decomposeDurationMs(server));
   const mutation = useSaveSetting(item.key);
 
@@ -1161,7 +1098,7 @@ function DurationMsEditor({ item }: { item: SettingItem }) {
       <SaveReset
         saving={mutation.isPending}
         onSave={save}
-        onReset={() => setValue(decomposeDurationMs(server))}
+        onReset={() => setValue(decomposeDurationMs(defaults))}
       />
     </div>
   );
@@ -1177,6 +1114,7 @@ function PositiveIntEditor({
   label?: string;
 }) {
   const server = item.value as number;
+  const defaults = item.default as number;
   const [value, setValue] = useState(String(server));
   const mutation = useSaveSetting(item.key);
 
@@ -1191,7 +1129,7 @@ function PositiveIntEditor({
       <SaveReset
         saving={mutation.isPending}
         onSave={() => mutation.mutate(Number(value))}
-        onReset={() => setValue(String(server))}
+        onReset={() => setValue(String(defaults))}
       />
     </div>
   );
@@ -1208,6 +1146,7 @@ interface ChannelTestValue {
 
 function ChannelTestEditor({ item }: { item: SettingItem }) {
   const server = item.value as ChannelTestValue;
+  const defaults = item.default as ChannelTestValue;
   const [enabled, setEnabled] = useState(server.enabled);
   const [interval, setInterval] = useState(() =>
     decomposeDurationMs(server.interval_ms),
@@ -1221,10 +1160,10 @@ function ChannelTestEditor({ item }: { item: SettingItem }) {
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
-    setEnabled(server.enabled);
-    setInterval(decomposeDurationMs(server.interval_ms));
-    setProbeTimeout(decomposeDurationMs(server.probe_timeout_ms));
-    setRetention(String(server.log_retention_per_channel));
+    setEnabled(defaults.enabled);
+    setInterval(decomposeDurationMs(defaults.interval_ms));
+    setProbeTimeout(decomposeDurationMs(defaults.probe_timeout_ms));
+    setRetention(String(defaults.log_retention_per_channel));
   };
 
   const save = () => {
@@ -1303,6 +1242,7 @@ interface DashboardThresholdsValue {
 
 function DashboardThresholdsEditor({ item }: { item: SettingItem }) {
   const server = item.value as DashboardThresholdsValue;
+  const defaults = item.default as DashboardThresholdsValue;
   const [slo, setSlo] = useState(String(server.success_rate_slo));
   const [warn, setWarn] = useState(String(server.success_rate_warn));
   const [ttftWarn, setTtftWarn] = useState(() =>
@@ -1321,13 +1261,13 @@ function DashboardThresholdsEditor({ item }: { item: SettingItem }) {
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
-    setSlo(String(server.success_rate_slo));
-    setWarn(String(server.success_rate_warn));
-    setTtftWarn(decomposeDurationMs(server.ttft_warn_ms));
-    setTtftDanger(decomposeDurationMs(server.ttft_danger_ms));
-    setLatWarn(decomposeDurationMs(server.latency_warn_ms));
-    setLatDanger(decomposeDurationMs(server.latency_danger_ms));
-    setProfitThin(String(server.profit_thin_rate));
+    setSlo(String(defaults.success_rate_slo));
+    setWarn(String(defaults.success_rate_warn));
+    setTtftWarn(decomposeDurationMs(defaults.ttft_warn_ms));
+    setTtftDanger(decomposeDurationMs(defaults.ttft_danger_ms));
+    setLatWarn(decomposeDurationMs(defaults.latency_warn_ms));
+    setLatDanger(decomposeDurationMs(defaults.latency_danger_ms));
+    setProfitThin(String(defaults.profit_thin_rate));
   };
 
   const save = () => {
@@ -1428,6 +1368,10 @@ function RawJSONEditor({ item }: { item: SettingItem }) {
     () => JSON.stringify(item.value, null, 2),
     [item.value],
   );
+  const defaultsText = useMemo(
+    () => JSON.stringify(item.default, null, 2),
+    [item.default],
+  );
   const [text, setText] = useState(server);
   const mutation = useSaveSetting(item.key);
 
@@ -1450,13 +1394,14 @@ function RawJSONEditor({ item }: { item: SettingItem }) {
       <SaveReset
         saving={mutation.isPending}
         onSave={save}
-        onReset={() => setText(server)}
+        onReset={() => setText(defaultsText)}
       />
     </div>
   );
 }
 
 function FieldText({
+  id,
   label,
   hint,
   value,
@@ -1464,6 +1409,7 @@ function FieldText({
   placeholder,
   inputMode,
 }: {
+  id?: string;
   label: string;
   hint?: string;
   value: string;
@@ -1474,11 +1420,12 @@ function FieldText({
   return (
     <div className="flex flex-col gap-1.5">
       {hint ? (
-        <HintLabel hint={hint}>{label}</HintLabel>
+        <HintLabel htmlFor={id} hint={hint}>{label}</HintLabel>
       ) : (
-        <Label className="text-xs">{label}</Label>
+        <Label htmlFor={id} className="text-xs">{label}</Label>
       )}
       <Input
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

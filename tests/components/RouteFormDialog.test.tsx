@@ -68,6 +68,8 @@ describe("RouteFormDialog", () => {
       </TestProviders>,
     );
     expect(screen.getAllByPlaceholderText("继承线路默认限流")).toHaveLength(3);
+    expect(screen.getByPlaceholderText("继承全局并发")).toBeVisible();
+    expect(screen.queryByText("会话粘性")).not.toBeInTheDocument();
 
     await user.type(screen.getByRole("textbox", { name: /线路名/ }), "balanced-route");
     await user.click(screen.getByRole("button", { name: "创建" }));
@@ -75,6 +77,7 @@ describe("RouteFormDialog", () => {
     expect(mocks.createRoute).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "选择 channel-a" }));
+    await user.type(screen.getByRole("spinbutton", { name: "并发" }), "4");
     await user.click(screen.getByRole("button", { name: "创建" }));
 
     await waitFor(() => expect(mocks.createRoute).toHaveBeenCalledTimes(1));
@@ -83,7 +86,9 @@ describe("RouteFormDialog", () => {
       name: "balanced-route",
       mode: "balanced",
       channel_ids: [10],
+      concurrency_limit: 4,
     });
     expect(input).not.toHaveProperty("pool_kind");
+    expect(input).not.toHaveProperty("sticky_enabled");
   });
 });

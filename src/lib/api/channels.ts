@@ -18,6 +18,9 @@ export interface Channel {
   status: string;
   priority: number;
   timeout_ms: number | null;
+  // 渠道会话粘性：null=继承系统默认；true 时 sticky_ttl_ms 必须 >0；false 时 TTL 必须为 null。
+  sticky_enabled: boolean | null;
+  sticky_ttl_ms: number | null;
   // 渠道级限流（P2-8）：null=继承渠道默认限流，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
   rpm_limit: number | null;
   tpm_limit: number | null;
@@ -83,6 +86,8 @@ export interface CreateChannelInput {
   status: string;
   priority: number;
   timeout_ms: number | null;
+  sticky_enabled: boolean | null;
+  sticky_ttl_ms: number | null;
   // 可选渠道级限流；省略表示三维全继承渠道默认限流。
   rateLimits?: RateLimitsInput;
   // 上游「断开仍计费」标记；省略=false。
@@ -126,6 +131,8 @@ export interface UpdateChannelInput {
   status: string;
   priority: number;
   timeout_ms: number | null;
+  sticky_enabled: boolean | null;
+  sticky_ttl_ms: number | null;
   // 渠道级限流；省略表示不变，传对象即原子替换三维。
   rateLimits?: RateLimitsInput;
   // 上游「断开仍计费」标记；省略=不变。
