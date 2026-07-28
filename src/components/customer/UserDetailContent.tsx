@@ -32,5 +32,11 @@ export function UserDetailContent({
     [user, detail, rangeParams],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="account" />;
+  return (
+    <DetailSideNav
+      sections={sections}
+      defaultSectionId="account"
+      orientation="horizontal"
+    />
+  );
 }

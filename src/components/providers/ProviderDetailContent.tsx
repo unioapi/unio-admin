@@ -68,7 +68,13 @@ export function ProviderDetailContent({
     [provider, providerId, range],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="configuration" />;
+  return (
+    <DetailSideNav
+      sections={sections}
+      defaultSectionId="configuration"
+      orientation="horizontal"
+    />
+  );
 }
 
 function ChannelsSection({ id, range }: { id: number; range: RangeQuery }) {

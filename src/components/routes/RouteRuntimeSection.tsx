@@ -6,12 +6,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { Column, ColumnDef } from "@tanstack/react-table";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
   AlertTriangleIcon,
   CheckCircle2Icon,
+  CircleHelpIcon,
   EyeIcon,
   ServerIcon,
 } from "lucide-react";
@@ -46,6 +47,7 @@ import { RequestStatusBadge } from "@/components/requests/RequestStatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -147,6 +149,7 @@ function reasonLabel(reason: string): string {
   return (
     EXCLUSION_LABELS[reason] ??
     ABNORMAL_LABELS[reason] ??
+    RUNTIME_SYNC_LABELS[reason] ??
     reason.replaceAll("_", " ")
   );
 }
@@ -212,11 +215,22 @@ function isObjectiveScore(value: {
   algorithm_version?: string;
   final_score?: number;
 }): boolean {
-  return value.algorithm_version === "objective_v1" || value.final_score != null;
+  return (
+    value.algorithm_version === "objective_v1" || value.final_score != null
+  );
 }
 
 function formatObjectiveScore(value: number | null | undefined): string {
   return value != null && Number.isFinite(value) ? value.toFixed(2) : "—";
+}
+
+function formatWeightedScore(
+  score: number | null | undefined,
+  weightPct: number | null | undefined,
+): string {
+  if (score == null || !Number.isFinite(score)) return "—";
+  const weight = weightPct ?? 0;
+  return `${score.toFixed(2)} × ${weight}% = ${((score * weight) / 100).toFixed(2)}`;
 }
 
 function permissionStateLabel(state: string): string {
@@ -231,6 +245,74 @@ function marginStatusLabel(state: string): string {
   if (state === "negative_margin") return "负毛利";
   if (state === "pricing_invalid") return "价格无效";
   return "未评估";
+}
+
+function breakerStateLabel(
+  state: RouteRuntimeChannel["channel_breaker_state"],
+): string {
+  if (!state) return "无样本";
+  if (state === "closed") return "闭合";
+  if (state === "half_open") return "半开";
+  return "熔断中";
+}
+
+function ColumnHelp({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${label}列说明`}
+            className="text-muted-foreground/60 hover:text-foreground inline-flex size-5 shrink-0 items-center justify-center"
+          >
+            <CircleHelpIcon className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent align="start" className="max-w-sm leading-relaxed">
+          {children}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function StaticColumnHeader({
+  label,
+  hint,
+}: {
+  label: string;
+  hint: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <span>{label}</span>
+      <ColumnHelp label={label}>{hint}</ColumnHelp>
+    </div>
+  );
+}
+
+function SortableColumnHeader<TValue>({
+  column,
+  label,
+  hint,
+}: {
+  column: Column<RouteRuntimeChannel, TValue>;
+  label: string;
+  hint: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <DataTableColumnHeader column={column} label={label} />
+      <ColumnHelp label={label}>{hint}</ColumnHelp>
+    </div>
+  );
 }
 
 function runtimeStateForChannel(
@@ -541,8 +623,8 @@ function RuntimeSummary({ runtime }: { runtime: RouteRuntime }) {
           runtime.breaker_store_admission !== "normal"
             ? "事实不可用"
             : runtime.all_capacity_zero
-            ? "全部满载"
-            : "正常"
+              ? "全部满载"
+              : "正常"
         }
         danger={
           runtime.all_capacity_zero ||
@@ -688,7 +770,7 @@ function dimensionRemaining(dim: CapacityDimension): number {
   return Math.max(0, Math.min(1, dim.remaining));
 }
 
-// CapacityDimCell：单维余量条——满格绿=充足（含不限流），逼近上限缩短并转黄/红。
+// CapacityDimCell：加高 Progress，左右文字叠在条内两端。
 function CapacityDimCell({
   channel,
   dim,
@@ -704,39 +786,61 @@ function CapacityDimCell({
   }
 
   const unlimited = dim.limit <= 0;
-  const fraction = unlimited ? 1 : dimensionRemaining(dim);
-  const tone =
-    unlimited || fraction >= 0.5 ? "ok" : fraction >= 0.2 ? "warn" : "danger";
-  const barClass =
+  const remaining = unlimited ? 1 : dimensionRemaining(dim);
+  const usagePct = unlimited
+    ? 0
+    : Math.min(
+        100,
+        Math.max(0, Math.round((dim.used / Math.max(dim.limit, 1)) * 100)),
+      );
+  const tone = unlimited
+    ? "ok"
+    : remaining >= 0.5
+      ? "ok"
+      : remaining >= 0.2
+        ? "warn"
+        : "danger";
+  const indicatorTone =
     tone === "ok"
-      ? "bg-emerald-500"
+      ? "[&_[data-slot=progress-indicator]]:bg-emerald-500/35"
       : tone === "warn"
-        ? "bg-amber-500"
-        : "bg-red-500";
-  const width = Math.round(fraction * 100);
-  const label = unlimited
-    ? "不限"
-    : formatCapacity(dim.used, dim.limit);
+        ? "[&_[data-slot=progress-indicator]]:bg-amber-500/45"
+        : "[&_[data-slot=progress-indicator]]:bg-red-500/50";
 
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex w-full max-w-32 cursor-help items-center gap-1.5">
-            <div className="bg-muted h-1.5 w-12 shrink-0 overflow-hidden rounded-full">
-              <div
+          <button
+            type="button"
+            className="relative w-[9.75rem] cursor-help text-left"
+            aria-label={
+              unlimited
+                ? `${dim.label} 不限`
+                : `${dim.label} ${formatCapacity(dim.used, dim.limit)}，占用 ${usagePct}%`
+            }
+          >
+            <Progress
+              value={usagePct}
+              className={cn("h-6", indicatorTone, unlimited && "opacity-50")}
+            />
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-between px-2 text-[11px] tabular-nums tracking-tight">
+              <span
                 className={cn(
-                  "h-full rounded-full",
-                  barClass,
-                  unlimited && "opacity-40",
+                  "truncate",
+                  tone === "ok" && "text-foreground/85",
+                  tone === "warn" && "text-amber-800 dark:text-amber-300",
+                  tone === "danger" &&
+                    "font-medium text-red-800 dark:text-red-300",
                 )}
-                style={{ width: `${width}%` }}
-              />
-            </div>
-            <span className="text-muted-foreground truncate text-xs tabular-nums">
-              {label}
+              >
+                {unlimited ? "不限" : formatCapacity(dim.used, dim.limit)}
+              </span>
+              <span className="text-muted-foreground shrink-0">
+                {unlimited ? "—" : `${usagePct}%`}
+              </span>
             </span>
-          </div>
+          </button>
         </TooltipTrigger>
         <TooltipContent align="start">
           <div className="text-xs">
@@ -746,7 +850,7 @@ function CapacityDimCell({
             <div className="mt-1 tabular-nums">
               {unlimited
                 ? "未设限"
-                : `${formatCapacity(dim.used, dim.limit)} · 剩 ${formatPercent(dim.remaining)}`}
+                : `${formatCapacity(dim.used, dim.limit)} · 占用 ${usagePct}% · 剩 ${formatPercent(dim.remaining)}`}
             </div>
           </div>
         </TooltipContent>
@@ -768,7 +872,11 @@ function capacityColumn(
       return dim ? dimensionRemaining(dim) : 1;
     },
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} label={label} />
+      <SortableColumnHeader
+        column={column}
+        label={label}
+        hint={capacityColumnHint(key)}
+      />
     ),
     cell: ({ row }) => {
       const dim = capacityDimensions(row.original).find((d) => d.key === key);
@@ -782,6 +890,417 @@ function capacityColumn(
       );
     },
   };
+}
+
+function capacityColumnHint(key: CapacityDimension["key"]): string {
+  const hints: Record<string, string> = {
+    concurrency:
+      "该渠道当前在途的上游调用数 / 渠道并发上限。按渠道全局统计，多个线路共用同一份用量。",
+    rpm: "该渠道当前 UTC 自然分钟内的请求数 / RPM 上限。按渠道全局统计。",
+    rpd: "该渠道当前 UTC 自然日内的请求数 / RPD 上限。按渠道全局统计。",
+    tpm: "该渠道当前 UTC 自然分钟内的 Token 数 / TPM 上限。请求开始按预估量占用，结束后按实际用量校正。",
+  };
+  return hints[key] ?? "渠道级限流使用量与上限。";
+}
+
+function TooltipKV({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex justify-between gap-6">
+      <span className="text-background/70">{label}</span>
+      <span className="text-right tabular-nums">{children}</span>
+    </div>
+  );
+}
+
+function ChannelCell({ channel }: { channel: RouteRuntimeChannel }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`查看渠道 ${channel.channel_name} 详情`}
+            className="max-w-56 cursor-help text-left"
+          >
+            <span className="block truncate font-medium">
+              {channel.channel_name}
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          align="start"
+          className="w-80 max-w-[min(20rem,calc(100vw-2rem))] p-3"
+        >
+          <div className="space-y-2 text-xs">
+            <div className="font-medium">{channel.channel_name}</div>
+            <TooltipKV label="渠道 ID">#{channel.channel_id}</TooltipKV>
+            <TooltipKV label="Provider">
+              {channel.provider_name || `#${channel.provider_id}`} (#
+              {channel.provider_id})
+            </TooltipKV>
+            <TooltipKV label="状态">
+              渠道 {channel.channel_status} · Provider {channel.provider_status}
+            </TooltipKV>
+            <TooltipKV label="协议 / Adapter">
+              {channel.protocol} / {channel.adapter_key}
+            </TooltipKV>
+            <TooltipKV label="Priority">{channel.priority}</TooltipKV>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function EligibilityCell({ channel }: { channel: RouteRuntimeChannel }) {
+  const reason = channel.excluded_reason || "excluded";
+  const eligible = channel.eligible;
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="cursor-help text-left">
+            {eligible ? (
+              <Badge variant="outline">
+                <CheckCircle2Icon data-icon="inline-start" />
+                候选
+              </Badge>
+            ) : (
+              <Badge variant="destructive">{reasonLabel(reason)}</Badge>
+            )}
+            {channel.margin_status !== "safe" ? (
+              <span className="text-muted-foreground mt-1 block text-xs">
+                毛利 {marginStatusLabel(channel.margin_status)}
+              </span>
+            ) : null}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent align="start" className="max-w-sm p-3">
+          <div className="space-y-2 text-xs leading-relaxed">
+            <div className="font-medium">
+              {eligible
+                ? "已进入本次候选池"
+                : `未进入候选池：${reasonLabel(reason)}`}
+            </div>
+            <div>
+              资格由线路、渠道和 Provider
+              状态，以及凭据、地址、协议、模型绑定、价格、熔断、冷却、权限与运行态版本共同决定。
+            </div>
+            <TooltipKV label="毛利检查">
+              {marginStatusLabel(channel.margin_status)}
+            </TooltipKV>
+            <TooltipKV label="Provider 熔断">
+              {breakerStateLabel(channel.provider_breaker_state)}
+            </TooltipKV>
+            <TooltipKV label="渠道熔断">
+              {breakerStateLabel(channel.channel_breaker_state)}
+            </TooltipKV>
+            <TooltipKV label="429 冷却">
+              {channel.cooldown_remaining_ms > 0
+                ? `剩 ${formatOpenRemaining(channel.cooldown_remaining_ms)}`
+                : "无"}
+            </TooltipKV>
+            <TooltipKV label="模型权限">
+              {channel.model_permission_paused
+                ? `暂停 · ${permissionStateLabel(channel.model_permission_recheck_state)}`
+                : "正常"}
+            </TooltipKV>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function ScoreCell({
+  channel,
+  mode,
+  usable,
+}: {
+  channel: RouteRuntimeChannel;
+  mode: RouteRuntime["mode"];
+  usable: boolean;
+}) {
+  if (!usable || !channel.eligible) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const objective = isObjectiveScore(channel);
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`查看得分详情 ${
+              objective
+                ? formatObjectiveScore(channel.final_score)
+                : channel.final_weight.toFixed(4)
+            }`}
+            className="cursor-help text-left font-mono text-xs tabular-nums"
+          >
+            {objective
+              ? formatObjectiveScore(channel.final_score)
+              : channel.final_weight.toFixed(4)}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          align="start"
+          className="w-96 max-w-[min(24rem,calc(100vw-2rem))] p-3"
+        >
+          {objective ? (
+            <div className="space-y-2 text-xs">
+              <div className="font-medium">
+                客观评分 · {channel.algorithm_version}
+              </div>
+              <div className="text-background/70">
+                总分 = 经济×{channel.economic_weight_pct ?? 0}% + 健康×
+                {channel.health_weight_pct ?? 0}% + 容量×
+                {channel.capacity_weight_pct ?? 0}% + Priority×
+                {channel.priority_weight_pct ?? 0}%
+              </div>
+              <TooltipKV label="经济贡献">
+                {formatWeightedScore(
+                  channel.economic_score,
+                  channel.economic_weight_pct,
+                )}
+              </TooltipKV>
+              <TooltipKV label="健康贡献">
+                {formatWeightedScore(
+                  channel.health_score,
+                  channel.health_weight_pct,
+                )}
+              </TooltipKV>
+              <TooltipKV label="容量贡献">
+                {formatWeightedScore(
+                  channel.capacity_score,
+                  channel.capacity_weight_pct,
+                )}
+              </TooltipKV>
+              <TooltipKV label="Priority 贡献">
+                {formatWeightedScore(
+                  channel.priority_score,
+                  channel.priority_weight_pct,
+                )}
+              </TooltipKV>
+              <TooltipKV label="最终得分">
+                {formatObjectiveScore(channel.final_score)}
+              </TooltipKV>
+              <TooltipKV label="成本占售价">
+                {channel.cost_ratio != null
+                  ? formatPercent(channel.cost_ratio)
+                  : "—"}
+              </TooltipKV>
+              <TooltipKV label="错误率 / 样本">
+                {formatPercent(channel.error_rate)} / {channel.error_samples}
+              </TooltipKV>
+              <TooltipKV label="并发 / TPM 剩余">
+                {formatPercent(channel.concurrency_remaining)} /{" "}
+                {formatPercent(channel.tpm_remaining)}
+              </TooltipKV>
+              <TooltipKV label="TTFT / 样本">
+                {channel.ttft_ewma_ms != null
+                  ? formatLatencyMs(channel.ttft_ewma_ms)
+                  : "—"}{" "}
+                / {channel.ttft_samples}
+              </TooltipKV>
+              <TooltipKV label="Priority 原值">{channel.priority}</TooltipKV>
+              {mode === "fixed" ? (
+                <div className="text-background/70">
+                  固定线路展示评分事实，但不按分数重排。
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-2 text-xs">
+              <div className="font-medium">兼容权重评分</div>
+              <TooltipKV label="容量分">
+                {formatPercent(channel.capacity_score)}
+              </TooltipKV>
+              <TooltipKV label="成本占售价">
+                {channel.cost_ratio != null
+                  ? formatPercent(channel.cost_ratio)
+                  : "—"}
+              </TooltipKV>
+              <TooltipKV label="成本系数">
+                {(channel.cost_factor ?? 1).toFixed(4)}
+              </TooltipKV>
+              <TooltipKV label="成本权重">
+                {(channel.cost_weight ?? 0).toFixed(4)}
+              </TooltipKV>
+              <TooltipKV label="最终权重">
+                {channel.final_weight.toFixed(4)}
+              </TooltipKV>
+            </div>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function TrafficCell({ channel }: { channel: RouteRuntimeChannel }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`查看分流详情 ${formatPercent(channel.selected_share_1m)}`}
+            className="cursor-help text-left text-xs tabular-nums"
+          >
+            <span className="block font-medium">
+              {formatPercent(channel.selected_share_1m)}
+            </span>
+            <span className="text-muted-foreground mt-0.5 block">
+              {channel.selected_1m} 次 / 1m
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          align="start"
+          className="w-72 max-w-[min(18rem,calc(100vw-2rem))] p-3"
+        >
+          <div className="space-y-2 text-xs">
+            <div className="font-medium">当前线路内的最终命中分布</div>
+            <TooltipKV label="最近 1 分钟">
+              {channel.selected_1m} 次 ·{" "}
+              {formatPercent(channel.selected_share_1m)}
+            </TooltipKV>
+            <TooltipKV label="最近 5 分钟">
+              {channel.selected_5m} 次 ·{" "}
+              {formatPercent(channel.selected_share_5m)}
+            </TooltipKV>
+            <TooltipKV label="最近 1 分钟回退">{channel.fallback_1m}</TooltipKV>
+            <div className="text-background/70">
+              分流按当前线路统计；它不是配置权重，也不与其他线路共享。
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function SyncCell({
+  channel,
+  state,
+}: {
+  channel: RouteRuntimeChannel;
+  state: string;
+}) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`查看同步详情 ${RUNTIME_SYNC_LABELS[state] ?? state}`}
+            className="cursor-help text-left"
+          >
+            <RuntimeSyncBadge state={state} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          align="start"
+          className="w-[26rem] max-w-[min(26rem,calc(100vw-2rem))] p-3"
+        >
+          <div className="space-y-2 text-xs">
+            <div className="font-medium">版本与同步状态</div>
+            <TooltipKV label="同步状态">
+              {RUNTIME_SYNC_LABELS[state] ?? state}
+            </TooltipKV>
+            <TooltipKV label="渠道配置（库 / 运行）">
+              {formatRuntimeRevision(channel.channel_config_revision)} /{" "}
+              {formatRuntimeRevision(channel.runtime_channel_config_revision)}
+            </TooltipKV>
+            <TooltipKV label="准入限流（库 / 运行）">
+              {formatRuntimeRevision(channel.channel_admission_limits_revision)}{" "}
+              /{" "}
+              {formatRuntimeRevision(
+                channel.runtime_channel_admission_limits_revision,
+              )}
+            </TooltipKV>
+            <TooltipKV label="Provider origin（库 / 运行）">
+              {formatRuntimeRevision(channel.origin_revision)} /{" "}
+              {formatRuntimeRevision(channel.runtime_origin_revision)}
+            </TooltipKV>
+            <TooltipKV label="Provider 状态（库 / 运行）">
+              {formatRuntimeRevision(channel.provider_status_revision)} /{" "}
+              {formatRuntimeRevision(channel.runtime_provider_status_revision)}
+            </TooltipKV>
+            <TooltipKV label="默认限流（线路 / 渠道）">
+              {formatRuntimeRevision(channel.route_rate_limits_revision)} /{" "}
+              {formatRuntimeRevision(channel.channel_rate_limits_revision)}
+            </TooltipKV>
+            <TooltipKV label="控制（并发 / 熔断 / 均衡）">
+              {formatRuntimeRevision(channel.global_concurrency_revision)} /{" "}
+              {formatRuntimeRevision(channel.circuit_breaker_revision)} /{" "}
+              {formatRuntimeRevision(channel.routing_balance_revision)}
+            </TooltipKV>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function TTFTCell({
+  channel,
+  usable,
+}: {
+  channel: RouteRuntimeChannel;
+  usable: boolean;
+}) {
+  const hasSample =
+    usable && channel.ttft_samples > 0 && channel.ttft_ewma_ms != null;
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`查看 TTFT 详情 ${
+              hasSample ? formatLatencyMs(channel.ttft_ewma_ms) : "无样本"
+            }`}
+            className="cursor-help text-left text-xs tabular-nums"
+          >
+            {hasSample ? (
+              <>
+                <span className="block font-medium">
+                  {formatLatencyMs(channel.ttft_ewma_ms)}
+                </span>
+                <span className="text-muted-foreground mt-0.5 block">
+                  {channel.ttft_samples} 样本
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">无样本</span>
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent align="start" className="max-w-sm p-3">
+          <div className="space-y-2 text-xs leading-relaxed">
+            <div className="font-medium">流式首字时间（TTFT）</div>
+            <div>
+              这里是首个响应 Token
+              到达时间的指数移动平均，只采集流式请求；不是完整响应耗时，也不是简单算术平均。
+            </div>
+            <TooltipKV label="当前均值">
+              {hasSample ? formatLatencyMs(channel.ttft_ewma_ms) : "—"}
+            </TooltipKV>
+            <TooltipKV label="样本数">{channel.ttft_samples}</TooltipKV>
+            <TooltipKV label="样本来源">仅流式请求</TooltipKV>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 function RuntimeChannelTable({
@@ -811,7 +1330,11 @@ function RuntimeChannelTable({
         accessorFn: (row) =>
           row.eligible ? row.current_order : Number.MAX_SAFE_INTEGER,
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="顺序" />
+          <SortableColumnHeader
+            column={column}
+            label="顺序"
+            hint="当前请求计划中的候选顺序。被排除的渠道不参与排序；固定线路按配置顺序，负载均衡线路按当前得分排序。"
+          />
         ),
         cell: ({ row }) => (
           <span className="font-mono text-xs tabular-nums">
@@ -821,62 +1344,34 @@ function RuntimeChannelTable({
       },
       {
         id: "channel",
-        header: "渠道 / Provider",
+        header: () => (
+          <StaticColumnHeader
+            label="渠道"
+            hint="渠道是实际调用上游的配置实体。悬浮渠道名称可查看 Provider、协议、Adapter、状态、ID 和 Priority。"
+          />
+        ),
         enableSorting: false,
         enableHiding: false,
-        cell: ({ row }) => {
-          const channel = row.original;
-          const state = runtimeStateForChannel(channel, infrastructureDenied);
-          const providerLabel = channel.provider_name || `#${channel.provider_id}`;
-          const providerStatus =
-            channel.provider_status !== "enabled"
-              ? ` · ${channel.provider_status}`
-              : "";
-          return (
-            <div>
-              <div className="max-w-56 truncate font-medium">
-                {channel.channel_name}
-              </div>
-              <div className="text-muted-foreground mt-0.5 max-w-56 truncate text-xs">
-                {providerLabel}
-                {providerStatus}
-              </div>
-              {state !== "active" ? (
-                <div className="mt-1">
-                  <RuntimeSyncBadge state={state} />
-                </div>
-              ) : null}
-            </div>
-          );
-        },
+        cell: ({ row }) => <ChannelCell channel={row.original} />,
       },
       {
         id: "eligibility",
-        header: "资格",
+        header: () => (
+          <StaticColumnHeader
+            label="资格"
+            hint={
+              <div className="space-y-1.5">
+                <div>候选：满足所有硬条件，可进入当前请求的选路计划。</div>
+                <div>
+                  排除原因包括状态停用/归档、凭据或地址缺失、协议或模型不匹配、价格/毛利不合格、熔断/冷却、权限暂停及版本不同步。
+                </div>
+              </div>
+            }
+          />
+        ),
         enableSorting: false,
         enableHiding: false,
-        cell: ({ row }) => {
-          const channel = row.original;
-          return (
-            <div>
-              {channel.eligible ? (
-                <Badge variant="outline">
-                  <CheckCircle2Icon data-icon="inline-start" />
-                  候选
-                </Badge>
-              ) : (
-                <Badge variant="destructive">
-                  {reasonLabel(channel.excluded_reason || "excluded")}
-                </Badge>
-              )}
-              {channel.margin_status !== "safe" ? (
-                <div className="text-muted-foreground mt-1 text-xs">
-                  毛利 {marginStatusLabel(channel.margin_status)}
-                </div>
-              ) : null}
-            </div>
-          );
-        },
+        cell: ({ row }) => <EligibilityCell channel={row.original} />,
       },
       capacityColumn("concurrency", "并发", usableOf),
       capacityColumn("rpm", "RPM", usableOf),
@@ -887,37 +1382,73 @@ function RuntimeChannelTable({
         enableHiding: false,
         accessorFn: (row) => row.final_weight,
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="得分 / 分流" />
+          <SortableColumnHeader
+            column={column}
+            label="得分"
+            hint="负载均衡的当前客观总分。由经济、健康、容量和 Priority 四项按配置权重加权；悬浮数值可查看公式、分项、权重和输入事实。"
+          />
         ),
-        cell: ({ row }) => {
-          const channel = row.original;
-          if (!usableOf(channel)) {
-            return <span className="text-muted-foreground">—</span>;
-          }
-          return (
-            <div className="font-mono text-xs tabular-nums">
-              <div>
-                {isObjectiveScore(channel)
-                  ? `得分 ${formatObjectiveScore(channel.final_score)}`
-                  : `权重 ${channel.final_weight.toFixed(4)}`}
-              </div>
-              <div className="text-muted-foreground mt-1">
-                分流 {formatPercent(channel.selected_share_1m)}
-                {channel.fallback_1m > 0 ? (
-                  <span className="text-destructive">
-                    {" · "}回退 {channel.fallback_1m}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          );
-        },
+        cell: ({ row }) => (
+          <ScoreCell
+            channel={row.original}
+            mode={mode}
+            usable={usableOf(row.original)}
+          />
+        ),
+      },
+      {
+        id: "traffic",
+        header: () => (
+          <StaticColumnHeader
+            label="分流"
+            hint="当前线路内各渠道最终命中的实际分布。主值为最近 1 分钟占比；悬浮可查看 1m/5m 次数、占比及回退次数。"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => <TrafficCell channel={row.original} />,
+      },
+      {
+        id: "sync",
+        header: () => (
+          <StaticColumnHeader
+            label="同步"
+            hint="PostgreSQL 配置与 Redis 运行态是否一致。悬浮状态可核对渠道、Provider、限流、并发、熔断和均衡控制版本。"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <SyncCell
+            channel={row.original}
+            state={runtimeStateForChannel(row.original, infrastructureDenied)}
+          />
+        ),
+      },
+      {
+        id: "ttft",
+        header: () => (
+          <StaticColumnHeader
+            label="TTFT"
+            hint="流式请求从发起上游调用到收到首个 Token 的指数移动平均。它只使用流式样本，不代表完整响应耗时。"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <TTFTCell channel={row.original} usable={usableOf(row.original)} />
+        ),
       },
       {
         id: "actions",
         enableSorting: false,
         enableHiding: false,
-        header: () => <span className="text-muted-foreground">操作</span>,
+        header: () => (
+          <StaticColumnHeader
+            label="操作"
+            hint="打开渠道负载均衡完整详情，包括限流、熔断与拦截、健康、评分、分流和版本同步信息。"
+          />
+        ),
         cell: ({ row }) => (
           <Button
             variant="ghost"
@@ -931,7 +1462,7 @@ function RuntimeChannelTable({
         ),
       },
     ],
-    [infrastructureDenied, usableOf],
+    [infrastructureDenied, mode, usableOf],
   );
 
   const { table } = useDataTable({
@@ -1019,13 +1550,7 @@ function RuntimeChannelDetailSheet({
   );
 }
 
-function DetailKV({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function DetailKV({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 text-xs">
       <span className="text-muted-foreground">{label}</span>
@@ -1110,7 +1635,8 @@ function RuntimeChannelDetail({
             "—"
           ) : channel.model_permission_paused ? (
             <span className="text-destructive">
-              暂停 · {permissionStateLabel(channel.model_permission_recheck_state)}
+              暂停 ·{" "}
+              {permissionStateLabel(channel.model_permission_recheck_state)}
             </span>
           ) : (
             "正常"
@@ -1125,7 +1651,9 @@ function RuntimeChannelDetail({
             : "—"}
         </DetailKV>
         <DetailKV label="流式 TTFT">
-          {runtimeUsable && channel.ttft_samples > 0 && channel.ttft_ewma_ms != null
+          {runtimeUsable &&
+          channel.ttft_samples > 0 &&
+          channel.ttft_ewma_ms != null
             ? `${formatLatencyMs(channel.ttft_ewma_ms)} · ${channel.ttft_samples} 样本`
             : "—"}
         </DetailKV>
@@ -1138,7 +1666,9 @@ function RuntimeChannelDetail({
         </DetailKV>
       </DetailBlock>
 
-      <DetailBlock title={isObjectiveScore(channel) ? "客观评分" : "成本与权重"}>
+      <DetailBlock
+        title={isObjectiveScore(channel) ? "客观评分" : "成本与权重"}
+      >
         {isObjectiveScore(channel) ? (
           <>
             <DetailKV label="经济 / 健康">
@@ -1634,21 +2164,41 @@ function DecisionScoreTable({
                 </TableCell>
                 {objective ? (
                   <>
-                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.economic_score)}</TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.health_score)}</TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.capacity_score)}</TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.priority_score)}</TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{formatObjectiveScore(score.final_score)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {formatObjectiveScore(score.economic_score)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {formatObjectiveScore(score.health_score)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {formatObjectiveScore(score.capacity_score)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {formatObjectiveScore(score.priority_score)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {formatObjectiveScore(score.final_score)}
+                    </TableCell>
                   </>
                 ) : (
                   <>
-                    <TableCell className="font-mono text-xs tabular-nums">{formatPercent(score.capacity_score)}</TableCell>
                     <TableCell className="font-mono text-xs tabular-nums">
-                      {score.cost_ratio == null ? "—" : formatPercent(score.cost_ratio)}
+                      {formatPercent(score.capacity_score)}
                     </TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{(score.cost_weight ?? 0).toFixed(4)}</TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{(score.cost_factor ?? 1).toFixed(4)}</TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">{score.final_weight.toFixed(4)}</TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {score.cost_ratio == null
+                        ? "—"
+                        : formatPercent(score.cost_ratio)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {(score.cost_weight ?? 0).toFixed(4)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {(score.cost_factor ?? 1).toFixed(4)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums">
+                      {score.final_weight.toFixed(4)}
+                    </TableCell>
                   </>
                 )}
               </TableRow>

@@ -120,7 +120,13 @@ export function ChannelDetailContent({
     [channelId, channel, range, opsRow, runtime, runtimeSyncState],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="overview" />;
+  return (
+    <DetailSideNav
+      sections={sections}
+      defaultSectionId="overview"
+      orientation="horizontal"
+    />
+  );
 }
 
 function PerformanceSection({

@@ -6,10 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouteRuntimeSection } from "@/components/routes/RouteRuntimeSection";
-import type {
-  RouteRuntime,
-  RoutingDecision,
-} from "@/lib/api/routesOps";
+import type { RouteRuntime, RoutingDecision } from "@/lib/api/routesOps";
 
 const mocks = vi.hoisted(() => ({
   getModels: vi.fn(),
@@ -300,8 +297,13 @@ describe("RouteRuntimeSection", () => {
     // 资格列：候选 + 硬排除原因。
     expect(screen.getByText("候选")).toBeVisible();
     expect(screen.getByText("服务商停用")).toBeVisible();
-    // 权重/分流列精简后用「权重 x」。
-    expect(screen.getByText("权重 0.7200")).toBeVisible();
+    // 得分与分流已拆列；兼容算法主值只显示最终权重。
+    expect(screen.getByRole("columnheader", { name: /得分/ })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: /分流/ })).toBeVisible();
+    expect(screen.getByText("0.7200")).toBeVisible();
+    expect(screen.getAllByText("3 次 / 1m")).toHaveLength(2);
+    expect(screen.getByRole("columnheader", { name: /同步/ })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: /TTFT/ })).toBeVisible();
     // 四维余量拆列：条后显示 used / limit（两条渠道各一套）；合计卡也会出现同名标签。
     expect(screen.getAllByText("并发").length).toBeGreaterThan(0);
     expect(screen.getAllByText("RPM").length).toBeGreaterThan(0);
@@ -312,7 +314,8 @@ describe("RouteRuntimeSection", () => {
     expect(screen.getAllByText("12 / 60")).toHaveLength(2);
     expect(screen.getAllByText("30 / 300")).toHaveLength(2);
     expect(screen.getAllByText("100 / 1K")).toHaveLength(2);
-    expect(screen.getAllByText(/provider-a/).length).toBeGreaterThan(0);
+    // Provider 不再作为渠道单元格的次要文本常驻展示。
+    expect(screen.queryByText("provider-a")).not.toBeInTheDocument();
     // 精简后这些细节列不再出现在主表（收进展开区）。
     expect(screen.queryByText("成本占售价 25.0%")).not.toBeInTheDocument();
     expect(
@@ -345,6 +348,72 @@ describe("RouteRuntimeSection", () => {
     expect(within(detail).getByText("3 秒")).toBeVisible();
     expect(within(detail).getByText("暂停 · 待复检")).toBeVisible();
     expect(within(detail).getByText(/12 \/ 60 · 剩 80\.0%/)).toBeVisible();
+  });
+
+  it("reveals channel, score, traffic, sync, and TTFT details on hover", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    Object.assign(runtime.channels[0], {
+      algorithm_version: "objective_v1",
+      economic_score: 92,
+      health_score: 80,
+      capacity_score: 70,
+      priority_score: 100,
+      final_score: 85.4,
+      economic_weight_pct: 45,
+      health_weight_pct: 25,
+      capacity_weight_pct: 20,
+      priority_weight_pct: 10,
+    });
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    await screen.findByText("primary", { exact: true });
+    await userEvent.hover(
+      screen.getByRole("button", { name: "查看渠道 primary 详情" }),
+    );
+    expect(
+      (await screen.findAllByText(/provider-a \(#1\)/)).length,
+    ).toBeGreaterThan(0);
+
+    await userEvent.hover(
+      screen.getByRole("button", { name: "查看得分详情 85.40" }),
+    );
+    expect(
+      (await screen.findAllByText(/总分 = 经济×45%/)).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("客观评分 · objective_v1").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("92.00 × 45% = 41.40").length).toBeGreaterThan(
+      0,
+    );
+
+    await userEvent.hover(
+      screen.getAllByRole("button", { name: "查看分流详情 100.0%" })[0],
+    );
+    expect(
+      (await screen.findAllByText("当前线路内的最终命中分布")).length,
+    ).toBeGreaterThan(0);
+
+    await userEvent.hover(
+      screen.getAllByRole("button", { name: "查看同步详情 运行态已同步" })[0],
+    );
+    expect(
+      (await screen.findAllByText("版本与同步状态")).length,
+    ).toBeGreaterThan(0);
+
+    await userEvent.hover(
+      screen.getByRole("button", { name: "查看 TTFT 详情 120ms" }),
+    );
+    expect(
+      (await screen.findAllByText("流式首字时间（TTFT）")).length,
+    ).toBeGreaterThan(0);
   });
 
   it("renders route-level usage totals for all users", async () => {
@@ -419,7 +488,7 @@ describe("RouteRuntimeSection", () => {
     expect(row).not.toBeNull();
     if (!row) return;
     expect(within(row).getByText("版本不一致")).toBeVisible();
-    expect(within(row).queryByText("权重 0.7200")).not.toBeInTheDocument();
+    expect(within(row).queryByText("0.7200")).not.toBeInTheDocument();
   });
 
   it("treats a missing Channel runtime revision as no sample", async () => {
@@ -445,7 +514,7 @@ describe("RouteRuntimeSection", () => {
     expect(row).not.toBeNull();
     if (!row) return;
     expect(within(row).queryByText("版本不一致")).not.toBeInTheDocument();
-    expect(within(row).getByText("权重 0.7200")).toBeVisible();
+    expect(within(row).getByText("0.7200")).toBeVisible();
   });
 
   it("labels invalid pricing exclusions in Chinese", async () => {
@@ -520,12 +589,10 @@ describe("RouteRuntimeSection", () => {
     );
 
     await screen.findByText("req-old-trace");
-    await userEvent.click(
-      screen.getByRole("button", { name: "查看路由决策" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "查看路由决策" }));
     const dialog = await screen.findByRole("dialog");
-    const transportChain = within(dialog).getByText("实际尝试链")
-      .nextElementSibling;
+    const transportChain =
+      within(dialog).getByText("实际尝试链").nextElementSibling;
     expect(transportChain).toHaveTextContent(
       "primary (#10) · Responses Compact",
     );
@@ -569,7 +636,7 @@ describe("RouteRuntimeSection", () => {
       </TestProviders>,
     );
 
-    expect(await screen.findByText("得分 85.40")).toBeVisible();
+    expect(await screen.findByText("85.40")).toBeVisible();
     const detail = await openChannelDetail("primary");
     expect(within(detail).getByText("92.00 / 80.00")).toBeVisible();
     expect(within(detail).getByText("70.00 / 100.00")).toBeVisible();
@@ -590,20 +657,28 @@ describe("RouteRuntimeSection", () => {
     );
 
     await screen.findByText("req-objective-trace");
-    await userEvent.click(
-      screen.getByRole("button", { name: "查看路由决策" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "查看路由决策" }));
     const dialog = await screen.findByRole("dialog");
     const scoreTable = within(dialog)
       .getByRole("columnheader", { name: "总分" })
       .closest("table");
     expect(scoreTable).not.toBeNull();
     if (!scoreTable) return;
-    expect(within(scoreTable).getByRole("columnheader", { name: "经济" })).toBeVisible();
-    expect(within(scoreTable).getByRole("columnheader", { name: "健康" })).toBeVisible();
-    expect(within(scoreTable).getByRole("columnheader", { name: "容量" })).toBeVisible();
-    expect(within(scoreTable).getByRole("columnheader", { name: "Priority" })).toBeVisible();
-    const scoreRow = within(scoreTable).getByText("primary (#10)").closest("tr");
+    expect(
+      within(scoreTable).getByRole("columnheader", { name: "经济" }),
+    ).toBeVisible();
+    expect(
+      within(scoreTable).getByRole("columnheader", { name: "健康" }),
+    ).toBeVisible();
+    expect(
+      within(scoreTable).getByRole("columnheader", { name: "容量" }),
+    ).toBeVisible();
+    expect(
+      within(scoreTable).getByRole("columnheader", { name: "Priority" }),
+    ).toBeVisible();
+    const scoreRow = within(scoreTable)
+      .getByText("primary (#10)")
+      .closest("tr");
     expect(scoreRow).not.toBeNull();
     if (!scoreRow) return;
     expect(within(scoreRow).getByText("92.00")).toBeVisible();

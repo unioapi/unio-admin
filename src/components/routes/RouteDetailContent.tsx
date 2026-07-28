@@ -88,7 +88,13 @@ export function RouteDetailContent({
     [routeId, range],
   );
 
-  return <DetailSideNav sections={sections} defaultSectionId="runtime" />;
+  return (
+    <DetailSideNav
+      sections={sections}
+      defaultSectionId="runtime"
+      orientation="horizontal"
+    />
+  );
 }
 
 function PerformanceSection({
