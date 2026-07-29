@@ -47,8 +47,11 @@ function runtimeFixture(): RouteRuntime {
     rpm_limit: 60,
     rpm_remaining: 0.8,
     rpd_used: 30,
-    rpd_limit: 300,
-    rpd_remaining: 0.9,
+    rpd_limit: 0,
+    rpd_remaining: null,
+    global_rpd_used: 120,
+    global_rpd_limit: 300,
+    global_rpd_remaining: 0.6,
     tpm_used: 100,
     tpm_limit: 1000,
     tpm_remaining: 0.9,
@@ -312,7 +315,8 @@ describe("RouteRuntimeSection", () => {
     expect(screen.getByText("线路实时合计（全用户）")).toBeVisible();
     expect(screen.getAllByText("1 / 10")).toHaveLength(2);
     expect(screen.getAllByText("12 / 60")).toHaveLength(2);
-    expect(screen.getAllByText("30 / 300")).toHaveLength(2);
+    expect(screen.getAllByText("本线路 30")).toHaveLength(2);
+    expect(screen.getAllByText("全局 40%")).toHaveLength(2);
     expect(screen.getAllByText("100 / 1K")).toHaveLength(2);
     // Provider 不再作为渠道单元格的次要文本常驻展示。
     expect(screen.queryByText("provider-a")).not.toBeInTheDocument();
@@ -432,6 +436,59 @@ describe("RouteRuntimeSection", () => {
     expect(screen.getByText("18")).toBeVisible();
     expect(screen.getByText("90")).toBeVisible();
     expect(screen.getByText("2.5K")).toBeVisible();
+
+    await userEvent.hover(
+      screen.getByRole("button", { name: "线路RPD列说明" }),
+    );
+    expect(
+      (await screen.findAllByText(/记录 Route 入口事实，不要求等于各 Channel RPD 求和/)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("separates route-channel RPD attribution from global channel capacity", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    const rpdCell = await screen.findAllByRole("button", {
+      name: /RPD 当前线路 30 次，渠道全局 120 \/ 300/,
+    });
+    await userEvent.hover(rpdCell[0]);
+    expect(
+      (await screen.findAllByText("当前线路归因：30 次")).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/渠道全局容量：/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Route 入口与 Channel attempt 分别记录/).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("does not invent global RPD capacity when the backend omits new facts", async () => {
+    const runtime = runtimeFixture();
+    runtime.observed_at = new Date().toISOString();
+    delete runtime.channels[0].global_rpd_used;
+    delete runtime.channels[0].global_rpd_limit;
+    delete runtime.channels[0].global_rpd_remaining;
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    render(
+      <TestProviders>
+        <RouteRuntimeSection routeId={7} />
+      </TestProviders>,
+    );
+
+    const primary = await screen.findByText("primary", { exact: true });
+    const row = primary.closest("tr");
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(within(row).getByText("失败")).toBeVisible();
+    expect(within(row).queryByText(/NaN/)).not.toBeInTheDocument();
   });
 
   it("shows route usage unavailable when aggregate is missing", async () => {

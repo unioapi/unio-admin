@@ -666,10 +666,26 @@ function RouteUsageSummary({ runtime }: { runtime: RouteRuntime }) {
         </div>
       ) : (
         <div className="grid overflow-hidden rounded-lg border sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryItem label="并发" value={formatCompact(usage.concurrency)} />
-          <SummaryItem label="RPM" value={formatCompact(usage.rpm)} />
-          <SummaryItem label="RPD" value={formatCompact(usage.rpd)} />
-          <SummaryItem label="TPM" value={formatCompact(usage.tpm)} />
+          <SummaryItem
+            label="并发"
+            value={formatCompact(usage.concurrency)}
+            hint="该线路全部用户当前仍在 Gateway 请求生命周期内的入口请求数，覆盖路由、候选等待、上游调用、结算和响应写出。"
+          />
+          <SummaryItem
+            label="RPM"
+            value={formatCompact(usage.rpm)}
+            hint="该线路全部用户在当前 UTC 自然分钟内通过入口准入的请求数。一次客户请求只计一次，fallback 不重复。"
+          />
+          <SummaryItem
+            label="RPD"
+            value={formatCompact(usage.rpd)}
+            hint="该线路全部用户在当前 UTC 自然日内通过入口准入的请求数。它记录 Route 入口事实，不要求等于各 Channel RPD 求和。"
+          />
+          <SummaryItem
+            label="TPM"
+            value={formatCompact(usage.tpm)}
+            hint="该线路全部用户在当前 UTC 自然分钟内的请求级 Token 用量，包含已完成实际值和在途请求的完整预算；明确未访问上游时释放预算。"
+          />
         </div>
       )}
     </div>
@@ -680,14 +696,19 @@ function SummaryItem({
   label,
   value,
   danger = false,
+  hint,
 }: {
   label: string;
   value: string;
   danger?: boolean;
+  hint?: ReactNode;
 }) {
   return (
     <div className="border-b px-3 py-3 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0">
-      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className="text-muted-foreground flex items-center gap-1 text-xs">
+        <span>{label}</span>
+        {hint ? <ColumnHelp label={`线路${label}`}>{hint}</ColumnHelp> : null}
+      </div>
       <div
         className={cn(
           "mt-1 text-sm font-semibold tabular-nums",
@@ -730,6 +751,8 @@ type CapacityDimension = {
   used: number;
   limit: number;
   remaining: number | null;
+  capacityUsed?: number;
+  factsUnavailable?: boolean;
 };
 
 function capacityDimensions(channel: RouteRuntimeChannel): CapacityDimension[] {
@@ -752,8 +775,11 @@ function capacityDimensions(channel: RouteRuntimeChannel): CapacityDimension[] {
       key: "rpd",
       label: "RPD",
       used: channel.rpd_used,
-      limit: channel.rpd_limit,
-      remaining: channel.rpd_remaining,
+      limit: channel.global_rpd_limit ?? 0,
+      remaining: channel.global_rpd_remaining ?? null,
+      capacityUsed: channel.global_rpd_used,
+      factsUnavailable:
+        channel.global_rpd_used == null || channel.global_rpd_limit == null,
     },
     {
       key: "tpm",
@@ -781,17 +807,22 @@ function CapacityDimCell({
   usable: boolean;
 }) {
   if (!usable) return <span className="text-muted-foreground">—</span>;
-  if (channel.capacity_read_failed) {
+  if (channel.capacity_read_failed || dim.factsUnavailable) {
     return <Badge variant="destructive">失败</Badge>;
   }
 
   const unlimited = dim.limit <= 0;
+  const capacityUsed = dim.capacityUsed ?? dim.used;
+  const routeRPD = dim.key === "rpd";
   const remaining = unlimited ? 1 : dimensionRemaining(dim);
   const usagePct = unlimited
     ? 0
     : Math.min(
         100,
-        Math.max(0, Math.round((dim.used / Math.max(dim.limit, 1)) * 100)),
+        Math.max(
+          0,
+          Math.round((capacityUsed / Math.max(dim.limit, 1)) * 100),
+        ),
       );
   const tone = unlimited
     ? "ok"
@@ -815,7 +846,11 @@ function CapacityDimCell({
             type="button"
             className="relative w-[9.75rem] cursor-help text-left"
             aria-label={
-              unlimited
+              routeRPD
+                ? unlimited
+                  ? `RPD 当前线路 ${formatCompact(dim.used)} 次，渠道全局不限`
+                  : `RPD 当前线路 ${formatCompact(dim.used)} 次，渠道全局 ${formatCapacity(capacityUsed, dim.limit)}，占用 ${usagePct}%`
+                : unlimited
                 ? `${dim.label} 不限`
                 : `${dim.label} ${formatCapacity(dim.used, dim.limit)}，占用 ${usagePct}%`
             }
@@ -834,10 +869,20 @@ function CapacityDimCell({
                     "font-medium text-red-800 dark:text-red-300",
                 )}
               >
-                {unlimited ? "不限" : formatCapacity(dim.used, dim.limit)}
+                {routeRPD
+                  ? `本线路 ${formatCompact(dim.used)}`
+                  : unlimited
+                    ? "不限"
+                    : formatCapacity(dim.used, dim.limit)}
               </span>
               <span className="text-muted-foreground shrink-0">
-                {unlimited ? "—" : `${usagePct}%`}
+                {routeRPD
+                  ? unlimited
+                    ? "全局不限"
+                    : `全局 ${usagePct}%`
+                  : unlimited
+                    ? "—"
+                    : `${usagePct}%`}
               </span>
             </span>
           </button>
@@ -845,13 +890,30 @@ function CapacityDimCell({
         <TooltipContent align="start">
           <div className="text-xs">
             <div className="font-medium">
-              {dim.label}（渠道级，所有用户累加）
+              {routeRPD
+                ? "RPD（当前线路 Channel attempt）"
+                : `${dim.label}（渠道级，所有线路累加）`}
             </div>
-            <div className="mt-1 tabular-nums">
-              {unlimited
-                ? "未设限"
-                : `${formatCapacity(dim.used, dim.limit)} · 占用 ${usagePct}% · 剩 ${formatPercent(dim.remaining)}`}
-            </div>
+            {routeRPD ? (
+              <div className="mt-1 space-y-1 tabular-nums">
+                <div>当前线路归因：{formatCompact(dim.used)} 次</div>
+                <div>
+                  渠道全局容量：
+                  {unlimited
+                    ? `${formatCompact(capacityUsed)} / 不限`
+                    : `${formatCapacity(capacityUsed, dim.limit)} · 占用 ${usagePct}% · 剩 ${formatPercent(dim.remaining)}`}
+                </div>
+                <div className="text-background/70">
+                  Route 入口与 Channel attempt 分别记录，不要求求和相等。
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1 tabular-nums">
+                {unlimited
+                  ? "未设限"
+                  : `${formatCapacity(dim.used, dim.limit)} · 占用 ${usagePct}% · 剩 ${formatPercent(dim.remaining)}`}
+              </div>
+            )}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -895,10 +957,10 @@ function capacityColumn(
 function capacityColumnHint(key: CapacityDimension["key"]): string {
   const hints: Record<string, string> = {
     concurrency:
-      "该渠道当前在途的上游调用数 / 渠道并发上限。按渠道全局统计，多个线路共用同一份用量。",
-    rpm: "该渠道当前 UTC 自然分钟内的请求数 / RPM 上限。按渠道全局统计。",
-    rpd: "该渠道当前 UTC 自然日内的请求数 / RPD 上限。按渠道全局统计。",
-    tpm: "该渠道当前 UTC 自然分钟内的 Token 数 / TPM 上限。请求开始按预估量占用，结束后按实际用量校正。",
+      "该 Channel 当前持有 AttemptPermit 的上游 attempt 数。按 Channel 全局统计，多条 Route 共用同一份并发容量。",
+    rpm: "该 Channel 当前 UTC 自然分钟内已有上游交互证据或结果不确定的 attempt 数。明确未写出请求时释放；按 Channel 全局统计。",
+    rpd: "主值是当前 Route 归因到该 Channel 的 attempt 数；悬浮单元格可查看 Channel 跨 Route 的全局 RPD 容量。Route 入口与 Channel attempt 分别记录，不要求求和相等。",
+    tpm: "该 Channel 当前 UTC 自然分钟内跨 Route 的 Token 用量与在途完整预算。结束后按上游 usage、本地输出或输入保底值校正。",
   };
   return hints[key] ?? "渠道级限流使用量与上限。";
 }

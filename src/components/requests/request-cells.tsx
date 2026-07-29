@@ -385,41 +385,57 @@ export function RequestReasoningCell({ row }: { row: RequestListItem }) {
   );
 }
 
-/** 线路：线路名 + 经过渠道数徽章（悬浮显示 策略 / 倍率 / 经过渠道 / 命中渠道）。 */
+/** 线路：线路名 + 命中渠道副标题 + 经过渠道数徽章（悬浮显示 策略 / 倍率 / 经过渠道 / 命中渠道）。 */
 export function RequestRouteCell({ row }: { row: RequestListItem }) {
   const route = row.route_name;
   const chain = row.channel_chain || "";
   const channelCount = chain
     ? chain.split(" → ").filter(Boolean).length
-    : row.final_channel_name
+    : row.final_channel_name || row.final_channel_id != null
       ? 1
       : 0;
 
-  if (!route && !chain && !row.final_channel_name) return <Dash />;
+  if (!route && !chain && !row.final_channel_name && row.final_channel_id == null) {
+    return <Dash />;
+  }
 
   const modeLabel = row.route_mode ? ROUTE_MODE_LABEL[row.route_mode] ?? row.route_mode : null;
   const ratio = row.route_price_ratio;
   const chainDisplay = chain || row.final_channel_name || "";
+  const hitChannelLabel =
+    row.final_channel_name || row.final_channel_id != null
+      ? [
+          row.final_channel_name,
+          row.final_channel_id != null ? `#${row.final_channel_id}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className="flex min-w-0 max-w-full cursor-default items-center gap-1 py-0.5 text-left"
+          className="flex min-w-0 max-w-full cursor-default flex-col gap-0.5 py-0.5 text-left"
         >
-          <span className="min-w-0 truncate underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
-            {route ?? "—"}
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="min-w-0 truncate underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
+              {route ?? "—"}
+            </span>
+            {channelCount > 0 ? (
+              <Badge
+                variant="secondary"
+                className="h-4 shrink-0 px-1 text-[10px] tabular-nums font-medium"
+                title={`经过 ${channelCount} 个渠道`}
+                aria-label={`经过 ${channelCount} 个渠道`}
+              >
+                {channelCount}
+              </Badge>
+            ) : null}
           </span>
-          {channelCount > 0 ? (
-            <Badge
-              variant="secondary"
-              className="h-4 shrink-0 px-1 text-[10px] tabular-nums font-medium"
-              title={`经过 ${channelCount} 个渠道`}
-              aria-label={`经过 ${channelCount} 个渠道`}
-            >
-              {channelCount}
-            </Badge>
+          {hitChannelLabel ? (
+            <span className="text-muted-foreground truncate text-[10px]">{hitChannelLabel}</span>
           ) : null}
         </button>
       </HoverCardTrigger>
@@ -429,7 +445,7 @@ export function RequestRouteCell({ row }: { row: RequestListItem }) {
           <div className="flex flex-col gap-1">
             {modeLabel && <Field label="策略" value={modeLabel} />}
             {ratio && <Field label="倍率" value={`× ${trimDecimal(ratio)}`} />}
-            {row.final_channel_name && <Field label="命中渠道" value={row.final_channel_name} />}
+            {hitChannelLabel && <Field label="命中渠道" value={hitChannelLabel} />}
             {channelCount > 0 && <Field label="经过渠道数" value={String(channelCount)} />}
           </div>
           <div className="flex flex-col gap-0.5">

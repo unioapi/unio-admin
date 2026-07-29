@@ -146,6 +146,9 @@ export interface RouteRuntimeChannel {
   rpd_used: number;
   rpd_limit: number;
   rpd_remaining: number | null;
+  global_rpd_used?: number;
+  global_rpd_limit?: number;
+  global_rpd_remaining?: number | null;
   tpm_used: number;
   tpm_limit: number;
   tpm_remaining: number | null;
