@@ -2,6 +2,7 @@ import { useState, type SubmitEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { UnioMark } from "@/components/brand/UnioMark";
 import { HintLabel } from "@/components/common/field-hint";
 import {
   Card,
@@ -50,9 +51,7 @@ export function LoginPage() {
     <div className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <div className="mb-1 flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <span className="text-base font-semibold">U</span>
-          </div>
+          <UnioMark className="mb-1 size-10 rounded-lg" />
           <CardTitle>Unio 控制台</CardTitle>
           <CardDescription>输入管理端访问 Token 登录</CardDescription>
         </CardHeader>

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/theme/ModeToggle";
+import { UnioMark } from "@/components/brand/UnioMark";
 import { useAuth } from "@/lib/auth/AuthContext";
 
 interface NavItem {
@@ -115,9 +116,7 @@ export function AppLayout() {
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2 px-1 py-1.5">
-            <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <span className="text-sm font-semibold">U</span>
-            </div>
+            <UnioMark className="size-7" />
             <span className="font-heading text-sm font-semibold">
               UNIO 控制台
             </span>

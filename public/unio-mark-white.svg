@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 678 496" role="img" aria-labelledby="title desc">
+  <title id="title">White UnioAPI logo mark</title>
+  <desc id="desc">The UnioAPI logo mark in white on a transparent canvas.</desc>
+  <g fill="none" stroke="#FFFFFF" stroke-width="86" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M143 128v182c0 58 39 103 89 103 55 0 100-43 100-100v-60"/>
+    <path d="M332 253v60c0 57 39 100 89 100s88-43 88-100v-60"/>
+  </g>
+  <circle cx="509" cy="129" r="44" fill="#FFFFFF"/>
+</svg>
