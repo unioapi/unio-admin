@@ -684,7 +684,7 @@ function RouteUsageSummary({ runtime }: { runtime: RouteRuntime }) {
           <SummaryItem
             label="TPM"
             value={formatCompact(usage.tpm)}
-            hint="该线路全部用户在当前 UTC 自然分钟内的请求级 Token 用量，包含已完成实际值和在途请求的完整预算；明确未访问上游时释放预算。"
+            hint="该线路全部用户当前分钟的 TPM 占用。运行中请求先记候选池最大完整输入；完成且有可靠 usage 后结算为实际总 Token；已触达但无可靠 usage 时保留输入。"
           />
         </div>
       )}
@@ -960,7 +960,8 @@ function capacityColumnHint(key: CapacityDimension["key"]): string {
       "该 Channel 当前持有 AttemptPermit 的上游 attempt 数。按 Channel 全局统计，多条 Route 共用同一份并发容量。",
     rpm: "该 Channel 当前 UTC 自然分钟内已有上游交互证据或结果不确定的 attempt 数。明确未写出请求时释放；按 Channel 全局统计。",
     rpd: "主值是当前 Route 归因到该 Channel 的 attempt 数；悬浮单元格可查看 Channel 跨 Route 的全局 RPD 容量。Route 入口与 Channel attempt 分别记录，不要求求和相等。",
-    tpm: "该 Channel 当前 UTC 自然分钟内跨 Route 的 Token 用量与在途完整预算。结束后按上游 usage、本地输出或输入保底值校正。",
+    tpm:
+      "该 Channel 当前 UTC 自然分钟内跨 Route 的 TPM 占用。每个上游 attempt 先记自己的完整输入；有可靠 usage 后结算为实际总 Token；已触达但无可靠 usage 时保留输入。",
   };
   return hints[key] ?? "渠道级限流使用量与上限。";
 }

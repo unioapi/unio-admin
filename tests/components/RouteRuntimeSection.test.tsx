@@ -441,7 +441,19 @@ describe("RouteRuntimeSection", () => {
       screen.getByRole("button", { name: "线路RPD列说明" }),
     );
     expect(
-      (await screen.findAllByText(/记录 Route 入口事实，不要求等于各 Channel RPD 求和/)).length,
+      (
+        await screen.findAllByText(
+          /记录 Route 入口事实，不要求等于各 Channel RPD 求和/,
+        )
+      ).length,
+    ).toBeGreaterThan(0);
+
+    await userEvent.hover(
+      screen.getByRole("button", { name: "线路TPM列说明" }),
+    );
+    expect(
+      (await screen.findAllByText(/运行中请求先记候选池最大完整输入/))
+        .length,
     ).toBeGreaterThan(0);
   });
 
