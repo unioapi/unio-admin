@@ -224,7 +224,7 @@ export function RequestTokensCell({ row }: { row: RequestListItem }) {
   );
 }
 
-/** 耗时：主行总耗时 + 次行 Gateway 首字/TPS；悬浮显示明细 + 口径说明。总耗时不按阈值着色（长输出本身就会很长）。 */
+/** 耗时：主行总耗时 + 次行首字/TPS；悬浮显示明细 + 口径说明。总耗时不按阈值着色（长输出本身就会很长）。 */
 export function RequestTimingCell({ row }: { row: RequestListItem }) {
   const th = useMetricThresholds();
   if (row.latency_ms == null && row.gateway_ttft_ms == null && row.tps == null) return <Dash />;
@@ -242,7 +242,7 @@ export function RequestTimingCell({ row }: { row: RequestListItem }) {
             <span className="text-muted-foreground text-[10px]">
               {row.gateway_ttft_ms != null && (
                 <span className={ttftClass(row.gateway_ttft_ms, th)}>
-                  Gateway 首字 {formatLatencyMs(row.gateway_ttft_ms)}
+                  首字 {formatLatencyMs(row.gateway_ttft_ms)}
                 </span>
               )}
               {row.gateway_ttft_ms != null && row.tps != null ? " · " : ""}
@@ -257,14 +257,14 @@ export function RequestTimingCell({ row }: { row: RequestListItem }) {
           <div className="flex flex-col gap-1">
             <Field label="总耗时" value={row.latency_ms != null ? formatLatencyMs(row.latency_ms) : "—"} />
             <Field
-              label="Gateway TTFT"
+              label="首字"
               value={row.gateway_ttft_ms != null ? formatLatencyMs(row.gateway_ttft_ms) : "—"}
             />
             <Field label="生成速率" value={row.tps != null ? formatTPS(row.tps) : "—"} />
             <Field label="输出 tokens" value={formatInt(row.output_tokens)} />
           </div>
           <p className="text-muted-foreground/80 text-[10px] leading-relaxed">
-            总耗时 = 完成 − 开始；Gateway TTFT = gateway_first_token_at − started_at；速率 = 输出 tokens ÷（完成 − Gateway 首字）。
+            总耗时 = 完成 − 开始；首字 = gateway_first_token_at − started_at；速率 = 输出 tokens ÷（完成 − 首字）。
           </p>
         </div>
       </TipHoverCardContent>
