@@ -100,7 +100,7 @@ export interface TtftStats {
   p90: number;
   p95: number;
   p99: number;
-  /** 测到首 token（response_started_at 非空）的请求数 */
+  /** 测到 Gateway 首字（gateway_first_token_at 非空）的请求数 */
   sample: number;
   /** sample / 区间总请求，反映平均/分位的代表性 */
   coverage: number;
@@ -141,7 +141,7 @@ export interface RadarReport {
   range: { from: string; to: string };
   requests: RadarRequests;
   latency: LatencyStats;
-  ttft: TtftStats;
+  gateway_ttft: TtftStats;
   tps: number;
   tokens: TokenStats;
   cache: CacheStats;
@@ -210,7 +210,7 @@ export interface TopErrorsResult {
 interface PerformancePoint {
   bucket: string;
   latency_p95: number;
-  ttft_p95: number;
+  gateway_ttft_p95: number;
   tps: number;
 }
 

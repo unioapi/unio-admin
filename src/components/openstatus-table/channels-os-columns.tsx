@@ -17,7 +17,6 @@ import {
   ChannelLastTestCell,
   channelLastTestAutoSizeLabel,
 } from "@/components/channels/ChannelLastTest";
-import { RateLimitSummaryCell } from "@/components/rate-limit/RateLimitSummaryCell";
 import { ChannelRowActions } from "@/components/channels/ChannelRowActions";
 import { SecretCopyCell } from "@/components/common/SecretCopyCell";
 import {
@@ -51,7 +50,8 @@ export const CHANNEL_OS_COLUMN_LABELS: Record<string, string> = {
   protocol_adapter: "协议/Adapter",
   credential: "凭证",
   multipliers: "倍率",
-  rate_limit: "限流",
+  priority: "优先级",
+  concurrency: "并发",
   bound_models: "模型",
   bound_routes: "线路",
   timeout: "超时",
@@ -298,35 +298,33 @@ function ChannelProtocolAdapterCell({
   );
 }
 
-function ChannelRateLimitCell({
-  rpm,
-  tpm,
-  rpd,
-  concurrency,
-}: {
-  rpm: number | null;
-  tpm: number | null;
-  rpd: number | null;
-  concurrency: number | null;
-}) {
+function ChannelConcurrencyCell({ limit }: { limit: number | null }) {
+  if (limit == null) {
+    return <span className="text-muted-foreground text-xs">继承默认</span>;
+  }
   return (
-    <RateLimitSummaryCell
-      rpm={rpm}
-      tpm={tpm}
-      rpd={rpd}
-      concurrency={concurrency}
-      scopeLabel="渠道级限流"
-      defaultScope="渠道"
-    />
+    <span className="tabular-nums text-xs">
+      {limit === 0 ? "不限" : formatInt(limit)}
+    </span>
   );
 }
 
-function ChannelTimeoutCell({ timeoutMs }: { timeoutMs: number | null }) {
-  if (timeoutMs == null) {
-    return <span className="text-muted-foreground text-xs">默认</span>;
-  }
+function ChannelTimeoutCell({
+  responseTimeoutMs,
+  firstTokenTimeoutMs,
+}: {
+  responseTimeoutMs: number | null;
+  firstTokenTimeoutMs: number | null;
+}) {
   return (
-    <span className="tabular-nums text-xs">{formatLatencyMs(timeoutMs)}</span>
+    <div className="flex flex-col gap-0.5 text-xs tabular-nums">
+      <span>
+        响应 {responseTimeoutMs == null ? "默认" : formatLatencyMs(responseTimeoutMs)}
+      </span>
+      <span className="text-muted-foreground">
+        上游首字 {firstTokenTimeoutMs == null ? "默认" : formatLatencyMs(firstTokenTimeoutMs)}
+      </span>
+    </div>
   );
 }
 
@@ -399,7 +397,7 @@ function ChannelMultipliersCell({
       </HoverCardTrigger>
       <HoverCardContent align="start" className="w-80 space-y-3">
         <div className="space-y-1">
-          <div className="text-sm font-medium">渠道倍率</div>
+          <div className="text-sm font-medium">倍率</div>
           <p className="text-muted-foreground text-xs leading-relaxed">
             上游名义成本 = 模型基准价 × 价格倍率；真实成本 = 名义成本 ×
             充值倍率。
@@ -574,10 +572,10 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
     },
     {
       id: "multipliers",
-      header: ({ column }) => <ColumnHeader column={column} title="渠道倍率" />,
+      header: ({ column }) => <ColumnHeader column={column} title="倍率" />,
       enableSorting: false,
       meta: {
-        label: "渠道倍率",
+        label: "倍率",
         autoSizeValue: (row: ChannelOpsRow) =>
           `${formatMultiplier(row.cost_multiplier)} / ${formatMultiplier(row.recharge_factor)}`,
       },
@@ -591,30 +589,30 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
       ),
     },
     {
-      id: "rate_limit",
-      header: ({ column }) => <ColumnHeader column={column} title="限流" />,
-      enableSorting: false,
+      id: "priority",
+      accessorKey: "priority",
+      header: ({ column }) => <ColumnHeader column={column} title="优先级" />,
       meta: {
-        autoSizeValue: (row: ChannelOpsRow) => {
-          if (
-            row.rpm_limit == null &&
-            row.tpm_limit == null &&
-            row.rpd_limit == null &&
-            row.concurrency_limit == null
-          ) {
-            return "默认";
-          }
-          if (row.rpm_limit === 0) return "不限";
-          return formatInt(row.rpm_limit ?? 0);
-        },
+        autoSizeValue: (row: ChannelOpsRow) => String(row.priority),
       },
       cell: ({ row }) => (
-        <ChannelRateLimitCell
-          rpm={row.original.rpm_limit}
-          tpm={row.original.tpm_limit}
-          rpd={row.original.rpd_limit}
-          concurrency={row.original.concurrency_limit}
-        />
+        <span className="tabular-nums text-sm">{row.original.priority}</span>
+      ),
+    },
+    {
+      id: "concurrency",
+      header: ({ column }) => <ColumnHeader column={column} title="并发" />,
+      enableSorting: false,
+      meta: {
+        autoSizeValue: (row: ChannelOpsRow) =>
+          row.concurrency_limit == null
+            ? "继承默认"
+            : row.concurrency_limit === 0
+              ? "不限"
+              : formatInt(row.concurrency_limit),
+      },
+      cell: ({ row }) => (
+        <ChannelConcurrencyCell limit={row.original.concurrency_limit} />
       ),
     },
     {
@@ -641,11 +639,14 @@ export function channelOsColumns(): ColumnDef<ChannelOpsRow, unknown>[] {
     },
     {
       id: "timeout",
-      accessorKey: "timeout_ms",
+      accessorKey: "response_timeout_ms",
       header: ({ column }) => <ColumnHeader column={column} title="超时" />,
       enableSorting: false,
       cell: ({ row }) => (
-        <ChannelTimeoutCell timeoutMs={row.original.timeout_ms} />
+        <ChannelTimeoutCell
+          responseTimeoutMs={row.original.response_timeout_ms}
+          firstTokenTimeoutMs={row.original.first_token_timeout_ms}
+        />
       ),
     },
     {

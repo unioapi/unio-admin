@@ -12,20 +12,23 @@ test.describe("P3 routing operations", () => {
     }, adminToken!);
   });
 
-  test("shows live route capacity and recent decisions", async ({ page }) => {
+  test("shows live candidate order and scoring samples", async ({ page }) => {
     const runtimeResponse = page.waitForResponse((response) =>
       response.url().includes(`/admin/v1/routes/${routeID}/ops/runtime`),
     );
     await page.goto(`/routes/${routeID}`);
 
-    await expect(page.getByRole("heading", { name: "实时路由" })).toBeVisible();
-    await expect(page.getByText("有效候选")).toBeVisible();
-    await expect(page.getByText("最近路由决策")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "实时路由" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "候选顺序表" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "最近 30 分钟评分样本" }),
+    ).toBeVisible();
 
     const response = await runtimeResponse;
     expect(response.ok()).toBeTruthy();
     const payload = await response.json();
-    expect(payload.data.pool_size).toBeGreaterThan(0);
+    expect(payload.data.route_summary.pool_size).toBeGreaterThan(0);
     expect(Array.isArray(payload.data.channels)).toBeTruthy();
+    expect(payload.data.source_status.state).toBeTruthy();
   });
 });

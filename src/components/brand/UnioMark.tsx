@@ -7,25 +7,22 @@ interface UnioMarkProps {
 export function UnioMark({ className }: UnioMarkProps) {
   return (
     <span
-      className={cn(
-        "relative inline-flex shrink-0 overflow-hidden rounded-md",
-        className,
-      )}
+      className={cn("relative inline-flex shrink-0", className)}
       aria-hidden="true"
     >
       <img
-        src="/unio-mark-on-white-square.svg"
+        src="/unio-mark.svg"
         alt=""
         width="678"
-        height="678"
-        className="size-full object-cover dark:hidden"
+        height="496"
+        className="size-full object-contain dark:hidden"
       />
       <img
-        src="/unio-mark-on-black-square.svg"
+        src="/unio-mark-white.svg"
         alt=""
         width="678"
-        height="678"
-        className="hidden size-full object-cover dark:block"
+        height="496"
+        className="hidden size-full object-contain dark:block"
       />
     </span>
   );

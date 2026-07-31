@@ -16,7 +16,8 @@ export interface ChannelOpsRow {
   adapter_key: string;
   origin: string;
   priority: number;
-  timeout_ms: number | null;
+  response_timeout_ms: number | null;
+  first_token_timeout_ms: number | null;
   provider_name: string;
   credential: string;
   attempt_total: number;
@@ -27,10 +28,6 @@ export interface ChannelOpsRow {
   bound_models: number;
   bound_routes: number;
   recent_error_code: string;
-  // 渠道级限流（P2-8）：null=继承渠道默认限流，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
-  rpm_limit: number | null;
-  tpm_limit: number | null;
-  rpd_limit: number | null;
   // 渠道在途并发（DEC-029）：null=继承并发默认 channel_limit，0=不限，>0=具体上限。
   concurrency_limit: number | null;
   last_tested_at: string | null;
@@ -59,9 +56,6 @@ export interface ChannelBreakerSnapshot {
   consecutive_failures: number;
   error_rate: number;
   sample_count: number;
-  ttft_ewma_ms: number;
-  ttft_samples: number;
-  ttft_sample_source: "stream_only";
   // 客户端收到 Redis 快照的时间，仅用于本地倒计时，不属于服务端 DTO。
   observed_at: string;
 }
@@ -72,15 +66,15 @@ export interface ChannelRuntime {
   origin_revision: number;
   provider_status_revision: number;
   config_revision: number;
-  admission_limits_revision: number;
+  capacity_revision: number;
   runtime_sync_state: RuntimeSyncState;
   runtime_provider_id: number | null;
   runtime_origin_revision: number | null;
   runtime_provider_status_revision: number | null;
   runtime_config_revision: number | null;
-  runtime_admission_active_revision: number | null;
-  runtime_admission_pending_revision: number | null;
-  admission_payload_matches: boolean;
+  runtime_capacity_active_revision: number | null;
+  runtime_capacity_pending_revision: number | null;
+  capacity_payload_matches: boolean;
   breaker: ChannelBreakerSnapshot | null;
 }
 

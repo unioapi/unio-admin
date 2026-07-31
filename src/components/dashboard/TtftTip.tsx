@@ -144,17 +144,17 @@ function PercentileBars({ ttft }: { ttft: TtftStats }) {
   );
 }
 
-/** 平均 TTFT 卡片悬浮详情。 */
+/** 平均 Gateway TTFT 卡片悬浮详情。 */
 export function TtftTip({ ttft }: { ttft: TtftStats }) {
   const th = useMetricThresholds();
   if (!ttft.has_data) {
     return (
       <div className="w-full space-y-2">
-        <div className="text-sm font-semibold leading-tight">平均 TTFT</div>
+        <div className="text-sm font-semibold leading-tight">平均 Gateway TTFT</div>
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          暂无首 token 时间数据。仅已开始返回内容（多为流式）的请求会记录{" "}
+          暂无 Gateway 首字时间数据。仅已向客户交付有效生成 Token（多为流式）的请求会记录{" "}
           <code className="bg-muted/60 rounded px-1 py-px font-mono text-[10px]">
-            response_started_at
+            gateway_first_token_at
           </code>
           ；历史请求或非流式请求不计入。
         </p>
@@ -167,9 +167,9 @@ export function TtftTip({ ttft }: { ttft: TtftStats }) {
       {/* 顶栏 + 平均值（中性色；告警看 P95 行，避免平均被 P95 阈值误染色） */}
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold leading-tight">平均 TTFT</div>
+          <div className="text-sm font-semibold leading-tight">平均 Gateway TTFT</div>
           <div className="text-muted-foreground mt-0.5 text-[11px]">
-            首 token 延迟（Time To First Token）
+            客户侧首字延迟（gateway_first_token_at − started_at）
           </div>
         </div>
         <div className="font-heading text-foreground text-xl font-semibold tabular-nums">
@@ -195,7 +195,7 @@ export function TtftTip({ ttft }: { ttft: TtftStats }) {
           <SummaryRow label="覆盖率" value={formatPercent(ttft.coverage)} />
         </div>
         <p className="text-muted-foreground pt-1 text-[10px] leading-relaxed">
-          覆盖率 = 样本 ÷ 区间总请求；偏低说明多数请求（非流式 / 未完成）未测到首 token，
+          覆盖率 = 样本 ÷ 区间总请求；偏低说明多数请求（非流式 / 未完成）未测到 Gateway 首字，
           平均值仅代表已测样本。
         </p>
       </TipSection>
@@ -204,7 +204,7 @@ export function TtftTip({ ttft }: { ttft: TtftStats }) {
       <TipSection title="口径">
         <div className="bg-muted/30 rounded-md px-2.5 py-2">
           <p className="text-foreground font-mono text-[10px] leading-relaxed">
-            TTFT = response_started_at − started_at
+            Gateway TTFT = gateway_first_token_at − started_at
           </p>
         </div>
         <div className="bg-muted/30 mt-2 flex items-center justify-between gap-3 rounded-md px-2.5 py-2 text-[11px]">
@@ -224,10 +224,10 @@ export function TtftTip({ ttft }: { ttft: TtftStats }) {
         <ul className="space-y-2">
           <li className="space-y-0.5">
             <code className="bg-muted/60 rounded px-1 py-px font-mono text-[10px]">
-              response_started_at
+              gateway_first_token_at
             </code>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
-              网关收到上游首个内容 token 的时刻；非流式响应通常不写入。
+              网关向客户成功写出首个有效生成 Token 的时刻；前导帧与非流式响应通常不写入。
             </p>
           </li>
           <li className="space-y-0.5">
@@ -235,7 +235,7 @@ export function TtftTip({ ttft }: { ttft: TtftStats }) {
               sample
             </code>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
-              区间内测到首 token 的请求数，即分位 / 平均的统计样本量。
+              区间内测到 Gateway 首字的请求数，即分位 / 平均的统计样本量。
             </p>
           </li>
         </ul>

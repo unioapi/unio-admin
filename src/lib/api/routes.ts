@@ -3,7 +3,7 @@ import { api } from "@/lib/api/client";
 // 与后端 routeDTO 对齐：线路只从显式绑定的渠道池中调度。
 export type RouteMode = "balanced" | "fixed";
 
-export interface RouteChannel {
+interface RouteChannel {
   channel_id: number;
   channel_name: string;
   provider_id: number;

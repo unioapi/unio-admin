@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -47,12 +47,26 @@ const USE_LEGACY_RANGE_FILTER = true;
 export interface RequestsListProps {
   /** 锁定用户：始终带 user_id 查询，隐藏用户筛选与用户/Key 列。 */
   fixedUserId?: number;
+  /** 锁定线路，只展示该线路的请求。 */
+  fixedRouteId?: number;
+  /** 锁定渠道，按对应 attempt 的 channel_id 过滤。 */
+  fixedChannelId?: number;
+  /** 只展示进入指定评分维度的 attempt；any 表示 TTFT 或错误率任一维度。 */
+  scoringDimension?: "ttft" | "error" | "any";
+  /** 评分样本的固定时间窗口。 */
+  sampleWindow?: { from?: string; to?: string };
   /** 列布局 localStorage 键；嵌入页与请求中心分开存（tablecn 版暂用 URL 状态）。 */
   storageKey?: string;
   /** 外部时间区间（详情页与页头 RangeFilter 共用）；缺省则组件内自建区间。 */
   rangeParams?: { from?: string; to?: string };
   /** 是否在表格工具栏展示时间筛选；详情页由页头控制时应为 false。 */
   showRangeFilter?: boolean;
+  /** 是否展示并启用列表自己的刷新控制；由父级统一刷新时应为 false。 */
+  showRefreshControl?: boolean;
+  /** 默认每页条数；URL 无 perPage 时生效。 */
+  defaultPageSize?: number;
+  /** 放在表格通用筛选之前的业务筛选。 */
+  toolbarLeading?: ReactNode;
   /**
    * 是否同步 URL 深链打开详情（请求中心用）。
    * 详情深链用 `q`；`request_id` 留给列表筛选，避免互相抢 URL 键。
@@ -63,9 +77,16 @@ export interface RequestsListProps {
 /** 请求记录列表：tablecn Data Table 试验版。 */
 export function RequestsList({
   fixedUserId,
+  fixedRouteId,
+  fixedChannelId,
+  scoringDimension,
+  sampleWindow,
   storageKey = "requests",
   rangeParams: externalRangeParams,
   showRangeFilter = true,
+  showRefreshControl = true,
+  defaultPageSize = PAGE_SIZE,
+  toolbarLeading,
   syncUrlDeepLink = false,
 }: RequestsListProps) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,9 +103,10 @@ export function RequestsList({
     );
   };
 
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
-    null,
-  );
+  const [selection, setSelection] = useState<{
+    requestId: string;
+    attemptId?: number;
+  } | null>(null);
 
   // —— 旧 RangeFilter 路径（USE_LEGACY_RANGE_FILTER=true 时启用）——
   const internalRange = useRangeQuery("24h");
@@ -104,7 +126,7 @@ export function RequestsList({
   const [page] = useQueryState("page", parseAsInteger.withDefault(1));
   const [perPage] = useQueryState(
     "perPage",
-    parseAsInteger.withDefault(PAGE_SIZE),
+    parseAsInteger.withDefault(defaultPageSize),
   );
   const [sorting] = useQueryState(
     "sort",
@@ -137,13 +159,14 @@ export function RequestsList({
   const sort = sortingToApiSort(sorting);
 
   const rangeParams = useMemo(() => {
+    if (sampleWindow) return sampleWindow;
     if (externalRangeParams) return externalRangeParams;
     if (USE_LEGACY_RANGE_FILTER) return internalRange.params;
     return timestampsToRangeParams(createdAtFilter);
-  }, [createdAtFilter, externalRangeParams, internalRange.params]);
+  }, [createdAtFilter, externalRangeParams, internalRange.params, sampleWindow]);
 
   const allColumns = useMemo(
-    () => requestOsColumns(setSelectedRequestId),
+    () => requestOsColumns((requestId) => setSelection({ requestId })),
     [],
   );
   const columns = useMemo(() => {
@@ -172,6 +195,9 @@ export function RequestsList({
         model,
         requestId,
         userId,
+        fixedRouteId,
+        fixedChannelId,
+        scoringDimension,
         page,
         perPage,
         sort,
@@ -187,6 +213,9 @@ export function RequestsList({
         model: model || undefined,
         requestId: requestId || undefined,
         userId,
+        routeId: fixedRouteId,
+        channelId: fixedChannelId,
+        scoringSample: scoringDimension,
         from: rangeParams.from,
         to: rangeParams.to,
       }),
@@ -206,10 +235,10 @@ export function RequestsList({
   }, [bumpRange, refetchList, useInternalLegacyRange]);
 
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!showRefreshControl || !autoRefresh) return;
     const id = window.setInterval(refreshList, intervalSec * 1000);
     return () => window.clearInterval(id);
-  }, [autoRefresh, intervalSec, refreshList]);
+  }, [autoRefresh, intervalSec, refreshList, showRefreshControl]);
 
   const items = query.data?.items ?? [];
   const total = query.data?.total ?? 0;
@@ -221,7 +250,7 @@ export function RequestsList({
     pageCount,
     initialState: {
       sorting: [...DEFAULT_SORT],
-      pagination: { pageIndex: 0, pageSize: PAGE_SIZE },
+      pagination: { pageIndex: 0, pageSize: defaultPageSize },
       columnVisibility:
         fixedUserId != null ? { user_id: false } : undefined,
     },
@@ -254,12 +283,13 @@ export function RequestsList({
           }}
         />
       ) : null}
-      {selectedRequestId ? (
+      {selection ? (
         <RequestDetailDialog
-          requestId={selectedRequestId}
+          requestId={selection.requestId}
+          focusAttemptId={selection.attemptId}
           open
           onOpenChange={(open) => {
-            if (!open) setSelectedRequestId(null);
+            if (!open) setSelection(null);
           }}
         />
       ) : null}
@@ -275,31 +305,41 @@ export function RequestsList({
         <DataTable
           table={table}
           emptyMessage={<RequestsEmpty />}
-          onRowClick={(row) => setSelectedRequestId(row.request_id)}
+          onRowClick={(row) =>
+            setSelection({
+              requestId: row.request_id,
+              attemptId: row.scoring_attempt_id ?? undefined,
+            })
+          }
         >
           <DataTableToolbar
             table={table}
             leading={
-              useInternalLegacyRange ? (
-                <RangeFilter
-                  value={internalRange.value}
-                  onChange={(v) => {
-                    internalRange.setRange(v);
-                    void table.setPageIndex(0);
-                  }}
-                  showRefresh={false}
-                />
-              ) : null
+              <>
+                {toolbarLeading}
+                {useInternalLegacyRange ? (
+                  <RangeFilter
+                    value={internalRange.value}
+                    onChange={(v) => {
+                      internalRange.setRange(v);
+                      void table.setPageIndex(0);
+                    }}
+                    showRefresh={false}
+                  />
+                ) : null}
+              </>
             }
           >
-            <RefreshControl
-              autoRefresh={autoRefresh}
-              intervalSec={intervalSec}
-              onAutoRefreshChange={setAutoRefresh}
-              onIntervalChange={setIntervalSec}
-              onRefresh={refreshList}
-              spinning={autoRefresh || query.isFetching}
-            />
+            {showRefreshControl ? (
+              <RefreshControl
+                autoRefresh={autoRefresh}
+                intervalSec={intervalSec}
+                onAutoRefreshChange={setAutoRefresh}
+                onIntervalChange={setIntervalSec}
+                onRefresh={refreshList}
+                spinning={autoRefresh || query.isFetching}
+              />
+            ) : null}
           </DataTableToolbar>
         </DataTable>
       )}

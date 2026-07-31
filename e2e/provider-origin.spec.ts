@@ -147,7 +147,7 @@ test("shows Provider origin and confirms enabled Channel cutover", async ({ page
 
   await providerRow.getByRole("link", { name: "查看", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "配置与运行态", exact: true }),
+    page.getByRole("tab", { name: "配置与运行态", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("https://primary.example.com/v1", { exact: true })).toBeVisible();
   await expect(page.getByText("v3", { exact: true })).toBeVisible();

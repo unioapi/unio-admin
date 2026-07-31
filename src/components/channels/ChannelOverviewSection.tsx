@@ -59,7 +59,7 @@ export function ChannelOverviewSection({
       <InfoItem label="运行态">
         {runtimeSyncState === "active" ? (
           <span className="tabular-nums">
-            已对账 · 限额 v{runtime?.runtime_admission_active_revision ?? "—"}
+            已对账 · 容量 v{runtime?.runtime_capacity_active_revision ?? "—"}
           </span>
         ) : (
           <span className="text-destructive">

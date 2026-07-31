@@ -167,7 +167,7 @@ function RadarCards({
   const th = useMetricThresholds();
   const r = data;
   const ttftValue =
-    r && r.ttft.has_data ? formatLatencyMs(r.ttft.avg) : "—";
+    r && r.gateway_ttft.has_data ? formatLatencyMs(r.gateway_ttft.avg) : "—";
 
   return (
     <MetricGrid>
@@ -189,12 +189,12 @@ function RadarCards({
         tooltip={r ? <LatencyTip latency={r.latency} /> : undefined}
       />
       <MetricCard
-        label="平均 TTFT"
+        label="平均 Gateway TTFT"
         loading={loading}
         value={ttftValue}
         icon={<HourglassIcon className="size-3.5" />}
-        hint={r ? <TtftHint ttft={r.ttft} /> : undefined}
-        tooltip={r ? <TtftTip ttft={r.ttft} /> : undefined}
+        hint={r ? <TtftHint ttft={r.gateway_ttft} /> : undefined}
+        tooltip={r ? <TtftTip ttft={r.gateway_ttft} /> : undefined}
       />
       <MetricCard
         label="缓存命中率"
@@ -604,8 +604,8 @@ function PerformanceChart({
   for (const p of points) {
     if (latPeak === null || p.latency_p95 > latPeak.v)
       latPeak = { v: p.latency_p95, bucket: p.bucket };
-    if (ttftPeak === null || p.ttft_p95 > ttftPeak.v)
-      ttftPeak = { v: p.ttft_p95, bucket: p.bucket };
+    if (ttftPeak === null || p.gateway_ttft_p95 > ttftPeak.v)
+      ttftPeak = { v: p.gateway_ttft_p95, bucket: p.bucket };
     if (p.tps > 0) {
       tpsSum += p.tps;
       tpsCount += 1;
@@ -620,7 +620,7 @@ function PerformanceChart({
   let prevTpsCount = 0;
   for (const p of prevPoints) {
     if (p.latency_p95 > prevLatPeak) prevLatPeak = p.latency_p95;
-    if (p.ttft_p95 > prevTtftPeak) prevTtftPeak = p.ttft_p95;
+    if (p.gateway_ttft_p95 > prevTtftPeak) prevTtftPeak = p.gateway_ttft_p95;
     if (p.tps > 0) {
       prevTpsSum += p.tps;
       prevTpsCount += 1;
@@ -630,7 +630,7 @@ function PerformanceChart({
 
   const config: ChartConfig = {
     latency_p95: { label: "P95 延迟", color: CHART_COLORS[2] },
-    ttft_p95: { label: "P95 TTFT", color: CHART_COLORS[3] },
+    gateway_ttft_p95: { label: "P95 Gateway TTFT", color: CHART_COLORS[3] },
     tps: { label: "TPS", color: CHART_COLORS[0] },
   };
   return (
@@ -657,7 +657,7 @@ function PerformanceChart({
           ...(ttftPeak
             ? [
                 {
-                  label: "P95 TTFT 峰值",
+                  label: "P95 Gateway TTFT 峰值",
                   value: `${formatLatencyMs(ttftPeak.v)}（${fmtBucket(ttftPeak.bucket, interval)}）`,
                   intent: ttftIntent(ttftPeak.v, th) as StatIntent,
                   compare: prevQ.isSuccess
@@ -741,7 +741,7 @@ function PerformanceChart({
           <SloReferenceLine
             yAxisId="ms"
             y={th.ttftWarnMs}
-            label={`TTFT ${formatLatencyMs(th.ttftWarnMs)}`}
+            label={`Gateway TTFT ${formatLatencyMs(th.ttftWarnMs)}`}
           />
           <Line
             yAxisId="ms"
@@ -753,9 +753,9 @@ function PerformanceChart({
           />
           <Line
             yAxisId="ms"
-            dataKey="ttft_p95"
+            dataKey="gateway_ttft_p95"
             type="monotone"
-            stroke="var(--color-ttft_p95)"
+            stroke="var(--color-gateway_ttft_p95)"
             dot={false}
             strokeWidth={2}
           />

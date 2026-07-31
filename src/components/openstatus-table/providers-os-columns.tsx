@@ -15,7 +15,7 @@ import { TruncateCell } from "./truncate-cell";
 import type { FacetOption } from "./types";
 
 /** 服务商状态筛选项（与 providers_status_check 一致：含归档）。 */
-export const PROVIDER_STATUS_OPTIONS: FacetOption[] = [
+const PROVIDER_STATUS_OPTIONS: FacetOption[] = [
   { value: "enabled", label: "启用" },
   { value: "disabled", label: "停用" },
   { value: "archived", label: "已归档" },
@@ -37,17 +37,6 @@ function toProvider(row: ProviderOpsRow): Provider {
     runtime_sync_pending: false,
   };
 }
-
-export const PROVIDER_OS_COLUMN_LABELS: Record<string, string> = {
-  name: "服务商",
-  status: "状态",
-  origin: "API Root",
-  channels: "渠道",
-  models: "模型",
-  routes: "线路",
-  created_at: "创建时间",
-  action: "操作",
-};
 
 export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
   return [

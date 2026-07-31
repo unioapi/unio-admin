@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getRequest,
@@ -16,23 +16,27 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RequestStatusBadge } from "@/components/requests/RequestStatusBadge";
 import { RequestCostBreakdown } from "@/components/requests/cost-breakdown";
+import { RoutingProcessPanel } from "@/components/requests/RoutingProcessPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 // 证据中心弹窗：默认 children-trigger 自管 open；也支持受控（深链自动打开）。
 export function RequestDetailDialog({
   requestId,
   children,
+  focusAttemptId,
   open: controlledOpen,
   onOpenChange,
 }: {
   requestId: string;
   children?: ReactNode;
+  focusAttemptId?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -47,16 +51,23 @@ export function RequestDetailDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        {open && <DetailBody requestId={requestId} />}
+      <DialogContent className="w-full min-w-0 gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        {open && <DetailBody requestId={requestId} focusAttemptId={focusAttemptId} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function DetailBody({ requestId }: { requestId: string }) {
+function DetailBody({
+  requestId,
+  focusAttemptId,
+}: {
+  requestId: string;
+  focusAttemptId?: number;
+}) {
   // includeInternal 是运营排查开关：勾选后带 ?include_internal=true 重新拉取，回显内部错误详情。
   const [includeInternal, setIncludeInternal] = useState(false);
+  const [activeTab, setActiveTab] = useState("detail");
 
   const query = useQuery({
     queryKey: ["request-detail", requestId, includeInternal],
@@ -68,63 +79,92 @@ function DetailBody({ requestId }: { requestId: string }) {
     },
   });
 
+  useEffect(() => {
+    if (!focusAttemptId || activeTab !== "detail" || !query.data) return;
+    const id = window.requestAnimationFrame(() => {
+      document.getElementById(`request-attempt-${focusAttemptId}`)?.scrollIntoView({
+        block: "center",
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [activeTab, focusAttemptId, query.data]);
+
   return (
-    <div className="flex flex-col">
-      <div className="space-y-1 px-6 pt-6 pr-12">
+    <Tabs
+      value={activeTab}
+      onValueChange={setActiveTab}
+      className="flex w-full min-w-0 flex-col gap-0"
+    >
+      <div className="flex flex-col gap-4 px-6 pt-6 pr-12">
         <DialogHeader>
           <DialogTitle>请求详情</DialogTitle>
           <DialogDescription className="font-mono text-xs break-all">
             {requestId}
           </DialogDescription>
         </DialogHeader>
+        <TabsList>
+          <TabsTrigger value="detail">请求详情</TabsTrigger>
+          <TabsTrigger value="routing">路由过程</TabsTrigger>
+        </TabsList>
       </div>
 
-      <ScrollArea className="max-h-[min(68vh,32rem)]">
-        <div className="px-6 py-5">
-          {query.isError ? (
-            <Alert variant="destructive">
-              <AlertTitle>加载失败</AlertTitle>
-              <AlertDescription>{query.error.message}</AlertDescription>
-            </Alert>
-          ) : query.isPending ? (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : (
-            <DetailContent
-              detail={query.data}
-              includeInternal={includeInternal}
-              onIncludeInternalChange={setIncludeInternal}
-            />
-          )}
+      <TabsContent value="detail" className="mt-0 w-full min-w-0 overflow-hidden">
+        <div className="max-h-[min(72vh,42rem)] w-full min-w-0 overflow-x-hidden overflow-y-auto">
+          <div className="w-full min-w-0 px-6 py-5">
+            {query.isError ? (
+              <Alert variant="destructive">
+                <AlertTitle>加载失败</AlertTitle>
+                <AlertDescription>{query.error.message}</AlertDescription>
+              </Alert>
+            ) : query.isPending ? (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : (
+              <DetailContent
+                detail={query.data}
+                includeInternal={includeInternal}
+                onIncludeInternalChange={setIncludeInternal}
+                focusAttemptId={focusAttemptId}
+              />
+            )}
+          </div>
         </div>
-      </ScrollArea>
-    </div>
+      </TabsContent>
+
+      <TabsContent value="routing" className="mt-0 w-full min-w-0 overflow-hidden">
+        <div className="max-h-[min(72vh,42rem)] w-full min-w-0 overflow-x-hidden overflow-y-auto">
+          <div className="w-full min-w-0 px-6 py-5">
+            {query.isError ? (
+              <Alert variant="destructive">
+                <AlertTitle>加载失败</AlertTitle>
+                <AlertDescription>{query.error.message}</AlertDescription>
+              </Alert>
+            ) : query.isPending ? (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : (
+              <RoutingProcessPanel requestId={requestId} detail={query.data} />
+            )}
+          </div>
+        </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 
-// TimingSection 由请求时间戳 + 输出 token 计算首字/总耗时/TPS（与列表口径一致）。
+// TimingSection 使用后端从原始时间戳派生的毫秒值，避免 RFC3339 展示时间丢失亚秒精度。
 function TimingSection({ detail }: { detail: RequestDetail }) {
-  const started = new Date(detail.started_at).getTime();
-  const respStart = detail.stream && detail.response_started_at
-    ? new Date(detail.response_started_at).getTime()
-    : null;
-  const completed = detail.completed_at
-    ? new Date(detail.completed_at).getTime()
-    : null;
+	const latencyMs = detail.latency_ms;
+	const gatewayTtftMs = detail.stream ? detail.gateway_ttft_ms : null;
+	const tps = detail.stream ? detail.tps : null;
 
-  const latencyMs = completed != null && completed >= started ? completed - started : null;
-  const ttftMs = respStart != null && respStart >= started ? respStart - started : null;
-  const output = detail.usage?.output_tokens_total ?? 0;
-  let tps: number | null = null;
-  if (completed != null && respStart != null && output > 0) {
-    const genSec = (completed - respStart) / 1000;
-    if (genSec > 0) tps = output / genSec;
-  }
-
-  if (latencyMs == null && ttftMs == null && tps == null) return null;
+  if (latencyMs == null && gatewayTtftMs == null && tps == null) return null;
 
   return (
     <Section title="时延">
@@ -132,7 +172,9 @@ function TimingSection({ detail }: { detail: RequestDetail }) {
         <Row label="总耗时">{latencyMs != null ? formatLatencyMs(latencyMs) : "—"}</Row>
         {detail.stream ? (
           <>
-            <Row label="首字 (TTFT)">{ttftMs != null ? formatLatencyMs(ttftMs) : "—"}</Row>
+            <Row label="Gateway TTFT">
+              {gatewayTtftMs != null ? formatLatencyMs(gatewayTtftMs) : "—"}
+            </Row>
             <Row label="TPS">{tps != null ? formatTPS(tps) : "—"}</Row>
           </>
         ) : null}
@@ -153,10 +195,12 @@ function DetailContent({
   detail,
   includeInternal,
   onIncludeInternalChange,
+  focusAttemptId,
 }: {
   detail: RequestDetail;
   includeInternal: boolean;
   onIncludeInternalChange: (checked: boolean) => void;
+  focusAttemptId?: number;
 }) {
   const showInternalToggle = hasRequestError(detail);
 
@@ -229,7 +273,7 @@ function DetailContent({
         ) : (
           <ul className="divide-border divide-y rounded-md border">
             {detail.attempts.map((a) => (
-              <AttemptRow key={a.id} attempt={a} />
+              <AttemptRow key={a.id} attempt={a} focused={a.id === focusAttemptId} />
             ))}
           </ul>
         )}
@@ -281,9 +325,12 @@ function FaultPartyBadge({ party }: { party: string }) {
   return <Badge variant={meta.variant}>{meta.label}</Badge>;
 }
 
-function AttemptRow({ attempt }: { attempt: Attempt }) {
+function AttemptRow({ attempt, focused = false }: { attempt: Attempt; focused?: boolean }) {
   return (
-    <li className="flex flex-col gap-1 p-3 text-sm">
+    <li
+      id={`request-attempt-${attempt.id}`}
+      className={cn("flex flex-col gap-1 p-3 text-sm", focused && "ring-2 ring-ring ring-inset")}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="tabular-nums">
           #{attempt.attempt_index}

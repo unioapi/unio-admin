@@ -17,13 +17,6 @@ import {
   durationError,
 } from "@/components/common/duration-input";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
-import {
-  RateLimitInput,
-  composeRateLimit,
-  decomposeRateLimit,
-  rateLimitWithUnitError,
-  type RateLimitFieldValue,
-} from "@/components/common/rate-limit-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -80,11 +73,9 @@ interface FieldErrors {
   adapter_key?: string;
   credential?: string;
   priority?: string;
-  timeout_ms?: string;
+  response_timeout_ms?: string;
+  first_token_timeout_ms?: string;
   sticky_ttl_ms?: string;
-  rpm_limit?: string;
-  tpm_limit?: string;
-  rpd_limit?: string;
   concurrency_limit?: string;
 }
 
@@ -139,8 +130,15 @@ function ChannelForm({
   const [credential, setCredential] = useState("");
   const [status, setStatus] = useState(channel?.status ?? "enabled");
   const [priority, setPriority] = useState(String(channel?.priority ?? 0));
-  const [timeoutMs, setTimeoutMs] = useState(
-    channel?.timeout_ms != null ? String(channel.timeout_ms) : "",
+  const [responseTimeoutMs, setResponseTimeoutMs] = useState(
+    channel?.response_timeout_ms != null
+      ? String(channel.response_timeout_ms)
+      : "",
+  );
+  const [firstTokenTimeoutMs, setFirstTokenTimeoutMs] = useState(
+    channel?.first_token_timeout_ms != null
+      ? String(channel.first_token_timeout_ms)
+      : "",
   );
   const [stickyMode, setStickyMode] = useState<"inherit" | "on" | "off">(
     channel?.sticky_enabled == null
@@ -152,19 +150,11 @@ function ChannelForm({
   const [stickyTTL, setStickyTTL] = useState(() =>
     decomposeDurationMs(channel?.sticky_ttl_ms ?? 30 * 60 * 1_000),
   );
-  const [rpmLimit, setRpmLimit] = useState(rateLimitToInput(channel?.rpm_limit));
   const [concurrencyLimit, setConcurrencyLimit] = useState(
     rateLimitToInput(channel?.concurrency_limit),
   );
   const [billsOnDisconnect, setBillsOnDisconnect] = useState(
     channel?.upstream_bills_on_disconnect ?? false,
-  );
-  // TPM/RPD 量级大,用「数字 + 单位(K/M/B)」输入;入库换算成真实整数。
-  const [tpmLimit, setTpmLimit] = useState<RateLimitFieldValue>(
-    decomposeRateLimit(channel?.tpm_limit),
-  );
-  const [rpdLimit, setRpdLimit] = useState<RateLimitFieldValue>(
-    decomposeRateLimit(channel?.rpd_limit),
   );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
@@ -217,17 +207,15 @@ function ChannelForm({
 
   const mutation = useMutation({
     mutationFn: () => {
-      const timeout = timeoutMs.trim() === "" ? null : Number(timeoutMs);
+      const responseTimeout =
+        responseTimeoutMs.trim() === "" ? null : Number(responseTimeoutMs);
+      const firstTokenTimeout =
+        firstTokenTimeoutMs.trim() === "" ? null : Number(firstTokenTimeoutMs);
       const prio = Number(priority);
       const stickyEnabled =
         stickyMode === "inherit" ? null : stickyMode === "on";
       const stickyTTLms = stickyMode === "on" ? composeDurationMs(stickyTTL) : null;
-      const rateLimits = {
-        rpm: parseRateLimit(rpmLimit),
-        tpm: composeRateLimit(tpmLimit),
-        rpd: composeRateLimit(rpdLimit),
-        concurrency: parseRateLimit(concurrencyLimit),
-      };
+      const concurrency = parseRateLimit(concurrencyLimit);
       if (channel) {
         return updateChannel({
           id: channel.id,
@@ -235,10 +223,11 @@ function ChannelForm({
           provider_id: Number(providerId),
           status,
           priority: prio,
-          timeout_ms: timeout,
+          response_timeout_ms: responseTimeout,
+          first_token_timeout_ms: firstTokenTimeout,
           sticky_enabled: stickyEnabled,
           sticky_ttl_ms: stickyTTLms,
-          rateLimits,
+          concurrency_limit: concurrency,
           billsOnDisconnect,
         });
       }
@@ -250,10 +239,11 @@ function ChannelForm({
         credential: credential.trim(),
         status,
         priority: prio,
-        timeout_ms: timeout,
+        response_timeout_ms: responseTimeout,
+        first_token_timeout_ms: firstTokenTimeout,
         sticky_enabled: stickyEnabled,
         sticky_ttl_ms: stickyTTLms,
-        rateLimits,
+        concurrency_limit: concurrency,
         billsOnDisconnect,
       });
     },
@@ -301,15 +291,18 @@ function ChannelForm({
     if (stickyMode === "on") {
       next.sticky_ttl_ms = durationError(stickyTTL, false);
     }
-    if (timeoutMs.trim() !== "") {
-      const t = Number(timeoutMs);
+    if (responseTimeoutMs.trim() !== "") {
+      const t = Number(responseTimeoutMs);
       if (!Number.isInteger(t) || t <= 0) {
-        next.timeout_ms = "超时需为正整数（毫秒）";
+        next.response_timeout_ms = "响应超时需为正整数（毫秒）";
       }
     }
-    next.rpm_limit = rateLimitError(rpmLimit, "继承渠道默认限流");
-    next.tpm_limit = rateLimitWithUnitError(tpmLimit, "继承渠道默认限流");
-    next.rpd_limit = rateLimitWithUnitError(rpdLimit, "继承渠道默认限流");
+    if (firstTokenTimeoutMs.trim() !== "") {
+      const t = Number(firstTokenTimeoutMs);
+      if (!Number.isInteger(t) || t <= 0) {
+        next.first_token_timeout_ms = "上游首字超时需为正整数（毫秒）";
+      }
+    }
     next.concurrency_limit = rateLimitError(concurrencyLimit);
     setErrors(next);
     return Object.values(next).every((v) => v === undefined);
@@ -324,12 +317,6 @@ function ChannelForm({
     }
     mutation.mutate();
   }
-
-  const rateLimitInvalid =
-    !!errors.rpm_limit ||
-    !!errors.tpm_limit ||
-    !!errors.rpd_limit ||
-    !!errors.concurrency_limit;
 
   return (
     <>
@@ -580,23 +567,63 @@ function ChannelForm({
                 <FieldError>{errors.priority}</FieldError>
               </Field>
 
-              <Field data-invalid={!!errors.timeout_ms}>
+              <Field data-invalid={!!errors.response_timeout_ms}>
                 <HintLabel
-                  htmlFor="timeout_ms"
-                  hint="用户请求经本渠道调用上游的单次超时（毫秒）；留空用系统「默认渠道超时」。与「渠道检测超时」无关。"
+                  htmlFor="response_timeout_ms"
+                  hint="非流式限制整个上游请求；流式限制收到 HTTP 响应头。留空使用系统默认值。"
                 >
-                  超时（毫秒）
+                  响应超时（毫秒）
                 </HintLabel>
                 <Input
-                  id="timeout_ms"
+                  id="response_timeout_ms"
                   type="number"
                   min={1}
-                  value={timeoutMs}
-                  onChange={(e) => setTimeoutMs(e.target.value)}
+                  value={responseTimeoutMs}
+                  onChange={(e) => setResponseTimeoutMs(e.target.value)}
                   placeholder="留空表示不单独设置"
-                  aria-invalid={!!errors.timeout_ms}
+                  aria-invalid={!!errors.response_timeout_ms}
                 />
-                <FieldError>{errors.timeout_ms}</FieldError>
+                <FieldError>{errors.response_timeout_ms}</FieldError>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field data-invalid={!!errors.first_token_timeout_ms}>
+                <HintLabel
+                  htmlFor="first_token_timeout_ms"
+                  hint="仅流式请求生效：从发起上游调用到收到首个有效生成 Token。非流式请求不使用上游首字超时。"
+                >
+                  上游首字超时（毫秒）
+                </HintLabel>
+                <Input
+                  id="first_token_timeout_ms"
+                  type="number"
+                  min={1}
+                  value={firstTokenTimeoutMs}
+                  onChange={(e) => setFirstTokenTimeoutMs(e.target.value)}
+                  placeholder="留空表示不单独设置"
+                  aria-invalid={!!errors.first_token_timeout_ms}
+                />
+                <FieldError>{errors.first_token_timeout_ms}</FieldError>
+              </Field>
+
+              <Field data-invalid={!!errors.concurrency_limit}>
+                <HintLabel
+                  htmlFor="concurrency_limit"
+                  hint="同时进行中的上游调用数，包含整段流式传输。满载时该渠道退出本次候选集；0=不限，留空=继承系统默认。"
+                >
+                  并发容量
+                </HintLabel>
+                <Input
+                  id="concurrency_limit"
+                  type="number"
+                  min={0}
+                  value={concurrencyLimit}
+                  onChange={(e) => setConcurrencyLimit(e.target.value)}
+                  placeholder="继承默认"
+                  aria-invalid={!!errors.concurrency_limit}
+                />
+                <FieldError>{errors.concurrency_limit}</FieldError>
               </Field>
             </div>
 
@@ -626,7 +653,7 @@ function ChannelForm({
               </Select>
               {stickyMode === "on" ? (
                 <div className="flex flex-col gap-1.5">
-                  <HintLabel htmlFor="sticky_ttl" hint="从绑定成功开始绝对计时，命中不会续期。">
+                  <HintLabel htmlFor="sticky_ttl" hint="原绑定渠道完整成功时续期；临时绕行不改绑，永久失效才清除绑定。">
                     渠道 Sticky TTL
                   </HintLabel>
                   <DurationInput
@@ -638,75 +665,6 @@ function ChannelForm({
                 </div>
               ) : null}
               <FieldError>{errors.sticky_ttl_ms}</FieldError>
-            </Field>
-
-            <Field data-invalid={rateLimitInvalid}>
-              <HintLabel hint="限制本网关调用该上游渠道的速率（网关→上游），命中自动跳过该渠道回退到下一个。留空=继承渠道默认限流，0=不限；TPM、RPD 可带单位 K/M/B（默认 K）。">
-                渠道级限流
-              </HintLabel>
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <Field data-invalid={!!errors.rpm_limit}>
-                    <HintLabel htmlFor="rpm_limit" hint="每分钟请求数。">
-                      RPM
-                    </HintLabel>
-                    <Input
-                      id="rpm_limit"
-                      type="number"
-                      min={0}
-                      value={rpmLimit}
-                      onChange={(e) => setRpmLimit(e.target.value)}
-                      placeholder="继承渠道默认限流"
-                      aria-invalid={!!errors.rpm_limit}
-                    />
-                    <FieldError>{errors.rpm_limit}</FieldError>
-                  </Field>
-                  <Field data-invalid={!!errors.tpm_limit}>
-                    <HintLabel htmlFor="tpm_limit" hint="每分钟 token 数。">
-                      TPM
-                    </HintLabel>
-                    <RateLimitInput
-                      id="tpm_limit"
-                      value={tpmLimit}
-                      onChange={setTpmLimit}
-                      ariaInvalid={!!errors.tpm_limit}
-                      placeholder="继承渠道默认限流"
-                    />
-                    <FieldError>{errors.tpm_limit}</FieldError>
-                  </Field>
-                  <Field data-invalid={!!errors.rpd_limit}>
-                    <HintLabel htmlFor="rpd_limit" hint="每日请求数。">
-                      RPD
-                    </HintLabel>
-                    <RateLimitInput
-                      id="rpd_limit"
-                      value={rpdLimit}
-                      onChange={setRpdLimit}
-                      ariaInvalid={!!errors.rpd_limit}
-                      placeholder="继承渠道默认限流"
-                    />
-                    <FieldError>{errors.rpd_limit}</FieldError>
-                  </Field>
-                  <Field data-invalid={!!errors.concurrency_limit}>
-                    <HintLabel
-                      htmlFor="concurrency_limit"
-                      hint="同时进行中的上游调用数（含整段流式传输）。慢上游 + 客户端自动重试时防止长请求堆积；每个在途请求都可能被上游计费。"
-                    >
-                      并发
-                    </HintLabel>
-                    <Input
-                      id="concurrency_limit"
-                      type="number"
-                      min={0}
-                      value={concurrencyLimit}
-                      onChange={(e) => setConcurrencyLimit(e.target.value)}
-                      placeholder="继承默认"
-                      aria-invalid={!!errors.concurrency_limit}
-                    />
-                    <FieldError>{errors.concurrency_limit}</FieldError>
-                  </Field>
-                </div>
-              </div>
             </Field>
 
             <Field>

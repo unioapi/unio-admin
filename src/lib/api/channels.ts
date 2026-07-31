@@ -12,19 +12,17 @@ export interface Channel {
   adapter_key: string;
   origin: string;
   config_revision: number;
-  admission_limits_revision: number;
+  capacity_revision: number;
+  runtime_sync_pending: boolean;
   // 明文上游 API key（产品决策：明文存储，管理端可查看/复制/编辑）。
   credential: string;
   status: string;
   priority: number;
-  timeout_ms: number | null;
+  response_timeout_ms: number | null;
+  first_token_timeout_ms: number | null;
   // 渠道会话粘性：null=继承系统默认；true 时 sticky_ttl_ms 必须 >0；false 时 TTL 必须为 null。
   sticky_enabled: boolean | null;
   sticky_ttl_ms: number | null;
-  // 渠道级限流（P2-8）：null=继承渠道默认限流，0=不限，>0=具体上限（每分钟请求/每分钟 token/每日请求）。
-  rpm_limit: number | null;
-  tpm_limit: number | null;
-  rpd_limit: number | null;
   // 在途并发上限（DEC-029）：同时进行中的上游调用数（含整段流式传输）。null=继承并发默认 channel_limit，0=不限。
   concurrency_limit: number | null;
   // 上游「断开仍计费」标记（bill-on-cancel 中转，如 sub2api）：true 时失败/取消会记平台成本敞口。
@@ -37,14 +35,6 @@ export interface Channel {
   last_test_ok: boolean | null;
   last_test_latency_ms: number | null;
   last_test_error: string | null;
-}
-
-// 限流入参：三维 rate 的 null=继承渠道默认限流；并发的 null=继承并发默认 channel_limit；0=不限。
-interface RateLimitsInput {
-  rpm: number | null;
-  tpm: number | null;
-  rpd: number | null;
-  concurrency: number | null;
 }
 
 export interface ChannelListParams extends ListParams {
@@ -85,23 +75,21 @@ export interface CreateChannelInput {
   credential: string;
   status: string;
   priority: number;
-  timeout_ms: number | null;
+  response_timeout_ms: number | null;
+  first_token_timeout_ms: number | null;
   sticky_enabled: boolean | null;
   sticky_ttl_ms: number | null;
-  // 可选渠道级限流；省略表示三维全继承渠道默认限流。
-  rateLimits?: RateLimitsInput;
+  concurrency_limit: number | null;
   // 上游「断开仍计费」标记；省略=false。
   billsOnDisconnect?: boolean;
 }
 
 export async function createChannel({
-  rateLimits,
   billsOnDisconnect,
   ...input
 }: CreateChannelInput): Promise<Channel> {
   const res = await api.post<{ data: Channel }>("/admin/v1/channels", {
     ...input,
-    rate_limits: rateLimits ?? undefined,
     upstream_bills_on_disconnect: billsOnDisconnect,
   });
   return res.data.data;
@@ -130,24 +118,22 @@ export interface UpdateChannelInput {
   provider_id: number;
   status: string;
   priority: number;
-  timeout_ms: number | null;
+  response_timeout_ms: number | null;
+  first_token_timeout_ms: number | null;
   sticky_enabled: boolean | null;
   sticky_ttl_ms: number | null;
-  // 渠道级限流；省略表示不变，传对象即原子替换三维。
-  rateLimits?: RateLimitsInput;
+  concurrency_limit?: number | null;
   // 上游「断开仍计费」标记；省略=不变。
   billsOnDisconnect?: boolean;
 }
 
 export async function updateChannel({
   id,
-  rateLimits,
   billsOnDisconnect,
   ...body
 }: UpdateChannelInput): Promise<Channel> {
   const res = await api.patch<{ data: Channel }>(`/admin/v1/channels/${id}`, {
     ...body,
-    rate_limits: rateLimits ?? undefined,
     upstream_bills_on_disconnect: billsOnDisconnect,
   });
   return res.data.data;
@@ -159,14 +145,14 @@ export interface RotateCredentialInput {
   credential: string;
 }
 
-export type CredentialVerificationState =
+type CredentialVerificationState =
   | "passed"
   | "failed"
   | "stale"
   | "execution_failed"
   | "not_required";
 
-export interface CredentialVerification {
+interface CredentialVerification {
   state: CredentialVerificationState;
   tested_origin_revision: number | null;
   tested_status_revision: number | null;

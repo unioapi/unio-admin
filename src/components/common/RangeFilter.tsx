@@ -81,6 +81,7 @@ export function RangeFilter({
   onChange,
   refreshedAt,
   onRefresh,
+  refreshLabel = "刷新",
   className,
   showTrigger = true,
   showRefresh = true,
@@ -89,6 +90,7 @@ export function RangeFilter({
   onChange: (next: RangeValue) => void;
   refreshedAt?: number;
   onRefresh?: () => void;
+  refreshLabel?: string;
   className?: string;
   /** 是否渲染时间区间触发按钮，默认 true。 */
   showTrigger?: boolean;
@@ -191,7 +193,7 @@ export function RangeFilter({
       {showRefresh && onRefresh ? (
         <div className="text-muted-foreground ml-auto flex items-center gap-1.5 text-[11px] tabular-nums">
           {refreshedAt ? <span>最后刷新 {formatClock(refreshedAt)}</span> : null}
-          <Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="刷新">
+          <Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label={refreshLabel}>
             <RefreshCwIcon />
           </Button>
         </div>

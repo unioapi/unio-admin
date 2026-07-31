@@ -20,6 +20,7 @@ export function RefreshControl({
   onIntervalChange,
   onRefresh,
   spinning,
+  refreshLabel = "刷新列表",
   className,
 }: {
   autoRefresh: boolean;
@@ -29,6 +30,8 @@ export function RefreshControl({
   onRefresh: () => void;
   /** 图标旋转：自动刷新开启，或正在拉取。 */
   spinning?: boolean;
+  /** 当前刷新控制负责的数据范围。 */
+  refreshLabel?: string;
   className?: string;
 }) {
   return (
@@ -39,8 +42,8 @@ export function RefreshControl({
           variant="outline"
           size="icon"
           className={cn(className)}
-          aria-label={autoRefresh ? "自动刷新已开启，点击立即刷新" : "刷新列表"}
-          title={autoRefresh ? "自动刷新中 · 点击立即刷新" : "刷新列表"}
+          aria-label={autoRefresh ? `自动刷新已开启，点击${refreshLabel}` : refreshLabel}
+          title={autoRefresh ? `自动刷新中 · 点击${refreshLabel}` : refreshLabel}
           onClick={() => onRefresh()}
         >
           <RefreshCwIcon

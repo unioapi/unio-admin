@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type DurationUnit = "ms" | "s" | "m" | "h";
+type DurationUnit = "ms" | "s" | "m" | "h";
 
 const DURATION_UNIT_MS: Record<DurationUnit, number> = {
   ms: 1,

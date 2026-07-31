@@ -58,13 +58,16 @@ describe("P4 admin API contracts", () => {
 
     const [item] = await listSettings();
     const result = await updateSetting("gateway.routing_balance", {
-      economic_weight_pct: 45,
-      health_weight_pct: 25,
-      capacity_weight_pct: 20,
+      cost_weight_pct: 25,
+      concurrency_weight_pct: 20,
+      ttft_weight_pct: 25,
+      error_rate_weight_pct: 20,
       priority_weight_pct: 10,
-      ttft_target_ms: 2_000,
-      ttft_weight: 0.35,
-      ttft_ewma_alpha: 0.2,
+      ttft_window_ms: 1_800_000,
+      ttft_penalty_unit_ms: 1_000,
+      ttft_penalty_points_per_unit: 2.5,
+      error_window_ms: 1_800_000,
+      error_penalty_points_per_percent: 2.5,
     });
 
     expect(item).toMatchObject({ revision: 4, runtime_active_revision: 3, runtime_pending_revision: 4 });
@@ -154,9 +157,11 @@ describe("P4 admin API contracts", () => {
       credential: "secret",
       status: "enabled",
       priority: 0,
-      timeout_ms: null,
+      response_timeout_ms: null,
+      first_token_timeout_ms: null,
       sticky_enabled: null,
       sticky_ttl_ms: null,
+      concurrency_limit: null,
     });
     await updateChannel({
       id: 9,
@@ -164,9 +169,11 @@ describe("P4 admin API contracts", () => {
       name: "channel-a",
       status: "disabled",
       priority: 0,
-      timeout_ms: null,
+      response_timeout_ms: null,
+      first_token_timeout_ms: null,
       sticky_enabled: false,
       sticky_ttl_ms: null,
+      concurrency_limit: null,
     });
 
     expect(mocks.post.mock.calls[0][1]).toMatchObject({

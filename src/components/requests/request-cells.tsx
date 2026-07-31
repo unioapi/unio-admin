@@ -14,6 +14,13 @@ import {
   formatUSDPrecise,
   trimDecimal,
 } from "@/lib/format";
+import {
+  channelBindingLabel,
+  resolveStickyMutation,
+  resolveStickyOutcome,
+  stickyMutationLabel,
+  stickyOutcomeLabel,
+} from "@/lib/sticky";
 import type { MetricThresholds } from "@/components/dashboard/metrics";
 import { useMetricThresholds } from "@/hooks/useMetricThresholds";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -217,10 +224,10 @@ export function RequestTokensCell({ row }: { row: RequestListItem }) {
   );
 }
 
-/** 耗时：主行总耗时 + 次行 首字/TPS；悬浮显示明细 + 口径说明。总耗时不按阈值着色（长输出本身就会很长）。 */
+/** 耗时：主行总耗时 + 次行 Gateway 首字/TPS；悬浮显示明细 + 口径说明。总耗时不按阈值着色（长输出本身就会很长）。 */
 export function RequestTimingCell({ row }: { row: RequestListItem }) {
   const th = useMetricThresholds();
-  if (row.latency_ms == null && row.ttft_ms == null && row.tps == null) return <Dash />;
+  if (row.latency_ms == null && row.gateway_ttft_ms == null && row.tps == null) return <Dash />;
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
@@ -231,12 +238,14 @@ export function RequestTimingCell({ row }: { row: RequestListItem }) {
           ) : (
             <Dash />
           )}
-          {(row.ttft_ms != null || row.tps != null) && (
+          {(row.gateway_ttft_ms != null || row.tps != null) && (
             <span className="text-muted-foreground text-[10px]">
-              {row.ttft_ms != null && (
-                <span className={ttftClass(row.ttft_ms, th)}>首字 {formatLatencyMs(row.ttft_ms)}</span>
+              {row.gateway_ttft_ms != null && (
+                <span className={ttftClass(row.gateway_ttft_ms, th)}>
+                  Gateway 首字 {formatLatencyMs(row.gateway_ttft_ms)}
+                </span>
               )}
-              {row.ttft_ms != null && row.tps != null ? " · " : ""}
+              {row.gateway_ttft_ms != null && row.tps != null ? " · " : ""}
               {row.tps != null && formatTPS(row.tps)}
             </span>
           )}
@@ -247,12 +256,15 @@ export function RequestTimingCell({ row }: { row: RequestListItem }) {
           <div className="text-sm font-medium">耗时明细</div>
           <div className="flex flex-col gap-1">
             <Field label="总耗时" value={row.latency_ms != null ? formatLatencyMs(row.latency_ms) : "—"} />
-            <Field label="首字 TTFT" value={row.ttft_ms != null ? formatLatencyMs(row.ttft_ms) : "—"} />
+            <Field
+              label="Gateway TTFT"
+              value={row.gateway_ttft_ms != null ? formatLatencyMs(row.gateway_ttft_ms) : "—"}
+            />
             <Field label="生成速率" value={row.tps != null ? formatTPS(row.tps) : "—"} />
             <Field label="输出 tokens" value={formatInt(row.output_tokens)} />
           </div>
           <p className="text-muted-foreground/80 text-[10px] leading-relaxed">
-            总耗时 = 完成 − 开始；首字 = 首个响应 − 开始；速率 = 输出 tokens ÷（完成 − 首个响应）。
+            总耗时 = 完成 − 开始；Gateway TTFT = gateway_first_token_at − started_at；速率 = 输出 tokens ÷（完成 − Gateway 首字）。
           </p>
         </div>
       </TipHoverCardContent>
@@ -469,5 +481,71 @@ export function RequestIdCell({ row }: { row: RequestListItem }) {
       copyAriaLabel="复制请求 ID"
       copyMessages={{ success: "已复制请求 ID", empty: "无请求 ID" }}
     />
+  );
+}
+
+/** Sticky：主标签维 A（选路结果），副标维 B（绑定变更）；tip 展开前后绑定与原因。 */
+export function RequestStickyCell({ row }: { row: RequestListItem }) {
+  const outcome = resolveStickyOutcome(row);
+  if (outcome == null) {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+  const mutation = resolveStickyMutation(row.sticky_action);
+  const outcomeLabel = stickyOutcomeLabel(outcome);
+  const mutationLabel = mutation ? stickyMutationLabel(mutation) : null;
+
+  return (
+    <HoverCard openDelay={120} closeDelay={120}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="flex max-w-full cursor-default flex-col items-start gap-0.5 text-left"
+        >
+          <span className="text-xs font-medium underline decoration-dotted underline-offset-2">
+            {outcomeLabel}
+          </span>
+          {mutationLabel ? (
+            <span className="text-muted-foreground text-[10px]">{mutationLabel}</span>
+          ) : null}
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-72">
+        <div className="flex w-full flex-col gap-3">
+          <div>
+            <div className="text-sm font-semibold leading-tight">粘性</div>
+            <div className="text-muted-foreground mt-0.5 text-[11px]">
+              选路结果 · 绑定变更
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline">{outcomeLabel}</Badge>
+            {mutationLabel ? <Badge variant="secondary">{mutationLabel}</Badge> : null}
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <Field
+              label="请求前绑定"
+              value={channelBindingLabel(
+                row.sticky_before_channel_id,
+                row.sticky_before_channel_name,
+              )}
+            />
+            <Field
+              label="请求后绑定"
+              value={channelBindingLabel(
+                row.sticky_after_channel_id,
+                row.sticky_after_channel_name,
+              )}
+            />
+            <Field
+              label="动作原因"
+              value={row.sticky_reason?.trim() || "—"}
+            />
+            {row.sticky_action ? (
+              <Field label="原始动作" value={row.sticky_action} mono />
+            ) : null}
+          </div>
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
   );
 }

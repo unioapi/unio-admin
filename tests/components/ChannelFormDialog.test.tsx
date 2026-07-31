@@ -42,16 +42,15 @@ const channel = {
   adapter_key: "openai",
   origin: "https://api.example.test/v1",
   config_revision: 2,
-  admission_limits_revision: 1,
+  capacity_revision: 1,
+  runtime_sync_pending: false,
   credential: "secret",
   status: "enabled",
   priority: 0,
-  timeout_ms: null,
+  response_timeout_ms: null,
+  first_token_timeout_ms: null,
   sticky_enabled: null,
   sticky_ttl_ms: null,
-  rpm_limit: null,
-  tpm_limit: null,
-  rpd_limit: null,
   concurrency_limit: null,
   upstream_bills_on_disconnect: false,
   created_at: "2026-07-22T00:00:00Z",
@@ -79,7 +78,7 @@ describe("ChannelFormDialog P4 binding", () => {
     mocks.updateChannel.mockResolvedValue(channel);
   });
 
-  it("shows Provider origin as read-only and submits provider_id", async () => {
+  it("shows Provider origin as read-only and submits capacity and timeout settings", async () => {
     const user = userEvent.setup();
     render(
       <TestProviders>
@@ -92,18 +91,32 @@ describe("ChannelFormDialog P4 binding", () => {
     await waitFor(() => {
       expect(apiRoot).toHaveValue("https://api.example.test/v1");
     });
-    expect(screen.getAllByPlaceholderText("继承渠道默认限流")).toHaveLength(3);
-    expect(screen.getByPlaceholderText("继承默认")).toHaveAttribute(
-      "id",
-      "concurrency_limit",
-    );
+    expect(screen.queryByText("RPM")).not.toBeInTheDocument();
+    expect(screen.queryByText("RPD")).not.toBeInTheDocument();
+    expect(screen.queryByText("TPM")).not.toBeInTheDocument();
+
+    const responseTimeout = screen.getByRole("spinbutton", { name: "响应超时（毫秒）" });
+    const firstTokenTimeout = screen.getByRole("spinbutton", { name: "上游首字超时（毫秒）" });
+    const concurrency = screen.getByRole("spinbutton", { name: "并发容量" });
+    await user.type(responseTimeout, "200000");
+    await user.type(firstTokenTimeout, "60000");
+    await user.type(concurrency, "12");
 
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(mocks.updateChannel).toHaveBeenCalledTimes(1));
 
     const input = mocks.updateChannel.mock.calls[0][0];
-    expect(input).toMatchObject({ id: 9, provider_id: 3 });
+    expect(input).toMatchObject({
+      id: 9,
+      provider_id: 3,
+      response_timeout_ms: 200000,
+      first_token_timeout_ms: 60000,
+      concurrency_limit: 12,
+    });
     expect(input).not.toHaveProperty("provider_origin_id");
+    expect(input).not.toHaveProperty("rpm_limit");
+    expect(input).not.toHaveProperty("rpd_limit");
+    expect(input).not.toHaveProperty("tpm_limit");
   });
 
   it("uses fixed Priority options and submits an enabled Channel Sticky TTL", async () => {

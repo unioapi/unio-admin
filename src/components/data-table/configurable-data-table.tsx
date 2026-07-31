@@ -6,6 +6,8 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnOrderState,
+  type ColumnSizingState,
   type PaginationState,
   type SortingState,
   type Updater,
@@ -30,7 +32,13 @@ import {
   deriveTableUrlKeys,
   sanitizeTableUrlNamespace,
 } from "@/lib/table-url-keys";
-import type { TableLayoutPrefs } from "./use-persisted-table-state";
+
+type TableLayoutPrefs = {
+  columnOrder: ColumnOrderState;
+  columnVisibility: VisibilityState;
+  columnSizing: ColumnSizingState;
+  columnSizingSignature?: string;
+};
 
 const DEFAULT_PAGE_SIZE = 20;
 

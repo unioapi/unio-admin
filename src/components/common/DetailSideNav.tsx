@@ -44,7 +44,7 @@ export function DetailSideNav({
               <TabsTrigger
                 key={section.id}
                 value={section.id}
-                className="h-11 min-w-20 flex-none px-3 text-sm"
+                className="-mb-px h-11 min-w-20 flex-none rounded-none border-0 border-b-2 border-transparent px-3 text-sm shadow-none after:hidden data-active:border-foreground data-active:bg-transparent data-active:shadow-none"
               >
                 {section.label}
               </TabsTrigger>

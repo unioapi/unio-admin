@@ -2,6 +2,7 @@ import { api } from "@/lib/api/client";
 import { buildListQuery } from "@/lib/api/list-params";
 import type { ListMeta, Page } from "@/lib/api/types";
 import type { BillingException, LedgerEntry } from "@/lib/api/ledger";
+import type { RoutingDecision } from "@/lib/api/routesOps";
 
 // 与后端 requestSummaryDTO 对齐；列表项不含 internal_error_detail（存储层即脱敏）。
 interface RequestSummary {
@@ -22,7 +23,7 @@ interface RequestSummary {
   error_code: string | null;
   error_message: string | null;
   delivery_status: string;
-  response_started_at: string | null;
+  gateway_first_token_at: string | null;
   response_completed_at: string | null;
   started_at: string;
   completed_at: string | null;
@@ -31,7 +32,7 @@ interface RequestSummary {
 }
 
 // 与后端 requestListItemDTO 对齐：请求列表项（富化）= 请求事实 + 用量/成本/扣费 + 线路/渠道链 + 时延。
-// 费用类为 USD 十进制字符串，无结算快照 / 账本时为 null；latency/ttft 单位 ms，tps 为 t/s。
+// 费用类为 USD 十进制字符串，无结算快照 / 账本时为 null；latency/gateway_ttft 单位 ms，tps 为 t/s。
 export interface RequestListItem extends RequestSummary {
   uncached_input_tokens: number;
   cache_read_input_tokens: number;
@@ -74,10 +75,14 @@ export interface RequestListItem extends RequestSummary {
   api_key_prefix: string | null;
   api_key_plaintext: string | null;
   route_name: string | null;
+  route_id: number | null;
   route_price_ratio: string | null;
   route_mode: string | null;
   final_channel_name: string | null;
   channel_chain: string;
+  scoring_attempt_id: number | null;
+  scoring_dimensions: Array<"ttft" | "error">;
+  scoring_error_failure: boolean;
   model_display_name: string | null;
   model_owned_by: string | null;
   // 归一推理强度 none/minimal/low/medium/high/xhigh；Anthropic 带原始预算；批二埋点，历史行为 null。
@@ -85,8 +90,18 @@ export interface RequestListItem extends RequestSummary {
   reasoning_budget_tokens: number | null;
   client_ip: string | null;
   latency_ms: number | null;
-  ttft_ms: number | null;
+  gateway_ttft_ms: number | null;
   tps: number | null;
+  // Sticky 摘要（无 routing_decision_traces 时 sticky_key_present 为 null）。
+  sticky_key_present: boolean | null;
+  sticky_action: string | null;
+  sticky_reason: string | null;
+  sticky_before_channel_id: number | null;
+  sticky_after_channel_id: number | null;
+  sticky_pinned: boolean | null;
+  sticky_pinned_non_preferred: boolean | null;
+  sticky_before_channel_name: string | null;
+  sticky_after_channel_name: string | null;
 }
 
 // 与后端 costSnapshotDTO 对齐：平台成本快照（单价 per_1m_tokens + 金额，USD 字符串）。
@@ -143,11 +158,15 @@ export interface Attempt {
   error_code: string | null;
   error_message: string | null;
   internal_error_detail?: string | null;
-  response_started_at: string | null;
+  gateway_first_token_at: string | null;
   /** 完整上游 transport 耗时，只由 upstream_completed_at - upstream_started_at 派生。 */
   upstream_total_ms: number | null;
   /** 流式上游首 Token 耗时；非流式恒为 null。 */
   upstream_ttft_ms: number | null;
+  upstream_timeout_phase: string | null;
+  ttft_scoring_sample: boolean;
+  error_scoring_sample: boolean;
+  error_scoring_failure: boolean;
   final_usage_received: boolean;
   started_at: string;
   completed_at: string | null;
@@ -173,6 +192,9 @@ interface RequestUsage {
 // 与后端 requestDetailDTO 对齐：请求 + 上游尝试链 + usage + 账本流水 + 计费异常。
 export interface RequestDetail extends RequestSummary {
   internal_error_detail?: string | null;
+  latency_ms: number | null;
+  gateway_ttft_ms: number | null;
+  tps: number | null;
   route_id: number | null;
   reasoning_effort: string | null;
   reasoning_budget_tokens: number | null;
@@ -196,6 +218,10 @@ export interface RequestListParams {
   requestId?: string;
   userId?: number;
   apiKeyId?: number;
+  routeId?: number;
+  channelId?: number;
+  attemptId?: number;
+  scoringSample?: "ttft" | "error" | "any";
   from?: string;
   to?: string;
 }
@@ -215,6 +241,10 @@ export async function listRequests(
         request_id: params.requestId,
         user_id: params.userId,
         api_key_id: params.apiKeyId,
+        route_id: params.routeId,
+        channel_id: params.channelId,
+        attempt_id: params.attemptId,
+        scoring_sample: params.scoringSample,
         from: params.from,
         to: params.to,
       }),
@@ -231,6 +261,15 @@ export async function getRequest(
   const res = await api.get<{ data: RequestDetail }>(
     `/admin/v1/requests/${encodeURIComponent(requestId)}`,
     { params: { include_internal: includeInternal ? "true" : undefined } },
+  );
+  return res.data.data;
+}
+
+export async function getRequestRoutingDecision(
+  requestId: string,
+): Promise<RoutingDecision> {
+  const res = await api.get<{ data: RoutingDecision }>(
+    `/admin/v1/requests/${encodeURIComponent(requestId)}/routing-decision`,
   );
   return res.data.data;
 }

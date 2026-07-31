@@ -95,10 +95,6 @@ const REASON_CODE_LABELS: Record<string, string> = Object.fromEntries(
   REASON_CODE_FILTER_OPTIONS.map((o) => [o.value, o.label]),
 );
 
-export function billingExceptionReasonCodeLabel(reasonCode: string): string {
-  return REASON_CODE_LABELS[reasonCode] ?? reasonCode;
-}
-
 function billingExceptionReasonCodeShort(reasonCode: string): string {
   return REASON_CODE_LABELS[reasonCode] ?? reasonCode;
 }

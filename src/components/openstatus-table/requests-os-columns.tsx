@@ -11,6 +11,7 @@ import {
   RequestModelCell,
   RequestReasoningCell,
   RequestRouteCell,
+  RequestStickyCell,
   RequestTimingCell,
   RequestTokensCell,
   RequestUserKeyCell,
@@ -24,23 +25,6 @@ export const REQUEST_STATUS_OPTIONS: FacetOption[] = [
   { value: "pending", label: "待处理" },
   { value: "canceled", label: "已取消" },
 ];
-
-export const REQUEST_OS_COLUMN_LABELS: Record<string, string> = {
-  created_at: "时间",
-  status: "状态",
-  user_id: "用户/Key",
-  route: "线路",
-  model: "模型",
-  reasoning: "推理强度",
-  stream: "类型",
-  endpoint: "端点",
-  ip: "IP",
-  timing: "耗时",
-  tokens: "Tokens",
-  cost: "费用",
-  request_id: "请求 ID",
-  action: "操作",
-};
 
 // 端点显示：优先 endpoint（chat_completions/messages/responses），回退 ingress_protocol。
 function endpointLabel(row: RequestListItem): string {
@@ -106,6 +90,16 @@ export function requestOsColumns(
       enableSorting: false,
       meta: { label: "线路" },
       cell: ({ row }) => <RequestRouteCell row={row.original} />,
+    },
+    {
+      id: "sticky",
+      accessorKey: "sticky_key_present",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="粘性" />
+      ),
+      enableSorting: false,
+      meta: { label: "粘性" },
+      cell: ({ row }) => <RequestStickyCell row={row.original} />,
     },
     {
       id: "model",

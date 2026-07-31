@@ -16,7 +16,7 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /** 把 observed_at + open_remaining_ms 换成仍在走的剩余毫秒（可到 0）。 */
-export function remainingOpenMs(
+function remainingOpenMs(
   breaker: ChannelBreakerSnapshot,
   nowMs: number,
 ): number | null {
@@ -28,7 +28,7 @@ export function remainingOpenMs(
 }
 
 /** 倒计时文案：mm:ss（不足 1 小时）或 h:mm:ss。 */
-export function formatCountdown(ms: number): string {
+function formatCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
@@ -211,14 +211,6 @@ export function ChannelCircuitBreakerBadge({
             </dd>
             <dt className="text-muted-foreground">连续失败</dt>
             <dd>{status.consecutive_failures}</dd>
-            {status.ttft_samples > 0 ? (
-              <>
-                <dt className="text-muted-foreground">流式 TTFT</dt>
-                <dd>
-                  {Math.round(status.ttft_ewma_ms)} ms（{status.ttft_samples} 样本）
-                </dd>
-              </>
-            ) : null}
             {status.observed_at ? (
               <>
                 <dt className="text-muted-foreground">快照时间</dt>

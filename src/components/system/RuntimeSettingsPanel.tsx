@@ -43,8 +43,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // 保存走 PUT /settings/{key}（后端按注册表校验）。value ≠ default 时显示「已偏离代码默认」——
 // 启动 seed 写入 DB 后行即固化，后续代码默认值升级不会自动跟进，靠此标记提示人工决策。
 //
-// 单位约定（与渠道配置对齐）：时长一律「数字 + 时间单位下拉」入库 int 毫秒（对齐
-// channels.timeout_ms）；TPM/RPD 用「数字 + K/M/B」（rate-limit-input，与渠道页同款）。
+// 单位约定（与渠道配置对齐）：时长一律「数字 + 时间单位下拉」入库 int 毫秒；
+// 线路 TPM/RPD 用「数字 + K/M/B」（rate-limit-input）。
 
 const SOURCE_LABEL: Record<string, string> = {
   redis: "Redis 实时源（消费方秒级读到）",
@@ -54,7 +54,6 @@ const SOURCE_LABEL: Record<string, string> = {
 
 const CRITICAL_SETTING_KEYS = new Set([
   "gateway.route_rate_limit_defaults",
-  "gateway.channel_rate_limit_defaults",
   "gateway.concurrency_defaults",
   "gateway.circuit_breaker",
   "gateway.routing_balance",
@@ -78,7 +77,7 @@ const DOMAIN_TABS: { value: string; label: string; hint: string }[] = [
     value: "gateway",
     label: "网关",
     hint:
-      "五个关键运行态控制以 Redis 激活版本为执行依据；其他网关设置由 applier 在约 5 秒内热更新",
+      "四个关键运行态控制以 Redis 激活版本为执行依据；其他网关设置由 applier 在约 5 秒内热更新",
   },
   {
     value: "admin_backend",
@@ -263,7 +262,6 @@ function SettingEditor({ item }: { item: SettingItem }) {
     case "gateway.circuit_breaker":
       return <CircuitBreakerEditor item={item} />;
     case "gateway.route_rate_limit_defaults":
-    case "gateway.channel_rate_limit_defaults":
       return <RateLimitEditor item={item} />;
     case "gateway.concurrency_defaults":
       return <ConcurrencyDefaultsEditor item={item} />;
@@ -274,7 +272,9 @@ function SettingEditor({ item }: { item: SettingItem }) {
     case "gateway.routing_sticky":
       return <RoutingStickyEditor item={item} />;
     case "gateway.stream_idle_timeout_ms":
-    case "gateway.default_channel_timeout_ms":
+    case "gateway.default_response_timeout_ms":
+    case "gateway.default_first_token_timeout_ms":
+    case "gateway.capacity_wait_timeout_ms":
       return <DurationMsEditor item={item} />;
     case "gateway.credential_401_threshold":
       return <PositiveIntEditor item={item} label="阈值（次）" />;
@@ -640,13 +640,11 @@ function CircuitBreakerEditor({ item }: { item: SettingItem }) {
   );
 }
 
-// ---- gateway.routing_sticky（会话粘性 + 队首短等）----
+// ---- gateway.routing_sticky ----
 
 interface RoutingStickyValue {
   enabled_default: boolean;
   ttl_ms: number;
-  tpm_wait_ms: number;
-  tpm_wait_jitter_ms: number;
 }
 
 function RoutingStickyEditor({ item }: { item: SettingItem }) {
@@ -654,35 +652,22 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
   const defaults = item.default as RoutingStickyValue;
   const [enabledDefault, setEnabledDefault] = useState(server.enabled_default);
   const [ttl, setTtl] = useState(() => decomposeDurationMs(server.ttl_ms));
-  const [tpmWait, setTpmWait] = useState(() =>
-    decomposeDurationMs(server.tpm_wait_ms),
-  );
-  const [tpmWaitJitter, setTpmWaitJitter] = useState(() =>
-    decomposeDurationMs(server.tpm_wait_jitter_ms),
-  );
   const mutation = useSaveSetting(item.key);
 
   const reset = () => {
     setEnabledDefault(defaults.enabled_default);
     setTtl(decomposeDurationMs(defaults.ttl_ms));
-    setTpmWait(decomposeDurationMs(defaults.tpm_wait_ms));
-    setTpmWaitJitter(decomposeDurationMs(defaults.tpm_wait_jitter_ms));
   };
 
   const save = () => {
-    const err =
-      durationError(ttl, false) ??
-      durationError(tpmWait, true) ??
-      durationError(tpmWaitJitter, true);
+    const err = durationError(ttl, false);
     if (err) {
-      toast.error(`时长：${err}（TTL 须 >0；短等/抖动 0=关闭）`);
+      toast.error(`粘性 TTL：${err}`);
       return;
     }
     mutation.mutate({
       enabled_default: enabledDefault,
       ttl_ms: composeDurationMs(ttl),
-      tpm_wait_ms: composeDurationMs(tpmWait),
-      tpm_wait_jitter_ms: composeDurationMs(tpmWaitJitter),
     } satisfies RoutingStickyValue);
   };
 
@@ -701,32 +686,18 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
           onCheckedChange={setEnabledDefault}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <HintLabel hint="绑定绝对过期时间（命中不刷新）。到期后回到线路策略排序，可能自然回迁更便宜渠道。">
-            粘性 TTL
-          </HintLabel>
-          <DurationInput value={ttl} onChange={setTtl} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <HintLabel hint="只有 Sticky 固定的首候选在 TPM/并发满时允许等待一次；普通评分候选会立即 fallback。0=关闭等待。">
-            Sticky 首候选短等
-          </HintLabel>
-          <DurationInput value={tpmWait} onChange={setTpmWait} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <HintLabel hint="加在短等上的随机抖动上限，避免同时醒来打爆同一渠道。0=无抖动。">
-            短等抖动
-          </HintLabel>
-          <DurationInput value={tpmWaitJitter} onChange={setTpmWaitJitter} />
-        </div>
+      <div className="flex flex-col gap-1.5">
+        <HintLabel hint="仅原绑定渠道完整成功时滑动续期；临时绕行不会改绑或续期，到期后重新按线路策略选择。">
+          粘性 TTL
+        </HintLabel>
+        <DurationInput value={ttl} onChange={setTtl} />
       </div>
       <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
     </div>
   );
 }
 
-// ---- gateway.route_rate_limit_defaults / gateway.channel_rate_limit_defaults ----
+// ---- gateway.route_rate_limit_defaults ----
 
 interface RateLimitValue {
   rpm: number;
@@ -737,7 +708,6 @@ interface RateLimitValue {
 function RateLimitEditor({ item }: { item: SettingItem }) {
   const server = item.value as RateLimitValue;
   const defaults = item.default as RateLimitValue;
-  const isRouteDefault = item.key === "gateway.route_rate_limit_defaults";
   const [rpm, setRpm] = useState(String(server.rpm));
   const [tpm, setTpm] = useState<RateLimitFieldValue>(() =>
     decomposeRateLimit(server.tpm),
@@ -795,15 +765,11 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
         </div>
       </div>
       <Alert>
-        <AlertTitle>
-          {isRouteDefault
-            ? "线路限流命中后直接返回 429"
-            : "渠道限流命中后自动尝试后备渠道"}
-        </AlertTitle>
+        <AlertTitle>线路限流命中后直接返回 429</AlertTitle>
         <AlertDescription>
-          {isRouteDefault
-            ? "在线路未单独设置限额时使用；RPM/RPD 在请求入口执行，TPM 在候选估算后、上游调用前执行。命中均直接返回 429；Redis 或运行态存储不可用时固定拒绝准入。"
-            : "在渠道未单独设置限额时使用；命中后跳过当前渠道并继续 fallback。Redis 或运行态存储不可用时固定拒绝准入。"}
+          在线路未单独设置限额时使用；RPM/RPD 在请求入口执行，TPM
+          在候选估算后、上游调用前执行。命中均直接返回 429；渠道级 RPM、RPD、TPM
+          只作观测，不参与拦截和评分。
         </AlertDescription>
       </Alert>
       <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />
@@ -874,51 +840,55 @@ function ConcurrencyDefaultsEditor({ item }: { item: SettingItem }) {
 }
 
 interface RoutingBalanceValue {
-  economic_weight_pct?: number;
-  health_weight_pct?: number;
-  capacity_weight_pct?: number;
-  priority_weight_pct?: number;
-  ttft_target_ms: number;
-  ttft_weight: number;
-  // 仅用于读取升级前的数据库值；保存永远写 objective_v1 结构。
-  cost_weight?: number;
-  minimum_routing_factor?: number;
-  ttft_ewma_alpha: number;
-}
-
-function objectiveWeights(value: RoutingBalanceValue) {
-  if (
-    Number.isInteger(value.economic_weight_pct) &&
-    Number.isInteger(value.health_weight_pct) &&
-    Number.isInteger(value.capacity_weight_pct) &&
-    Number.isInteger(value.priority_weight_pct)
-  ) {
-    return {
-      economic: value.economic_weight_pct as number,
-      health: value.health_weight_pct as number,
-      capacity: value.capacity_weight_pct as number,
-      priority: value.priority_weight_pct as number,
-    };
-  }
-  return { economic: 45, health: 25, capacity: 20, priority: 10 };
+  cost_weight_pct: number;
+  concurrency_weight_pct: number;
+  ttft_weight_pct: number;
+  error_rate_weight_pct: number;
+  priority_weight_pct: number;
+  ttft_window_ms: number;
+  ttft_penalty_unit_ms: number;
+  ttft_penalty_points_per_unit: number;
+  error_window_ms: number;
+  error_penalty_points_per_percent: number;
 }
 
 function RoutingBalanceEditor({ item }: { item: SettingItem }) {
   const server = item.value as RoutingBalanceValue;
   const defaults = item.default as RoutingBalanceValue;
-  const serverWeights = objectiveWeights(server);
-  const defaultWeights = objectiveWeights(defaults);
-  const [target, setTarget] = useState(() =>
-    decomposeDurationMs(server.ttft_target_ms),
+  const [costWeight, setCostWeight] = useState(String(server.cost_weight_pct));
+  const [concurrencyWeight, setConcurrencyWeight] = useState(
+    String(server.concurrency_weight_pct),
   );
-  const [weight, setWeight] = useState(String(server.ttft_weight));
-  const [economicWeight, setEconomicWeight] = useState(String(serverWeights.economic));
-  const [healthWeight, setHealthWeight] = useState(String(serverWeights.health));
-  const [capacityWeight, setCapacityWeight] = useState(String(serverWeights.capacity));
-  const [priorityWeight, setPriorityWeight] = useState(String(serverWeights.priority));
-  const [alpha, setAlpha] = useState(String(server.ttft_ewma_alpha));
+  const [ttftWeight, setTTFTWeight] = useState(String(server.ttft_weight_pct));
+  const [errorWeight, setErrorWeight] = useState(
+    String(server.error_rate_weight_pct),
+  );
+  const [priorityWeight, setPriorityWeight] = useState(
+    String(server.priority_weight_pct),
+  );
+  const [ttftWindow, setTTFTWindow] = useState(() =>
+    decomposeDurationMs(server.ttft_window_ms),
+  );
+  const [ttftPenaltyUnit, setTTFTPenaltyUnit] = useState(() =>
+    decomposeDurationMs(server.ttft_penalty_unit_ms),
+  );
+  const [ttftPenaltyPoints, setTTFTPenaltyPoints] = useState(
+    String(server.ttft_penalty_points_per_unit),
+  );
+  const [errorWindow, setErrorWindow] = useState(() =>
+    decomposeDurationMs(server.error_window_ms),
+  );
+  const [errorPenaltyPoints, setErrorPenaltyPoints] = useState(
+    String(server.error_penalty_points_per_percent),
+  );
   const mutation = useSaveSetting(item.key);
-  const parsedWeights = [economicWeight, healthWeight, capacityWeight, priorityWeight].map(Number);
+  const parsedWeights = [
+    costWeight,
+    concurrencyWeight,
+    ttftWeight,
+    errorWeight,
+    priorityWeight,
+  ].map(Number);
   const weightsInRange = parsedWeights.every(
     (value) => Number.isInteger(value) && value >= 0 && value <= 100,
   );
@@ -929,36 +899,42 @@ function RoutingBalanceEditor({ item }: { item: SettingItem }) {
   const weightsValid = weightsInRange && weightTotal === 100;
 
   const save = () => {
-    const targetError = durationError(target, false);
-    const weightNumber = Number(weight);
-    const alphaNumber = Number(alpha);
-    if (targetError) {
-      toast.error(`TTFT 目标：${targetError}`);
+    const windowError =
+      durationError(ttftWindow, false) ??
+      durationError(ttftPenaltyUnit, false) ??
+      durationError(errorWindow, false);
+    if (windowError) {
+      toast.error(`评分时长：${windowError}`);
       return;
     }
+    const ttftPoints = Number(ttftPenaltyPoints);
+    const errorPoints = Number(errorPenaltyPoints);
     if (
-      !Number.isFinite(weightNumber) ||
-      weightNumber < 0 ||
-      weightNumber > 1 ||
-      !Number.isFinite(alphaNumber) ||
-      alphaNumber <= 0 ||
-      alphaNumber > 1
+      !Number.isFinite(ttftPoints) ||
+      ttftPoints <= 0 ||
+      ttftPoints > 100 ||
+      !Number.isFinite(errorPoints) ||
+      errorPoints <= 0 ||
+      errorPoints > 100
     ) {
-      toast.error("TTFT 权重需在 [0,1]，EWMA 系数需在 (0,1]");
+      toast.error("TTFT 与错误率的惩罚分必须在 (0, 100] 内");
       return;
     }
     if (!weightsValid) {
-      toast.error("四项评分权重必须为 0–100 的整数，且合计为 100%");
+      toast.error("五项评分权重必须为 0–100 的整数，且合计为 100%");
       return;
     }
     mutation.mutate({
-      economic_weight_pct: parsedWeights[0],
-      health_weight_pct: parsedWeights[1],
-      capacity_weight_pct: parsedWeights[2],
-      priority_weight_pct: parsedWeights[3],
-      ttft_target_ms: composeDurationMs(target),
-      ttft_weight: weightNumber,
-      ttft_ewma_alpha: alphaNumber,
+      cost_weight_pct: parsedWeights[0],
+      concurrency_weight_pct: parsedWeights[1],
+      ttft_weight_pct: parsedWeights[2],
+      error_rate_weight_pct: parsedWeights[3],
+      priority_weight_pct: parsedWeights[4],
+      ttft_window_ms: composeDurationMs(ttftWindow),
+      ttft_penalty_unit_ms: composeDurationMs(ttftPenaltyUnit),
+      ttft_penalty_points_per_unit: ttftPoints,
+      error_window_ms: composeDurationMs(errorWindow),
+      error_penalty_points_per_percent: errorPoints,
     } satisfies RoutingBalanceValue);
   };
 
@@ -967,37 +943,41 @@ function RoutingBalanceEditor({ item }: { item: SettingItem }) {
       <Alert>
         <AlertTitle>客观评分确定性排序</AlertTitle>
         <AlertDescription>
-          普通候选按经济、健康、容量、Priority 总分排序，不进行全量随机；同分时按 Priority、渠道 ID 排序。TTFT 只采集流式首 Token。
+          候选按成本、并发容量、TTFT、错误率、Priority 五项总分排序；同分时按
+          Priority、渠道 ID 排序。TTFT 和错误率使用时间窗口，无样本时对应指标按满分计算。
         </AlertDescription>
       </Alert>
       <div className="grid gap-3 sm:grid-cols-2">
-        <FieldText id="economic_weight_pct" label="经济权重（%）" value={economicWeight} onChange={setEconomicWeight} inputMode="numeric" />
-        <FieldText id="health_weight_pct" label="健康权重（%）" value={healthWeight} onChange={setHealthWeight} inputMode="numeric" />
-        <FieldText id="capacity_weight_pct" label="容量权重（%）" value={capacityWeight} onChange={setCapacityWeight} inputMode="numeric" />
+        <FieldText id="cost_weight_pct" label="成本权重（%）" value={costWeight} onChange={setCostWeight} inputMode="numeric" />
+        <FieldText id="concurrency_weight_pct" label="并发容量权重（%）" value={concurrencyWeight} onChange={setConcurrencyWeight} inputMode="numeric" />
+        <FieldText id="ttft_weight_pct" label="上游 TTFT 权重（%）" value={ttftWeight} onChange={setTTFTWeight} inputMode="numeric" />
+        <FieldText id="error_rate_weight_pct" label="错误率权重（%）" value={errorWeight} onChange={setErrorWeight} inputMode="numeric" />
         <FieldText id="priority_weight_pct" label="Priority 权重（%）" value={priorityWeight} onChange={setPriorityWeight} inputMode="numeric" />
         <div className="flex flex-col gap-1.5">
-          <HintLabel hint="达到该首 Token 时长时，TTFT 项开始降低候选权重。">
-            TTFT 目标
+          <HintLabel hint="只读取该时间范围内已完成请求的流式上游首字样本。">
+            上游 TTFT 样本窗口
           </HintLabel>
-          <DurationInput value={target} onChange={setTarget} />
+          <DurationInput value={ttftWindow} onChange={setTTFTWindow} />
         </div>
-        <FieldText
-          label="TTFT 权重 [0,1]"
-          value={weight}
-          onChange={setWeight}
-          inputMode="decimal"
-        />
-        <FieldText
-          label="TTFT EWMA 系数 (0,1]"
-          value={alpha}
-          onChange={setAlpha}
-          inputMode="decimal"
-        />
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="平均上游 TTFT 每增加一个单位，就按下方配置扣除指标分。">
+            上游 TTFT 惩罚单位
+          </HintLabel>
+          <DurationInput value={ttftPenaltyUnit} onChange={setTTFTPenaltyUnit} />
+        </div>
+        <FieldText label="每单位上游 TTFT 扣分" value={ttftPenaltyPoints} onChange={setTTFTPenaltyPoints} inputMode="decimal" />
+        <div className="flex flex-col gap-1.5">
+          <HintLabel hint="只读取该时间范围内已完成 attempt 的成功和失败样本。">
+            错误率样本窗口
+          </HintLabel>
+          <DurationInput value={errorWindow} onChange={setErrorWindow} />
+        </div>
+        <FieldText label="错误率每 1% 扣分" value={errorPenaltyPoints} onChange={setErrorPenaltyPoints} inputMode="decimal" />
       </div>
       <Alert variant={weightsValid ? "default" : "destructive"}>
         <AlertTitle>评分权重合计：{weightTotal}%</AlertTitle>
         <AlertDescription>
-          {weightsValid ? "配置有效。" : "四项必须是 0–100 的整数，且合计正好为 100%。"}
+          {weightsValid ? "配置有效。" : "五项必须是 0–100 的整数，且合计正好为 100%。"}
         </AlertDescription>
       </Alert>
       <SaveReset
@@ -1005,13 +985,16 @@ function RoutingBalanceEditor({ item }: { item: SettingItem }) {
         saveDisabled={!weightsValid}
         onSave={save}
         onReset={() => {
-          setTarget(decomposeDurationMs(defaults.ttft_target_ms));
-          setWeight(String(defaults.ttft_weight));
-          setEconomicWeight(String(defaultWeights.economic));
-          setHealthWeight(String(defaultWeights.health));
-          setCapacityWeight(String(defaultWeights.capacity));
-          setPriorityWeight(String(defaultWeights.priority));
-          setAlpha(String(defaults.ttft_ewma_alpha));
+          setCostWeight(String(defaults.cost_weight_pct));
+          setConcurrencyWeight(String(defaults.concurrency_weight_pct));
+          setTTFTWeight(String(defaults.ttft_weight_pct));
+          setErrorWeight(String(defaults.error_rate_weight_pct));
+          setPriorityWeight(String(defaults.priority_weight_pct));
+          setTTFTWindow(decomposeDurationMs(defaults.ttft_window_ms));
+          setTTFTPenaltyUnit(decomposeDurationMs(defaults.ttft_penalty_unit_ms));
+          setTTFTPenaltyPoints(String(defaults.ttft_penalty_points_per_unit));
+          setErrorWindow(decomposeDurationMs(defaults.error_window_ms));
+          setErrorPenaltyPoints(String(defaults.error_penalty_points_per_percent));
         }}
       />
     </div>
@@ -1072,18 +1055,19 @@ function CooldownEditor({ item }: { item: SettingItem }) {
   );
 }
 
-// ---- int 毫秒标量（流式 idle / 默认渠道超时 / 渠道检测超时）----
+// ---- int 毫秒标量（响应 / 首字 / 流式 idle / 全池短等）----
 
 function DurationMsEditor({ item }: { item: SettingItem }) {
   const server = item.value as number;
   const defaults = item.default as number;
   const [value, setValue] = useState(() => decomposeDurationMs(server));
   const mutation = useSaveSetting(item.key);
+  const allowZero = item.key === "gateway.capacity_wait_timeout_ms";
 
   const save = () => {
-    const err = durationError(value, false);
+    const err = durationError(value, allowZero);
     if (err) {
-      toast.error(`时长：${err}`);
+      toast.error(`时长：${err}${allowZero ? "（0=关闭短等）" : ""}`);
       return;
     }
     mutation.mutate(composeDurationMs(value));
@@ -1092,7 +1076,7 @@ function DurationMsEditor({ item }: { item: SettingItem }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">时长</Label>
+        <Label className="text-xs">时长{allowZero ? "（0=关闭）" : ""}</Label>
         <DurationInput value={value} onChange={setValue} />
       </div>
       <SaveReset
