@@ -63,6 +63,9 @@ const LedgerPage = lazy(() =>
 const SystemPage = lazy(() =>
   import("@/pages/SystemPage").then((m) => ({ default: m.SystemPage })),
 );
+const LoggingPage = lazy(() =>
+  import("@/pages/LoggingPage").then((m) => ({ default: m.LoggingPage })),
+);
 const UsersPage = lazy(() =>
   import("@/pages/UsersPage").then((m) => ({ default: m.UsersPage })),
 );
@@ -105,6 +108,7 @@ function App() {
             <Route path="requests" element={<RequestsPage />} />
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="system" element={<SystemPage />} />
+            <Route path="logs" element={<LoggingPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="users/:userId" element={<UserDetailPage />} />
             <Route path="users/:userId/api-keys" element={<ApiKeysPage />} />

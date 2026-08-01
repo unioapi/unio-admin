@@ -163,6 +163,113 @@ export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
   return res.data.data;
 }
 
+export interface GatewayLoggingControl {
+  active: boolean;
+  session_id?: string;
+  started_at?: string;
+  expires_at?: string;
+  reason?: string;
+  enabled_by_user_id: number;
+  revision: number;
+}
+
+export interface GatewayLoggingInstance {
+  url: string;
+  state: "applied" | "pending" | "unreachable" | "environment_debug";
+  error?: string;
+  instance_id?: string;
+  environment?: string;
+  baseline_level?: string;
+  effective_level?: string;
+  debug_session_id?: string;
+  expires_at?: string;
+  applied_revision?: number;
+}
+
+export interface GatewayLoggingSnapshot {
+  mode: "info" | "debug" | "environment_debug";
+  control: GatewayLoggingControl;
+  instances: GatewayLoggingInstance[];
+}
+
+export type GatewayLogLevel = "debug" | "info" | "warning" | "error";
+export type GatewayLogRange = "15m" | "1h" | "6h" | "24h" | "7d";
+
+export interface GatewayLogEntry {
+  id: string;
+  timestamp: string;
+  level: GatewayLogLevel;
+  type: string;
+  event: string;
+  message: string;
+  environment: string;
+  instance: string;
+  data: Record<string, unknown>;
+}
+
+export interface GatewayLogList {
+  items: GatewayLogEntry[];
+  from: string;
+  to: string;
+  limit: number;
+  truncated: boolean;
+}
+
+export interface GatewayLogFilters {
+  range: GatewayLogRange;
+  level: GatewayLogLevel | "";
+  type: string;
+  event: string;
+  related_id: string;
+  search: string;
+  limit: 50 | 100 | 200;
+}
+
+export async function getGatewayLogging(): Promise<GatewayLoggingSnapshot> {
+  const res = await api.get<{ data: GatewayLoggingSnapshot }>(
+    "/admin/v1/system/gateway-logging",
+  );
+  return res.data.data;
+}
+
+export async function getGatewayLogs(
+  filters: GatewayLogFilters,
+): Promise<GatewayLogList> {
+  const res = await api.get<{ data: GatewayLogList }>(
+    "/admin/v1/system/gateway-logs",
+    {
+      params: {
+        range: filters.range,
+        level: filters.level || undefined,
+        type: filters.type || undefined,
+        event: filters.event || undefined,
+        related_id: filters.related_id || undefined,
+        search: filters.search || undefined,
+        limit: filters.limit,
+      },
+    },
+  );
+  return res.data.data;
+}
+
+export async function startGatewayDebugSession(input: {
+  duration_minutes: 5 | 15 | 30 | 60;
+  reason: string;
+}): Promise<GatewayLoggingSnapshot> {
+  const res = await api.put<{ data: GatewayLoggingSnapshot }>(
+    "/admin/v1/system/gateway-logging/debug-session",
+    input,
+  );
+  return res.data.data;
+}
+
+export async function stopGatewayDebugSession(): Promise<GatewayLoggingSnapshot> {
+  const res = await api.delete<{ data: GatewayLoggingSnapshot }>(
+    "/admin/v1/system/gateway-logging/debug-session",
+  );
+  return res.data.data;
+}
+
 // Provider 全局设置（可编辑）：Anthropic beta 转发策略。与后端 anthropicBetaPolicyDTO 对齐。
 // mode：passthrough（全透传）/ filter（黑名单）/ whitelist（白名单）。
 // list：filter 当黑名单、whitelist 当白名单；passthrough 忽略。

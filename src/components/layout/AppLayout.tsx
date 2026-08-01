@@ -5,6 +5,7 @@ import {
   CableIcon,
   LayoutDashboardIcon,
   LogOutIcon,
+  ScrollTextIcon,
   RouteIcon,
   ServerCogIcon,
   ServerIcon,
@@ -75,7 +76,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "系统设置",
-    items: [{ title: "系统设置", to: "/system", icon: ServerCogIcon }],
+    items: [
+      { title: "系统设置", to: "/system", icon: ServerCogIcon },
+      { title: "日志监控", to: "/logs", icon: ScrollTextIcon },
+    ],
   },
 ];
 
