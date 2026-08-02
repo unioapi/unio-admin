@@ -31,7 +31,7 @@ const READINESS_REASON_LABELS: Record<string, string> = {
 export function RuntimeDiagnosticsPanel() {
   const query = useQuery({
     queryKey: ["runtime-diagnostics"],
-    queryFn: getRuntimeDiagnostics,
+    queryFn: ({ signal }) => getRuntimeDiagnostics(signal),
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,
   });

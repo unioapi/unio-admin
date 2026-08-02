@@ -26,7 +26,12 @@ export function RoutesPage() {
 
   const table = useServerTable({
     queryKey: "routes",
-    fetch: (p) => getRoutesOpsTable({ range: "all", ...p }),
+    fetch: (p) =>
+      getRoutesOpsTable({
+        range: "all",
+        ...p,
+        status: p.status === "disabled" ? "disabled" : "enabled",
+      }),
     defaultSort: { id: "name", desc: false },
     statusOptions: ROUTE_STATUS_OPTIONS,
     initialStatus: "enabled",
@@ -68,9 +73,10 @@ export function RoutesPage() {
             <FacetFilterButton
               label="状态"
               multiple={false}
-              value={table.status ? [table.status] : []}
+              allOption={false}
+              value={[table.status === "disabled" ? "disabled" : "enabled"]}
               options={[...table.statusOptions]}
-              onChange={(v) => table.onStatusChange(v[0] ?? "")}
+              onChange={(v) => table.onStatusChange(v[0] ?? "enabled")}
             />
           }
         />

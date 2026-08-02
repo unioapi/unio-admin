@@ -80,8 +80,14 @@ export async function getUserOpsDetail(id: number, params: RangeQuery): Promise<
   return res.data.data;
 }
 
-export async function getApiKeysOpsSummary(userId: number): Promise<ApiKeysOpsSummary> {
-  const res = await api.get<{ data: ApiKeysOpsSummary }>(`/admin/v1/users/${userId}/api-keys/ops/summary`);
+export async function getApiKeysOpsSummary(
+  userId: number,
+  signal?: AbortSignal,
+): Promise<ApiKeysOpsSummary> {
+  const path = `/admin/v1/users/${userId}/api-keys/ops/summary`;
+  const res = signal
+    ? await api.get<{ data: ApiKeysOpsSummary }>(path, { signal })
+    : await api.get<{ data: ApiKeysOpsSummary }>(path);
   return res.data.data;
 }
 

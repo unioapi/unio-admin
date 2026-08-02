@@ -95,7 +95,8 @@ export function RouteDataSourceSubtitle({ routeId }: { routeId: number }) {
   const modelId = models.data?.[0]?.model_id ?? "";
   const runtime = useQuery({
     queryKey: ["route", routeId, "ops-runtime", modelId, "all", "order"],
-    queryFn: () => getRouteRuntime(routeId, { model_id: modelId, sort: "order" }),
+    queryFn: ({ signal }) =>
+      getRouteRuntime(routeId, { model_id: modelId, sort: "order" }, signal),
     enabled: modelId !== "",
   });
 
@@ -151,12 +152,12 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
 
   const runtimeQuery = useQuery({
     queryKey: ["route", routeId, "ops-runtime", modelId, protocol, "order"],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       getRouteRuntime(routeId, {
         model_id: modelId,
         protocol: protocol === "all" ? undefined : (protocol as "openai" | "anthropic"),
         sort: "order",
-      }),
+      }, signal),
     enabled: modelId !== "",
     // 用 react-query 的间隔刷新：上一轮未完成时不会叠新请求，避免 setInterval 并发堆积把标签页打崩。
     refetchInterval: autoRefresh ? intervalSec * 1000 : false,

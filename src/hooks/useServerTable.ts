@@ -37,7 +37,10 @@ interface UseServerTableOptions<T> {
    * invalidateQueries({queryKey:[queryKey, ...extraKey?]}) 能前缀命中本列表并自动刷新。
    */
   queryKey: string;
-  fetch: (params: ServerTableFetchParams) => Promise<Page<T>>;
+  fetch: (
+    params: ServerTableFetchParams,
+    signal?: AbortSignal,
+  ) => Promise<Page<T>>;
   defaultSort?: { id: string; desc: boolean };
   /** 提供后暴露 status / onStatusChange / statusOptions。 */
   statusOptions?: readonly StatusOption[];
@@ -116,14 +119,14 @@ export function useServerTable<T>({
 
   const query = useQuery({
     queryKey: [queryKey, ...extraKey, "ops-list", page, sort, status, search],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetch({
         page,
         page_size: pageSize,
         sort,
         status: status || undefined,
         search: search || undefined,
-      }),
+      }, signal),
     placeholderData: keepPreviousData,
     enabled,
     refetchInterval,

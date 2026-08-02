@@ -15,7 +15,7 @@ import {
   rateLimitWithUnitError,
   type RateLimitFieldValue,
 } from "@/components/common/rate-limit-input";
-import { HintLabel } from "@/components/common/field-hint";
+import { FieldHint, HintLabel } from "@/components/common/field-hint";
 import {
   DurationInput,
   composeDurationMs,
@@ -32,6 +32,12 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 // 运行时配置面板：按「域」分 Tab 渲染（batch2 §2/§6.2，对齐 new-api 设置页组织方式）。
 //
@@ -123,7 +129,7 @@ function jsonEquals(a: unknown, b: unknown): boolean {
 export function RuntimeSettingsPanel() {
   const query = useQuery({
     queryKey: RUNTIME_SETTINGS_QUERY_KEY,
-    queryFn: listSettings,
+    queryFn: ({ signal }) => listSettings(signal),
   });
 
   if (query.isError) {
@@ -156,13 +162,10 @@ export function RuntimeSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Alert>
-        <AlertTitle>运行时配置（免重启生效）</AlertTitle>
+      <Alert className="py-2.5">
+        <AlertTitle>运行时配置</AlertTitle>
         <AlertDescription>
-          按域分组：配置保存后写入数据库并经 Redis
-          推送到对应消费方（各域生效时效见 Tab 内说明）。
-          标有「已偏离代码默认」的项表示当前值与代码内置默认不同（可能是人为调整，也可能是新版本
-          默认值已升级而 DB 仍为旧值），是否跟进由你决定。
+          保存后免重启生效。偏离代码默认的项目会单独标记，来源、版本和默认值可在卡片底部展开查看。
         </AlertDescription>
       </Alert>
       <Tabs defaultValue="gateway">
@@ -182,12 +185,12 @@ export function RuntimeSettingsPanel() {
             <TabsContent
               key={t.value}
               value={t.value}
-              className="flex flex-col gap-4 pt-3"
+              className="flex flex-col gap-3 pt-3"
             >
               <p className="text-muted-foreground text-xs">{t.hint}</p>
               {/* anthropic 域的 beta 策略有专用 typed 卡片（含生效探针），生成式卡片跳过该 key。 */}
               {t.value === "anthropic" && <AnthropicBetaPolicyCard />}
-              <div className="grid items-start gap-4 md:grid-cols-2">
+              <div className="grid items-start gap-3 md:grid-cols-2">
                 {domainItems
                   .filter((item) => item.key !== "anthropic.beta_policy")
                   .map((item) => (
@@ -213,46 +216,88 @@ function SettingCard({ item }: { item: SettingItem }) {
         : "内置默认（尚未建立运行态）"
     : (SOURCE_LABEL[item.source] ?? item.source);
   return (
-    <Card>
-      <CardHeader>
+    <Card size="sm">
+      <CardHeader className="gap-0">
         <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
           {item.label}
+          <FieldHint
+            text={item.description}
+            label={`${item.label}说明`}
+          />
           {diverged && <Badge variant="secondary">已偏离代码默认</Badge>}
           {critical ? (
             <RuntimeControlBadge state={item.runtime_sync_state} />
           ) : null}
         </CardTitle>
-        <p className="text-muted-foreground text-xs">{item.description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-3">
         <SettingEditor item={item} />
-        <div className="text-muted-foreground border-t pt-2 text-[11px] leading-5">
-          <div>
-            <span className="font-medium">生效来源</span>：
-            {sourceLabel}
-          </div>
-          <div>
-            <span className="font-medium">数据库版本</span>：v
-            {item.revision || "—"}
-          </div>
-          {critical ? (
-            <div>
-              <span className="font-medium">Redis 版本</span>：激活 v
-              {item.runtime_active_revision || "—"} / 待提交 v
-              {item.runtime_pending_revision || "—"}
-            </div>
-          ) : null}
-          <div className="font-mono break-all">
-            <span className="font-sans font-medium">当前值</span>：
-            {JSON.stringify(item.value)}
-          </div>
-          <div className="font-mono break-all">
-            <span className="font-sans font-medium">代码默认</span>：
-            {JSON.stringify(item.default)}
-          </div>
-        </div>
+        <SettingDetails
+          item={item}
+          sourceLabel={sourceLabel}
+          critical={critical}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+function SettingDetails({
+  item,
+  sourceLabel,
+  critical,
+}: {
+  item: SettingItem;
+  sourceLabel: string;
+  critical: boolean;
+}) {
+  return (
+    <Accordion type="single" collapsible className="border-t">
+      <AccordionItem value="details" className="border-0">
+        <AccordionTrigger
+          aria-label="配置详情"
+          className="py-2 text-[11px] font-normal text-muted-foreground hover:no-underline"
+        >
+          <span>配置详情</span>
+          <span className="ml-auto mr-2 hidden max-w-64 truncate sm:inline">
+            {sourceLabel}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="pb-0">
+          <dl className="grid gap-x-4 gap-y-2 text-[11px] leading-5 text-muted-foreground sm:grid-cols-2">
+            <div>
+              <dt className="font-medium text-foreground">生效来源</dt>
+              <dd>{sourceLabel}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-foreground">数据库版本</dt>
+              <dd>v{item.revision || "—"}</dd>
+            </div>
+            {critical ? (
+              <div className="sm:col-span-2">
+                <dt className="font-medium text-foreground">Redis 版本</dt>
+                <dd>
+                  激活 v{item.runtime_active_revision || "—"} / 待提交 v
+                  {item.runtime_pending_revision || "—"}
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="font-medium text-foreground">当前值</dt>
+              <dd className="mt-1 max-h-28 overflow-auto rounded-md bg-muted/50 p-2 font-mono break-all text-foreground">
+                {JSON.stringify(item.value)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-foreground">代码默认</dt>
+              <dd className="mt-1 max-h-28 overflow-auto rounded-md bg-muted/50 p-2 font-mono break-all text-foreground">
+                {JSON.stringify(item.default)}
+              </dd>
+            </div>
+          </dl>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 }
 

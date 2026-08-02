@@ -11,6 +11,7 @@ import { ActivityIcon } from "lucide-react";
 import { listRequests, type RequestListItem } from "@/lib/api/requests";
 import { sortingToApiSort } from "@/lib/api/list-params";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
+import { rangeParams as resolveRangeParams } from "@/lib/range";
 import { useRefreshSettings } from "@/hooks/useRefreshSettings";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { RefreshControl } from "@/components/common/RefreshControl";
@@ -110,10 +111,11 @@ export function RequestsList({
 
   // —— 旧 RangeFilter 路径（USE_LEGACY_RANGE_FILTER=true 时启用）——
   const internalRange = useRangeQuery("24h");
-  const useInternalLegacyRange =
+  const useInternalRange =
     USE_LEGACY_RANGE_FILTER &&
-    showRangeFilter &&
-    externalRangeParams == null;
+    externalRangeParams == null &&
+    sampleWindow == null;
+  const showInternalLegacyRange = useInternalRange && showRangeFilter;
 
   const {
     autoRefresh,
@@ -158,12 +160,32 @@ export function RequestsList({
   const userId = fixedUserId ?? parsedUserId;
   const sort = sortingToApiSort(sorting);
 
-  const rangeParams = useMemo(() => {
+  const requestRange = useMemo(() => {
     if (sampleWindow) return sampleWindow;
     if (externalRangeParams) return externalRangeParams;
     if (USE_LEGACY_RANGE_FILTER) return internalRange.params;
     return timestampsToRangeParams(createdAtFilter);
   }, [createdAtFilter, externalRangeParams, internalRange.params, sampleWindow]);
+
+  const rangeKey = useMemo(() => {
+    if (sampleWindow) return sampleWindow;
+    if (externalRangeParams) return externalRangeParams;
+    if (USE_LEGACY_RANGE_FILTER) {
+      return {
+        preset: internalRange.value.preset,
+        from: internalRange.value.from,
+        to: internalRange.value.to,
+      };
+    }
+    return createdAtFilter;
+  }, [
+    createdAtFilter,
+    externalRangeParams,
+    internalRange.value.from,
+    internalRange.value.preset,
+    internalRange.value.to,
+    sampleWindow,
+  ]);
 
   const allColumns = useMemo(
     () => requestOsColumns((requestId) => setSelection({ requestId })),
@@ -201,44 +223,43 @@ export function RequestsList({
         page,
         perPage,
         sort,
-        range: rangeParams,
+        range: rangeKey,
       },
     ],
-    queryFn: () =>
-      listRequests({
-        page,
-        pageSize: perPage,
-        sort,
-        status: status || undefined,
-        model: model || undefined,
-        requestId: requestId || undefined,
-        userId,
-        routeId: fixedRouteId,
-        channelId: fixedChannelId,
-        scoringSample: scoringDimension,
-        from: rangeParams.from,
-        to: rangeParams.to,
-      }),
+    queryFn: ({ signal }) => {
+      const currentRange = useInternalRange
+        ? resolveRangeParams(internalRange.value)
+        : requestRange;
+      return listRequests(
+        {
+          page,
+          pageSize: perPage,
+          sort,
+          status: status || undefined,
+          model: model || undefined,
+          requestId: requestId || undefined,
+          userId,
+          routeId: fixedRouteId,
+          channelId: fixedChannelId,
+          scoringSample: scoringDimension,
+          from: currentRange.from,
+          to: currentRange.to,
+        },
+        signal,
+      );
+    },
     placeholderData: keepPreviousData,
+    refetchInterval:
+      showRefreshControl && autoRefresh ? intervalSec * 1000 : false,
+    refetchIntervalInBackground: false,
   });
 
-  const bumpRange = internalRange.refresh;
   const refetchList = query.refetch;
 
-  // 手动 / 自动刷新：相对时间区间推进 to=now；否则仅 refetch 列表接口。
+  // 相对时间在 queryFn 执行时推进，query key 只记录区间描述，避免轮询制造缓存。
   const refreshList = useCallback(() => {
-    if (useInternalLegacyRange) {
-      bumpRange();
-      return;
-    }
     void refetchList();
-  }, [bumpRange, refetchList, useInternalLegacyRange]);
-
-  useEffect(() => {
-    if (!showRefreshControl || !autoRefresh) return;
-    const id = window.setInterval(refreshList, intervalSec * 1000);
-    return () => window.clearInterval(id);
-  }, [autoRefresh, intervalSec, refreshList, showRefreshControl]);
+  }, [refetchList]);
 
   const items = query.data?.items ?? [];
   const total = query.data?.total ?? 0;
@@ -317,7 +338,7 @@ export function RequestsList({
             leading={
               <>
                 {toolbarLeading}
-                {useInternalLegacyRange ? (
+                {showInternalLegacyRange ? (
                   <RangeFilter
                     value={internalRange.value}
                     onChange={(v) => {

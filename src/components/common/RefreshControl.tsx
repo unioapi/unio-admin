@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,6 +8,7 @@ import {
 } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   REFRESH_INTERVAL_OPTIONS,
   type RefreshIntervalSec,
@@ -34,6 +36,8 @@ export function RefreshControl({
   refreshLabel?: string;
   className?: string;
 }) {
+  const autoRefreshId = useId();
+
   return (
     <HoverCard openDelay={200} closeDelay={280}>
       <HoverCardTrigger asChild>
@@ -47,48 +51,52 @@ export function RefreshControl({
           onClick={() => onRefresh()}
         >
           <RefreshCwIcon
-            className={cn(
-              "size-4 transition-transform",
-              spinning && "animate-spin",
-            )}
+            className={cn("transition-transform", spinning && "animate-spin")}
           />
         </Button>
       </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-56 space-y-3 p-3">
+      <HoverCardContent align="end" className="flex w-56 flex-col gap-3 p-3">
         <div className="flex items-center justify-between gap-3">
-          <Label htmlFor="auto-refresh" className="text-xs font-medium">
+          <Label htmlFor={autoRefreshId} className="text-xs font-medium">
             自动刷新
           </Label>
           <Switch
-            id="auto-refresh"
+            id={autoRefreshId}
             size="sm"
             checked={autoRefresh}
             onCheckedChange={onAutoRefreshChange}
           />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-1.5">
           <p className="text-muted-foreground text-xs">刷新间隔</p>
-          <div className="grid grid-cols-3 gap-1">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            spacing={1}
+            value={String(intervalSec)}
+            onValueChange={(value) => {
+              if (value) {
+                onIntervalChange(Number(value) as RefreshIntervalSec);
+              }
+            }}
+            aria-label="刷新间隔"
+            className="grid w-full grid-cols-4"
+          >
             {REFRESH_INTERVAL_OPTIONS.map((sec) => {
-              const active = intervalSec === sec;
               return (
-                <button
+                <ToggleGroupItem
                   key={sec}
-                  type="button"
-                  onClick={() => onIntervalChange(sec)}
-                  className={cn(
-                    "h-7 rounded-md text-xs tabular-nums transition-colors",
-                    active
-                      ? "bg-foreground text-background font-medium"
-                      : "text-foreground/80 hover:bg-muted",
-                  )}
+                  value={String(sec)}
+                  aria-label={`${sec} 秒`}
+                  className="tabular-nums"
                 >
                   {sec}秒
-                </button>
+                </ToggleGroupItem>
               );
             })}
-          </div>
+          </ToggleGroup>
         </div>
       </HoverCardContent>
     </HoverCard>

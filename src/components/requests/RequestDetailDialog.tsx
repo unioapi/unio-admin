@@ -71,7 +71,7 @@ function DetailBody({
 
   const query = useQuery({
     queryKey: ["request-detail", requestId, includeInternal],
-    queryFn: () => getRequest(requestId, includeInternal),
+    queryFn: ({ signal }) => getRequest(requestId, includeInternal, signal),
     // 请求仍在进行中/待处理时每 5s 轮询，终态后停止（避免打开历史请求时无谓查询）。
     refetchInterval: (q) => {
       const s = q.state.data?.status;

@@ -56,7 +56,7 @@ export function ChannelDetailPage() {
 
   const runtimeQ = useQuery({
     queryKey: ["channel", channelId, "runtime"],
-    queryFn: () => getChannelRuntime(channelId),
+    queryFn: ({ signal }) => getChannelRuntime(channelId, signal),
     enabled: channelQ.isSuccess,
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,

@@ -81,7 +81,7 @@ export function RoutingProcessPanel({
 }) {
   const query = useQuery({
     queryKey: ["request-routing-decision", requestId],
-    queryFn: () => getRequestRoutingDecision(requestId),
+    queryFn: ({ signal }) => getRequestRoutingDecision(requestId, signal),
     refetchInterval: (q) =>
       q.state.data?.trace_status === "partial" ? 3000 : false,
   });

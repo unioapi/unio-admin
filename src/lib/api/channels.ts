@@ -44,10 +44,12 @@ export interface ChannelListParams extends ListParams {
 // 服务端分页：过滤/翻页都下沉到后端 SQL，前端只拿当前页 + 总数。
 export async function listChannels(
   params: ChannelListParams,
+  signal?: AbortSignal,
 ): Promise<Page<Channel>> {
   const res = await api.get<{ data: Channel[]; meta: ListMeta }>(
     "/admin/v1/channels",
     {
+      ...(signal ? { signal } : {}),
       params: {
         page: params.page,
         page_size: params.pageSize,

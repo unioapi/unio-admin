@@ -86,6 +86,7 @@ function DataTableToolbarFilter<TData>({
           return (
             <Input
               placeholder={columnMeta.placeholder ?? columnMeta.label}
+              maxLength={columnMeta.maxLength}
               value={(column.getFilterValue() as string) ?? ""}
               onChange={(event) => column.setFilterValue(event.target.value)}
               className="h-8 w-40 lg:w-56"

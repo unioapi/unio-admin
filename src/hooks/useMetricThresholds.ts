@@ -59,7 +59,7 @@ function decodeThresholds(value: unknown): MetricThresholds | null {
 export function useMetricThresholds(): MetricThresholds {
   const query = useQuery({
     queryKey: RUNTIME_SETTINGS_QUERY_KEY,
-    queryFn: listSettings,
+    queryFn: ({ signal }) => listSettings(signal),
     staleTime: 30_000,
   });
   const value = query.data?.find((s) => s.key === KEY)?.value;

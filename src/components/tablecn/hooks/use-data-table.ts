@@ -220,10 +220,13 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     return Object.entries(filterValues).reduce<ColumnFiltersState>(
       (filters, [key, value]) => {
         if (value !== null) {
+          const variant = filterableColumns.find(
+            (column) => column.id === key,
+          )?.meta?.variant;
           const processedValue = Array.isArray(value)
             ? value
-            : typeof value === "string" && /[^a-zA-Z0-9]/.test(value)
-              ? value.split(/[^a-zA-Z0-9]+/).filter(Boolean)
+            : variant === "text" || variant === "number"
+              ? value
               : [value];
 
           filters.push({
@@ -235,10 +238,15 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
       },
       [],
     );
-  }, [filterValues, enableAdvancedFilter]);
+  }, [filterValues, filterableColumns, enableAdvancedFilter]);
 
   const [columnFilters, setColumnFilters] =
     React.useState<ColumnFiltersState>(initialColumnFilters);
+
+  // nuqs 在 Router adapter 就绪后才可能拿到首屏 URL；同时支持浏览器前进/后退。
+  React.useEffect(() => {
+    setColumnFilters(initialColumnFilters);
+  }, [initialColumnFilters]);
 
   const onColumnFiltersChange = React.useCallback(
     (updaterOrValue: Updater<ColumnFiltersState>) => {

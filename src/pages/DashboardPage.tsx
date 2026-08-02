@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   Area,
@@ -26,7 +30,6 @@ import {
   getTimeseries,
   getTopErrors,
   type RadarReport,
-  type RangeQuery,
   type RequestPoint,
   type SpendPoint,
   type TimeseriesInterval,
@@ -40,6 +43,12 @@ import {
   relativeChange,
 } from "@/lib/compare";
 import { useRangeQuery } from "@/hooks/useRangeQuery";
+import type { RangeValue } from "@/lib/range";
+import {
+  dashboardRangeKey,
+  dashboardRangeQuery,
+  previousDashboardRangeQuery,
+} from "@/lib/dashboard-range";
 import { RangeFilter } from "@/components/common/RangeFilter";
 import { MetricCard, MetricGrid } from "@/components/common/MetricCard";
 import { CacheHitHint, CacheHitTip } from "@/components/dashboard/CacheHitTip";
@@ -101,18 +110,18 @@ import {
   StatStrip,
   TipRow,
   fmtBucket,
-  usePreviousRange,
   type StatIntent,
 } from "@/components/dashboard/chart-common";
 
 export function DashboardPage() {
-  const { value, setRange, params, bucket, refresh, refreshedAt } =
-    useRangeQuery("24h");
-  const rangeQuery: RangeQuery = { ...params, range: value.preset, interval: bucket };
+  const { value, setRange, bucket, refresh, refreshedAt } = useRangeQuery("24h");
+  const queryClient = useQueryClient();
+  const rangeKey = dashboardRangeKey(value, bucket);
 
   const radar = useQuery({
-    queryKey: ["dashboard", "radar", rangeQuery],
-    queryFn: () => getRadar(rangeQuery),
+    queryKey: ["dashboard", "radar", rangeKey],
+    queryFn: ({ signal }) =>
+      getRadar(dashboardRangeQuery(value, bucket), signal),
     placeholderData: keepPreviousData,
     refetchInterval: 60_000,
   });
@@ -132,7 +141,13 @@ export function DashboardPage() {
           value={value}
           onChange={setRange}
           refreshedAt={refreshedAt}
-          onRefresh={refresh}
+          onRefresh={() => {
+            refresh();
+            void queryClient.refetchQueries({
+              queryKey: ["dashboard"],
+              type: "active",
+            });
+          }}
         />
       </div>
 
@@ -144,9 +159,9 @@ export function DashboardPage() {
       ) : (
         <>
           <RadarCards data={radar.data} loading={radar.isPending} />
-          <TrendsSection range={rangeQuery} interval={bucket} />
-          <BreakdownSection range={rangeQuery} />
-          <TopErrorsSection range={rangeQuery} />
+          <TrendsSection rangeValue={value} interval={bucket} />
+          <BreakdownSection rangeValue={value} interval={bucket} />
+          <TopErrorsSection rangeValue={value} interval={bucket} />
           <div className="grid gap-4 lg:grid-cols-2">
             <ActionItemsCard data={radar.data} loading={radar.isPending} />
             <BadChannelsCard data={radar.data} loading={radar.isPending} />
@@ -341,10 +356,10 @@ const TREND_TABS = [
 type TrendTab = (typeof TREND_TABS)[number]["value"];
 
 function TrendsSection({
-  range,
+  rangeValue,
   interval,
 }: {
-  range: RangeQuery;
+  rangeValue: RangeValue;
   interval: TimeseriesInterval;
 }) {
   const [tab, setTab] = useState<TrendTab>("stability");
@@ -366,16 +381,16 @@ function TrendsSection({
             ))}
           </TabsList>
           <TabsContent value="stability" className="pt-4">
-            <StabilityChart range={range} interval={interval} />
+            <StabilityChart rangeValue={rangeValue} interval={interval} />
           </TabsContent>
           <TabsContent value="performance" className="pt-4">
-            <PerformanceChart range={range} interval={interval} />
+            <PerformanceChart rangeValue={rangeValue} interval={interval} />
           </TabsContent>
           <TabsContent value="profit" className="pt-4">
-            <ProfitChart range={range} interval={interval} />
+            <ProfitChart rangeValue={rangeValue} interval={interval} />
           </TabsContent>
           <TabsContent value="usage" className="pt-4">
-            <UsageChart range={range} interval={interval} />
+            <UsageChart rangeValue={rangeValue} interval={interval} />
           </TabsContent>
         </Tabs>
       </CardContent>
@@ -385,35 +400,48 @@ function TrendsSection({
 
 // 稳定性：请求量（面积，左轴）+ 成功率（折线，右轴 0–100%）。回答「稳不稳 / 几点掉的」。
 function StabilityChart({
-  range,
+  rangeValue,
   interval,
 }: {
-  range: RangeQuery;
+  rangeValue: RangeValue;
   interval: TimeseriesInterval;
 }) {
   const th = useMetricThresholds();
-  const prevRange = usePreviousRange(range);
+  const rangeKey = dashboardRangeKey(rangeValue, interval);
+  const hasPreviousRange =
+    previousDashboardRangeQuery(rangeValue, interval) != null;
   const q = useQuery({
-    queryKey: ["dashboard", "ts", "requests", interval, range],
-    queryFn: () =>
-      getTimeseries<RequestPoint>({
-        metric: "requests",
-        interval,
-        from: range.from ?? "",
-        to: range.to ?? "",
-      }),
+    queryKey: ["dashboard", "ts", "requests", rangeKey],
+    queryFn: ({ signal }) => {
+      const range = dashboardRangeQuery(rangeValue, interval);
+      return getTimeseries<RequestPoint>(
+        {
+          metric: "requests",
+          interval,
+          from: range.from ?? "",
+          to: range.to ?? "",
+        },
+        signal,
+      );
+    },
     placeholderData: keepPreviousData,
   });
   const prevQ = useQuery({
-    queryKey: ["dashboard", "ts", "requests", interval, "prev", prevRange],
-    queryFn: () =>
-      getTimeseries<RequestPoint>({
-        metric: "requests",
-        interval,
-        from: prevRange!.from ?? "",
-        to: prevRange!.to ?? "",
-      }),
-    enabled: !!prevRange,
+    queryKey: ["dashboard", "ts", "requests", "prev", rangeKey],
+    queryFn: ({ signal }) => {
+      const previous = previousDashboardRangeQuery(rangeValue, interval);
+      if (!previous) throw new Error("previous dashboard range is unavailable");
+      return getTimeseries<RequestPoint>(
+        {
+          metric: "requests",
+          interval,
+          from: previous.from ?? "",
+          to: previous.to ?? "",
+        },
+        signal,
+      );
+    },
+    enabled: hasPreviousRange,
     placeholderData: keepPreviousData,
   });
   const raw = q.data?.points ?? [];
@@ -568,23 +596,30 @@ function StabilityChart({
 
 // 性能：P95 延迟 / P95 TTFT（左轴 ms）+ 平均 TPS（右轴 t/s）。回答「快不快 / 吞吐够不够」。
 function PerformanceChart({
-  range,
+  rangeValue,
   interval,
 }: {
-  range: RangeQuery;
+  rangeValue: RangeValue;
   interval: TimeseriesInterval;
 }) {
   const th = useMetricThresholds();
-  const prevRange = usePreviousRange(range);
+  const rangeKey = dashboardRangeKey(rangeValue, interval);
+  const hasPreviousRange =
+    previousDashboardRangeQuery(rangeValue, interval) != null;
   const q = useQuery({
-    queryKey: ["dashboard", "ts", "performance", range],
-    queryFn: () => getPerformanceSeries(range),
+    queryKey: ["dashboard", "ts", "performance", rangeKey],
+    queryFn: ({ signal }) =>
+      getPerformanceSeries(dashboardRangeQuery(rangeValue, interval), signal),
     placeholderData: keepPreviousData,
   });
   const prevQ = useQuery({
-    queryKey: ["dashboard", "ts", "performance", "prev", prevRange],
-    queryFn: () => getPerformanceSeries(prevRange!),
-    enabled: !!prevRange,
+    queryKey: ["dashboard", "ts", "performance", "prev", rangeKey],
+    queryFn: ({ signal }) => {
+      const previous = previousDashboardRangeQuery(rangeValue, interval);
+      if (!previous) throw new Error("previous dashboard range is unavailable");
+      return getPerformanceSeries(previous, signal);
+    },
+    enabled: hasPreviousRange,
     placeholderData: keepPreviousData,
   });
   const points = q.data?.points ?? [];
@@ -776,58 +811,82 @@ function PerformanceChart({
 
 // 盈利：营收 vs 成本（折线）+ 毛利（面积）。回答「赚不赚钱 / 毛利走势」。
 function ProfitChart({
-  range,
+  rangeValue,
   interval,
 }: {
-  range: RangeQuery;
+  rangeValue: RangeValue;
   interval: TimeseriesInterval;
 }) {
   const th = useMetricThresholds();
-  const prevRange = usePreviousRange(range);
+  const rangeKey = dashboardRangeKey(rangeValue, interval);
+  const hasPreviousRange =
+    previousDashboardRangeQuery(rangeValue, interval) != null;
   const revenueQ = useQuery({
-    queryKey: ["dashboard", "ts", "spend", interval, range],
-    queryFn: () =>
-      getTimeseries<SpendPoint>({
-        metric: "spend",
-        interval,
-        from: range.from ?? "",
-        to: range.to ?? "",
-      }),
+    queryKey: ["dashboard", "ts", "spend", rangeKey],
+    queryFn: ({ signal }) => {
+      const range = dashboardRangeQuery(rangeValue, interval);
+      return getTimeseries<SpendPoint>(
+        {
+          metric: "spend",
+          interval,
+          from: range.from ?? "",
+          to: range.to ?? "",
+        },
+        signal,
+      );
+    },
     placeholderData: keepPreviousData,
   });
   const costQ = useQuery({
-    queryKey: ["dashboard", "ts", "cost", interval, range],
-    queryFn: () =>
-      getTimeseries<SpendPoint>({
-        metric: "cost",
-        interval,
-        from: range.from ?? "",
-        to: range.to ?? "",
-      }),
+    queryKey: ["dashboard", "ts", "cost", rangeKey],
+    queryFn: ({ signal }) => {
+      const range = dashboardRangeQuery(rangeValue, interval);
+      return getTimeseries<SpendPoint>(
+        {
+          metric: "cost",
+          interval,
+          from: range.from ?? "",
+          to: range.to ?? "",
+        },
+        signal,
+      );
+    },
     placeholderData: keepPreviousData,
   });
   const prevRevenueQ = useQuery({
-    queryKey: ["dashboard", "ts", "spend", interval, "prev", prevRange],
-    queryFn: () =>
-      getTimeseries<SpendPoint>({
-        metric: "spend",
-        interval,
-        from: prevRange!.from ?? "",
-        to: prevRange!.to ?? "",
-      }),
-    enabled: !!prevRange,
+    queryKey: ["dashboard", "ts", "spend", "prev", rangeKey],
+    queryFn: ({ signal }) => {
+      const previous = previousDashboardRangeQuery(rangeValue, interval);
+      if (!previous) throw new Error("previous dashboard range is unavailable");
+      return getTimeseries<SpendPoint>(
+        {
+          metric: "spend",
+          interval,
+          from: previous.from ?? "",
+          to: previous.to ?? "",
+        },
+        signal,
+      );
+    },
+    enabled: hasPreviousRange,
     placeholderData: keepPreviousData,
   });
   const prevCostQ = useQuery({
-    queryKey: ["dashboard", "ts", "cost", interval, "prev", prevRange],
-    queryFn: () =>
-      getTimeseries<SpendPoint>({
-        metric: "cost",
-        interval,
-        from: prevRange!.from ?? "",
-        to: prevRange!.to ?? "",
-      }),
-    enabled: !!prevRange,
+    queryKey: ["dashboard", "ts", "cost", "prev", rangeKey],
+    queryFn: ({ signal }) => {
+      const previous = previousDashboardRangeQuery(rangeValue, interval);
+      if (!previous) throw new Error("previous dashboard range is unavailable");
+      return getTimeseries<SpendPoint>(
+        {
+          metric: "cost",
+          interval,
+          from: previous.from ?? "",
+          to: previous.to ?? "",
+        },
+        signal,
+      );
+    },
+    enabled: hasPreviousRange,
     placeholderData: keepPreviousData,
   });
 
@@ -994,34 +1053,47 @@ function mergeProfitPoints(
 
 // 用量：输入 / 输出 token 堆叠面积。回答「用得多不多」。
 function UsageChart({
-  range,
+  rangeValue,
   interval,
 }: {
-  range: RangeQuery;
+  rangeValue: RangeValue;
   interval: TimeseriesInterval;
 }) {
-  const prevRange = usePreviousRange(range);
+  const rangeKey = dashboardRangeKey(rangeValue, interval);
+  const hasPreviousRange =
+    previousDashboardRangeQuery(rangeValue, interval) != null;
   const q = useQuery({
-    queryKey: ["dashboard", "ts", "tokens", interval, range],
-    queryFn: () =>
-      getTimeseries<TokenPoint>({
-        metric: "tokens",
-        interval,
-        from: range.from ?? "",
-        to: range.to ?? "",
-      }),
+    queryKey: ["dashboard", "ts", "tokens", rangeKey],
+    queryFn: ({ signal }) => {
+      const range = dashboardRangeQuery(rangeValue, interval);
+      return getTimeseries<TokenPoint>(
+        {
+          metric: "tokens",
+          interval,
+          from: range.from ?? "",
+          to: range.to ?? "",
+        },
+        signal,
+      );
+    },
     placeholderData: keepPreviousData,
   });
   const prevQ = useQuery({
-    queryKey: ["dashboard", "ts", "tokens", interval, "prev", prevRange],
-    queryFn: () =>
-      getTimeseries<TokenPoint>({
-        metric: "tokens",
-        interval,
-        from: prevRange!.from ?? "",
-        to: prevRange!.to ?? "",
-      }),
-    enabled: !!prevRange,
+    queryKey: ["dashboard", "ts", "tokens", "prev", rangeKey],
+    queryFn: ({ signal }) => {
+      const previous = previousDashboardRangeQuery(rangeValue, interval);
+      if (!previous) throw new Error("previous dashboard range is unavailable");
+      return getTimeseries<TokenPoint>(
+        {
+          metric: "tokens",
+          interval,
+          from: previous.from ?? "",
+          to: previous.to ?? "",
+        },
+        signal,
+      );
+    },
+    enabled: hasPreviousRange,
     placeholderData: keepPreviousData,
   });
   const points = q.data?.points ?? [];
@@ -1146,10 +1218,18 @@ function UsageChart({
 }
 
 // 失败原因 Top：区间内失败请求按错误码聚合，回答「为什么失败」。深链到失败请求列表。
-function TopErrorsSection({ range }: { range: RangeQuery }) {
+function TopErrorsSection({
+  rangeValue,
+  interval,
+}: {
+  rangeValue: RangeValue;
+  interval: TimeseriesInterval;
+}) {
+  const rangeKey = dashboardRangeKey(rangeValue, interval);
   const q = useQuery({
-    queryKey: ["dashboard", "errors", range],
-    queryFn: () => getTopErrors(range),
+    queryKey: ["dashboard", "errors", rangeKey],
+    queryFn: ({ signal }) =>
+      getTopErrors(dashboardRangeQuery(rangeValue, interval), signal),
     placeholderData: keepPreviousData,
     refetchInterval: 60_000,
   });

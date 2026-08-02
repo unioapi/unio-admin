@@ -181,12 +181,19 @@ function withObservedAt(runtime: Omit<ChannelRuntime, "breaker"> & {
   };
 }
 
-export async function getChannelRuntime(id: number): Promise<ChannelRuntime> {
-  const res = await api.get<{
+export async function getChannelRuntime(
+  id: number,
+  signal?: AbortSignal,
+): Promise<ChannelRuntime> {
+  const path = `/admin/v1/channels/${id}/ops/runtime`;
+  type Response = {
     data: Omit<ChannelRuntime, "breaker"> & {
       breaker: Omit<ChannelBreakerSnapshot, "observed_at"> | null;
     };
-  }>(`/admin/v1/channels/${id}/ops/runtime`);
+  };
+  const res = signal
+    ? await api.get<Response>(path, { signal })
+    : await api.get<Response>(path);
   return withObservedAt(res.data.data);
 }
 

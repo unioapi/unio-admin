@@ -7,8 +7,13 @@ import {
   getBreakdown,
   type BreakdownDimension,
   type BreakdownRow,
-  type RangeQuery,
+  type TimeseriesInterval,
 } from "@/lib/api/dashboard";
+import type { RangeValue } from "@/lib/range";
+import {
+  dashboardRangeKey,
+  dashboardRangeQuery,
+} from "@/lib/dashboard-range";
 import { ConfigurableDataTable } from "@/components/data-table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -95,18 +100,26 @@ function breakdownActionColumn(
 
 export function BreakdownDataTable({
   dimension,
-  range,
+  rangeValue,
+  interval,
   active,
 }: {
   dimension: BreakdownDimension;
-  range: RangeQuery;
+  rangeValue: RangeValue;
+  interval: TimeseriesInterval;
   active: boolean;
 }) {
   const thresholds = useMetricThresholds();
+  const rangeKey = dashboardRangeKey(rangeValue, interval);
 
   const q = useQuery({
-    queryKey: ["dashboard", "breakdown", dimension, range],
-    queryFn: () => getBreakdown(dimension, range),
+    queryKey: ["dashboard", "breakdown", dimension, rangeKey],
+    queryFn: ({ signal }) =>
+      getBreakdown(
+        dimension,
+        dashboardRangeQuery(rangeValue, interval),
+        signal,
+      ),
     placeholderData: keepPreviousData,
     enabled: active,
   });

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { BreakdownDimension, RangeQuery } from "@/lib/api/dashboard";
+import type {
+  BreakdownDimension,
+  TimeseriesInterval,
+} from "@/lib/api/dashboard";
+import type { RangeValue } from "@/lib/range";
 import {
   Card,
   CardAction,
@@ -11,7 +15,13 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BREAKDOWN_TABS } from "./constants";
 import { BreakdownDataTable } from "./BreakdownDataTable";
 
-export function BreakdownSection({ range }: { range: RangeQuery }) {
+export function BreakdownSection({
+  rangeValue,
+  interval,
+}: {
+  rangeValue: RangeValue;
+  interval: TimeseriesInterval;
+}) {
   const [dim, setDim] = useState<BreakdownDimension>("provider");
 
   return (
@@ -38,7 +48,12 @@ export function BreakdownSection({ range }: { range: RangeQuery }) {
         </CardAction>
       </CardHeader>
       <CardContent className="pt-4">
-        <BreakdownDataTable dimension={dim} range={range} active />
+        <BreakdownDataTable
+          dimension={dim}
+          rangeValue={rangeValue}
+          interval={interval}
+          active
+        />
       </CardContent>
     </Card>
   );

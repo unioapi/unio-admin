@@ -48,7 +48,7 @@ export function ApiKeysPage() {
 
   const summary = useQuery({
     queryKey: ["api-keys", userId, "ops-summary"],
-    queryFn: () => getApiKeysOpsSummary(userId),
+    queryFn: ({ signal }) => getApiKeysOpsSummary(userId, signal),
     refetchInterval: 60_000,
     enabled: validUser,
   });

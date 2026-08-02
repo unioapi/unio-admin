@@ -259,11 +259,15 @@ describe("RouteRuntimeSection objective_v1", () => {
     expect(within(row).getByText("12 RPM")).toBeVisible();
     expect(within(row).getByText("1.25s")).toBeVisible();
     await waitFor(() =>
-      expect(mocks.getRuntime).toHaveBeenCalledWith(7, {
-        model_id: "openai/gpt-test",
-        protocol: undefined,
-        sort: "order",
-      }),
+      expect(mocks.getRuntime).toHaveBeenCalledWith(
+        7,
+        {
+          model_id: "openai/gpt-test",
+          protocol: undefined,
+          sort: "order",
+        },
+        expect.any(AbortSignal),
+      ),
     );
   });
 

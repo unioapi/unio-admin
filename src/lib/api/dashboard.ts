@@ -47,10 +47,12 @@ export async function getTimeseries<P = RequestPoint | TokenPoint | SpendPoint>(
     from: string;
     to: string;
   },
+  signal?: AbortSignal,
 ): Promise<DashboardSeries<P>> {
   const res = await api.get<{ data: DashboardSeries<P> }>(
     "/admin/v1/dashboard/timeseries",
     {
+      ...(signal ? { signal } : {}),
       params: {
         metric: params.metric,
         interval: params.interval,
@@ -221,9 +223,13 @@ export interface PerformanceSeries {
   points: PerformancePoint[];
 }
 
-export async function getRadar(params: RangeQuery): Promise<RadarReport> {
+export async function getRadar(
+  params: RangeQuery,
+  signal?: AbortSignal,
+): Promise<RadarReport> {
   const res = await api.get<{ data: RadarReport }>("/admin/v1/dashboard/radar", {
     params,
+    ...(signal ? { signal } : {}),
   });
   return res.data.data;
 }
@@ -231,30 +237,33 @@ export async function getRadar(params: RangeQuery): Promise<RadarReport> {
 export async function getBreakdown(
   dimension: BreakdownDimension,
   params: RangeQuery,
+  signal?: AbortSignal,
 ): Promise<BreakdownResult> {
   const res = await api.get<{ data: BreakdownResult }>(
     "/admin/v1/dashboard/breakdown",
-    { params: { ...params, dimension } },
+    { params: { ...params, dimension }, ...(signal ? { signal } : {}) },
   );
   return res.data.data;
 }
 
 export async function getPerformanceSeries(
   params: RangeQuery,
+  signal?: AbortSignal,
 ): Promise<PerformanceSeries> {
   const res = await api.get<{ data: PerformanceSeries }>(
     "/admin/v1/dashboard/timeseries/performance",
-    { params },
+    { params, ...(signal ? { signal } : {}) },
   );
   return res.data.data;
 }
 
 export async function getTopErrors(
   params: RangeQuery,
+  signal?: AbortSignal,
 ): Promise<TopErrorsResult> {
   const res = await api.get<{ data: TopErrorsResult }>(
     "/admin/v1/dashboard/errors",
-    { params },
+    { params, ...(signal ? { signal } : {}) },
   );
   return res.data.data;
 }

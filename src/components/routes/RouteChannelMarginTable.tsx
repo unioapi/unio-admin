@@ -20,6 +20,7 @@ import {
   marginTone,
   parseRouteRatio,
 } from "@/components/routes/route-pricing";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -35,6 +36,7 @@ type ChannelOption = {
   name: string;
   provider_name: string;
   protocol: string;
+  status?: string;
 };
 
 type MarginRow = {
@@ -231,6 +233,7 @@ export function RouteChannelMarginTable({
               return (
                 <label
                   key={c.id}
+                  title={c.status === "disabled" ? `${c.name}（已停用）` : c.name}
                   className={cn(
                     "hover:bg-muted/60 flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
                     checked && "border-primary/40 bg-primary/5",
@@ -243,6 +246,9 @@ export function RouteChannelMarginTable({
                     onChange={() => onToggleChannel?.(c.id)}
                   />
                   <span className="max-w-[140px] truncate font-medium">{c.name}</span>
+                  {c.status === "disabled" ? (
+                    <Badge variant="outline">停用</Badge>
+                  ) : null}
                 </label>
               );
             })

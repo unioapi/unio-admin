@@ -12,6 +12,7 @@ import { apiErrorMessage } from "@/lib/api/client";
 import { RoutePriceCalculator } from "@/components/routes/RoutePriceCalculator";
 import { RouteChannelMarginTable } from "@/components/routes/RouteChannelMarginTable";
 import { formatRouteRatioInput } from "@/components/routes/route-pricing";
+import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { HintLabel } from "@/components/common/field-hint";
 import {
@@ -123,10 +124,22 @@ function RouteForm({
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [disabledChannelsConfirmOpen, setDisabledChannelsConfirmOpen] = useState(false);
 
   const channelsQuery = useQuery({
     queryKey: ["channels", "all-for-route"],
-    queryFn: () => listChannels({ page: 1, pageSize: 100 }),
+    queryFn: async ({ signal }) => {
+      const [enabled, disabled] = await Promise.all([
+        listChannels({ page: 1, pageSize: 100, status: "enabled" }, signal),
+        listChannels({ page: 1, pageSize: 100, status: "disabled" }, signal),
+      ]);
+      const channelsById = new Map(
+        [...enabled.items, ...disabled.items]
+          .filter((channel) => channel.status !== "archived")
+          .map((channel) => [channel.id, channel]),
+      );
+      return { items: [...channelsById.values()], total: channelsById.size };
+    },
   });
 
   const mutation = useMutation({
@@ -179,6 +192,14 @@ function RouteForm({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!validate()) return;
+    if (selectedDisabledChannels.length > 0) {
+      setDisabledChannelsConfirmOpen(true);
+      return;
+    }
+    continueSubmit();
+  }
+
+  function continueSubmit() {
     if (route && status !== route.status) {
       setStatusConfirmOpen(true);
       return;
@@ -197,6 +218,13 @@ function RouteForm({
     const list = channelsQuery.data?.items ?? [];
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [channelsQuery.data]);
+
+  const selectedDisabledChannels = useMemo(
+    () => orderedChannels.filter(
+      (channel) => channel.status === "disabled" && channelIds.includes(channel.id),
+    ),
+    [channelIds, orderedChannels],
+  );
 
   const channelNameMap = useMemo(
     () => Object.fromEntries(orderedChannels.map((c) => [c.id, c.name])),
@@ -427,6 +455,20 @@ function RouteForm({
         onConfirm={() => mutation.mutate()}
       />
     ) : null}
+    <ConfirmActionDialog
+      open={disabledChannelsConfirmOpen}
+      onOpenChange={setDisabledChannelsConfirmOpen}
+      title="确认使用停用渠道"
+      description={`已选择停用渠道「${selectedDisabledChannels
+        .map((channel) => channel.name)
+        .join("」、「")}」。停用渠道当前不会参与路由，只有重新启用后才会生效。确认仍然${route ? "保存" : "创建"}？`}
+      confirmLabel={route ? "仍然保存" : "仍然创建"}
+      pending={mutation.isPending}
+      onConfirm={() => {
+        setDisabledChannelsConfirmOpen(false);
+        continueSubmit();
+      }}
+    />
     </>
   );
 }

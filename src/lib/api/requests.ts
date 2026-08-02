@@ -228,10 +228,12 @@ export interface RequestListParams {
 
 export async function listRequests(
   params: RequestListParams,
+  signal?: AbortSignal,
 ): Promise<Page<RequestListItem>> {
   const res = await api.get<{ data: RequestListItem[]; meta: ListMeta }>(
     "/admin/v1/requests",
     {
+      ...(signal ? { signal } : {}),
       params: buildListQuery({
         page: params.page,
         page_size: params.pageSize,
@@ -257,19 +259,25 @@ export async function listRequests(
 export async function getRequest(
   requestId: string,
   includeInternal = false,
+  signal?: AbortSignal,
 ): Promise<RequestDetail> {
   const res = await api.get<{ data: RequestDetail }>(
     `/admin/v1/requests/${encodeURIComponent(requestId)}`,
-    { params: { include_internal: includeInternal ? "true" : undefined } },
+    {
+      params: { include_internal: includeInternal ? "true" : undefined },
+      ...(signal ? { signal } : {}),
+    },
   );
   return res.data.data;
 }
 
 export async function getRequestRoutingDecision(
   requestId: string,
+  signal?: AbortSignal,
 ): Promise<RoutingDecision> {
-  const res = await api.get<{ data: RoutingDecision }>(
-    `/admin/v1/requests/${encodeURIComponent(requestId)}/routing-decision`,
-  );
+  const path = `/admin/v1/requests/${encodeURIComponent(requestId)}/routing-decision`;
+  const res = signal
+    ? await api.get<{ data: RoutingDecision }>(path, { signal })
+    : await api.get<{ data: RoutingDecision }>(path);
   return res.data.data;
 }

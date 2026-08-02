@@ -528,10 +528,11 @@ export async function getRouteRuntime(
     /** 后端排序：order / score / concurrency / ttft / error / rpm；前缀 `-` 表示降序。 */
     sort?: string;
   },
+  signal?: AbortSignal,
 ): Promise<RouteRuntime> {
   const res = await api.get<{ data: RouteRuntime }>(
     `/admin/v1/routes/${id}/ops/runtime`,
-    { params },
+    { params, ...(signal ? { signal } : {}) },
   );
   return res.data.data;
 }

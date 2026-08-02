@@ -137,6 +137,20 @@ describe("RuntimeSettingsPanel", () => {
     expect(routeCard).not.toBeNull();
     if (!routeCard) return;
 
+    expect(
+      within(routeCard).getByRole("button", {
+        name: "线路默认限流(RPM/TPM/RPD)说明",
+      }),
+    ).toBeVisible();
+    expect(
+      within(routeCard).queryByText('{"rpm":0,"tpm":0,"rpd":0}'),
+    ).not.toBeInTheDocument();
+    await user.click(
+      within(routeCard).getByRole("button", { name: "配置详情" }),
+    );
+    expect(
+      within(routeCard).getAllByText('{"rpm":0,"tpm":0,"rpd":0}'),
+    ).toHaveLength(2);
     expect(within(routeCard).getByText("线路限流命中后直接返回 429")).toBeVisible();
     expect(
       within(routeCard).getByText(

@@ -41,7 +41,7 @@ export function UserDetailPage() {
 
   const keySummary = useQuery({
     queryKey: ["api-keys", userId, "ops-summary"],
-    queryFn: () => getApiKeysOpsSummary(userId),
+    queryFn: ({ signal }) => getApiKeysOpsSummary(userId, signal),
     enabled: userQuery.isSuccess,
   });
 

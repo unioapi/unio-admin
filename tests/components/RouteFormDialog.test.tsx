@@ -28,13 +28,14 @@ vi.mock("@/components/routes/RouteChannelMarginTable", () => ({
     channels,
     onToggleChannel,
   }: {
-    channels: Array<{ id: number; name: string }>;
+    channels: Array<{ id: number; name: string; status?: string }>;
     onToggleChannel: (id: number) => void;
   }) => (
     <div>
       {channels.map((channel) => (
         <button key={channel.id} type="button" onClick={() => onToggleChannel(channel.id)}>
           选择 {channel.name}
+          {channel.status === "disabled" ? "（停用）" : ""}
         </button>
       ))}
     </div>
@@ -54,8 +55,8 @@ describe("RouteFormDialog", () => {
     mocks.listChannels.mockResolvedValue({
       total: 2,
       items: [
-        { id: 10, name: "channel-a" },
-        { id: 11, name: "channel-b" },
+        { id: 10, name: "channel-a", status: "enabled" },
+        { id: 11, name: "channel-b", status: "enabled" },
       ],
     });
   });
@@ -90,5 +91,103 @@ describe("RouteFormDialog", () => {
     });
     expect(input).not.toHaveProperty("pool_kind");
     expect(input).not.toHaveProperty("sticky_enabled");
+  });
+
+  it("marks disabled channels, hides archived channels, and confirms before create", async () => {
+    const user = userEvent.setup();
+    mocks.listChannels.mockImplementation(({ status }: { status?: string }) =>
+      Promise.resolve({
+        total: 2,
+        items: status === "disabled"
+          ? [
+              { id: 20, name: "channel-disabled", status: "disabled" },
+              { id: 21, name: "channel-archived", status: "archived" },
+            ]
+          : [{ id: 10, name: "channel-enabled", status: "enabled" }],
+      }),
+    );
+
+    render(
+      <TestProviders>
+        <RouteFormDialog open onOpenChange={vi.fn()} route={null} onSaved={vi.fn()} />
+      </TestProviders>,
+    );
+
+    const disabledChannel = await screen.findByRole("button", {
+      name: "选择 channel-disabled（停用）",
+    });
+    expect(disabledChannel).toBeVisible();
+    expect(screen.queryByText(/channel-archived/)).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: /线路名/ }), "disabled-route");
+    await user.click(disabledChannel);
+    await user.click(screen.getByRole("button", { name: "创建" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "确认使用停用渠道" }),
+    ).toBeVisible();
+    expect(screen.getByText(/已选择停用渠道「channel-disabled」/)).toBeVisible();
+    expect(mocks.createRoute).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "仍然创建" }));
+    await waitFor(() => expect(mocks.createRoute).toHaveBeenCalledTimes(1));
+    expect(mocks.createRoute.mock.calls[0][0]).toMatchObject({ channel_ids: [20] });
+  });
+
+  it("confirms a disabled channel already selected while editing", async () => {
+    const user = userEvent.setup();
+    mocks.updateRoute.mockResolvedValue({ id: 7 });
+    mocks.listChannels.mockImplementation(({ status }: { status?: string }) =>
+      Promise.resolve({
+        total: 1,
+        items: status === "disabled"
+          ? [{ id: 20, name: "channel-disabled", status: "disabled" }]
+          : [],
+      }),
+    );
+
+    render(
+      <TestProviders>
+        <RouteFormDialog
+          open
+          onOpenChange={vi.fn()}
+          route={{
+            id: 7,
+            name: "existing-route",
+            mode: "balanced",
+            status: "enabled",
+            price_ratio: "1",
+            rpm_limit: null,
+            tpm_limit: null,
+            rpd_limit: null,
+            concurrency_limit: null,
+            description: null,
+            channels: [{
+              channel_id: 20,
+              channel_name: "channel-disabled",
+              provider_id: 1,
+              provider_slug: "provider-a",
+            }],
+            created_at: "2026-08-01T00:00:00Z",
+            updated_at: "2026-08-01T00:00:00Z",
+            archived_at: null,
+          }}
+          onSaved={vi.fn()}
+        />
+      </TestProviders>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "选择 channel-disabled（停用）" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "确认使用停用渠道" }),
+    ).toBeVisible();
+    expect(mocks.updateRoute).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "仍然保存" }));
+    await waitFor(() => expect(mocks.updateRoute).toHaveBeenCalledTimes(1));
   });
 });

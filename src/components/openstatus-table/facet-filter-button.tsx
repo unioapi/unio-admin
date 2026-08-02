@@ -30,13 +30,14 @@ export function FacetFilterButton({
   options,
   onChange,
   multiple = false,
+  allOption = "全部",
 }: {
   label: string;
   value: string[];
   options: FacetOption[];
   onChange: (next: string[]) => void;
   multiple?: boolean;
-  /** @deprecated 保留以免破坏调用方；清除用 × /「全部」 */
+  /** 单选时的清除项；false 表示必须保留一个选项。 */
   allOption?: string | false;
 }) {
   const [open, setOpen] = useState(false);
@@ -57,13 +58,17 @@ export function FacetFilterButton({
         return;
       }
       if (isSelected) {
+        if (allOption === false) {
+          setOpen(false);
+          return;
+        }
         clear();
         return;
       }
       onChange([option.value]);
       setOpen(false);
     },
-    [clear, multiple, onChange, selectedValues],
+    [allOption, clear, multiple, onChange, selectedValues],
   );
 
   /** 阻止事件冒泡到 PopoverTrigger，否则点 × 只会打开菜单、清不掉。 */
@@ -77,25 +82,29 @@ export function FacetFilterButton({
       <PopoverTrigger asChild>
         <Button variant="outline" className="border-dashed font-normal">
           {selectedValues.size > 0 ? (
-            <span
-              role="button"
-              aria-label={`清除${label}筛选`}
-              tabIndex={0}
-              className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              onPointerDown={stopTrigger}
-              onClick={(event) => {
-                stopTrigger(event);
-                clear();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+            allOption !== false ? (
+              <span
+                role="button"
+                aria-label={`清除${label}筛选`}
+                tabIndex={0}
+                className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onPointerDown={stopTrigger}
+                onClick={(event) => {
                   stopTrigger(event);
                   clear();
-                }
-              }}
-            >
-              <XCircle />
-            </span>
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    stopTrigger(event);
+                    clear();
+                  }
+                }}
+              >
+                <XCircle />
+              </span>
+            ) : (
+              <Check />
+            )
           ) : (
             <PlusCircle />
           )}
@@ -144,7 +153,7 @@ export function FacetFilterButton({
           <CommandList className="max-h-full">
             <CommandEmpty>无匹配项</CommandEmpty>
             <CommandGroup className="max-h-[300px] scroll-py-1 overflow-y-auto overflow-x-hidden">
-              {!multiple ? (
+              {!multiple && allOption !== false ? (
                 <CommandItem
                   className="[&>svg:last-child]:hidden"
                   onSelect={() => clear()}
@@ -159,7 +168,7 @@ export function FacetFilterButton({
                   >
                     <Check />
                   </div>
-                  <span className="truncate">全部</span>
+                  <span className="truncate">{allOption}</span>
                 </CommandItem>
               ) : null}
               {options.map((option) => {
@@ -185,7 +194,7 @@ export function FacetFilterButton({
                 );
               })}
             </CommandGroup>
-            {selectedValues.size > 0 ? (
+            {selectedValues.size > 0 && allOption !== false ? (
               <>
                 <CommandSeparator />
                 <CommandGroup>

@@ -39,7 +39,7 @@ createRoot(document.getElementById("root")!).render(
           </BrowserRouter>
         </TooltipProvider>
         <Toaster richColors position="top-center" />
-        <ReactQueryDevtools initialIsOpen={false} />
+        {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
       </QueryClientProvider>
     </ThemeProvider>
   </StrictMode>,

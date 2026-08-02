@@ -32,7 +32,7 @@ export function ProviderRuntimeSection({ provider }: { provider: Provider }) {
   const [resetOpen, setResetOpen] = useState(false);
   const runtimeQ = useQuery({
     queryKey: ["provider", provider.id, "runtime"],
-    queryFn: () => getProviderRuntime(provider.id),
+    queryFn: ({ signal }) => getProviderRuntime(provider.id, signal),
     refetchInterval: 5_000,
     retry: 1,
   });

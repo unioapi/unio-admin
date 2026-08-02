@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  EyeIcon,
-  RefreshCwIcon,
-  RotateCcwIcon,
-  SearchIcon,
-} from "lucide-react";
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  parseAsArrayOf,
+  parseAsNumberLiteral,
+  parseAsString,
+  parseAsStringLiteral,
+  useQueryState,
+} from "nuqs";
+import { RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   getGatewayLogging,
@@ -14,12 +21,18 @@ import {
   stopGatewayDebugSession,
   type GatewayLogEntry,
   type GatewayLogFilters,
-  type GatewayLogLevel,
   type GatewayLoggingInstance,
   type GatewayLoggingSnapshot,
 } from "@/lib/api/system";
 import { apiErrorMessage } from "@/lib/api/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { RefreshControl } from "@/components/common/RefreshControl";
+import { useRefreshSettings } from "@/hooks/useRefreshSettings";
+import { gatewayLogsColumns } from "@/components/openstatus-table/gateway-logs-columns";
+import { DataTable } from "@/components/tablecn/data-table";
+import { DataTableSkeleton } from "@/components/tablecn/data-table-skeleton";
+import { DataTableToolbar } from "@/components/tablecn/data-table-toolbar";
+import { useDataTable } from "@/components/tablecn/hooks/use-data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,19 +53,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -86,16 +92,9 @@ const GATEWAY_LOGGING_QUERY_KEY = ["gateway-logging"] as const;
 const GATEWAY_LOGS_QUERY_KEY = ["gateway-logs"] as const;
 const DEBUG_DURATIONS = [5, 15, 30, 60] as const;
 type DebugDuration = (typeof DEBUG_DURATIONS)[number];
-
-const DEFAULT_LOG_FILTERS: GatewayLogFilters = {
-  range: "1h",
-  level: "",
-  type: "",
-  event: "",
-  related_id: "",
-  search: "",
-  limit: 100,
-};
+const LOG_RANGES = ["15m", "1h", "6h", "24h", "7d"] as const;
+const LOG_LEVELS = ["debug", "info", "warning", "error"] as const;
+const LOG_LIMITS = [50, 100, 200] as const;
 
 const INSTANCE_STATE: Record<
   GatewayLoggingInstance["state"],
@@ -113,23 +112,74 @@ export function LoggingPage() {
   const [duration, setDuration] = useState<DebugDuration>(15);
   const [reason, setReason] = useState("");
   const [reasonTouched, setReasonTouched] = useState(false);
-  const [draftFilters, setDraftFilters] = useState<GatewayLogFilters>(
-    DEFAULT_LOG_FILTERS,
+  const [logRange, setLogRange] = useQueryState(
+    "log_range",
+    parseAsStringLiteral(LOG_RANGES).withDefault("1h"),
   );
-  const [filters, setFilters] = useState<GatewayLogFilters>(DEFAULT_LOG_FILTERS);
+  const [logLimit, setLogLimit] = useQueryState(
+    "log_limit",
+    parseAsNumberLiteral(LOG_LIMITS).withDefault(100),
+  );
+  const [levelFilter] = useQueryState(
+    "level",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
+  const [typeFilter] = useQueryState("type", parseAsString.withDefault(""));
+  const [eventFilter] = useQueryState("event", parseAsString.withDefault(""));
+  const [relatedIdFilter] = useQueryState(
+    "related_id",
+    parseAsString.withDefault(""),
+  );
+  const [searchFilter] = useQueryState("search", parseAsString.withDefault(""));
   const [selectedLog, setSelectedLog] = useState<GatewayLogEntry | null>(null);
-  const now = useCurrentSecond();
+  const {
+    autoRefresh,
+    intervalSec,
+    setAutoRefresh,
+    setIntervalSec,
+  } = useRefreshSettings("gateway-logs:list");
+
+  const level = LOG_LEVELS.includes(
+    levelFilter[0] as (typeof LOG_LEVELS)[number],
+  )
+    ? (levelFilter[0] as GatewayLogFilters["level"])
+    : "";
+  const filters: GatewayLogFilters = {
+    range: logRange,
+    level,
+    type: typeFilter.trim(),
+    event: eventFilter.trim(),
+    related_id: relatedIdFilter.trim(),
+    search: searchFilter.trim(),
+    limit: logLimit,
+  };
 
   const query = useQuery({
     queryKey: GATEWAY_LOGGING_QUERY_KEY,
-    queryFn: getGatewayLogging,
+    queryFn: ({ signal }) => getGatewayLogging(signal),
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,
   });
   const logsQuery = useQuery({
     queryKey: [...GATEWAY_LOGS_QUERY_KEY, filters],
-    queryFn: () => getGatewayLogs(filters),
-    refetchInterval: false,
+    queryFn: ({ signal }) => getGatewayLogs(filters, signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: autoRefresh ? intervalSec * 1000 : false,
+    refetchIntervalInBackground: false,
+  });
+
+  const logColumns = useMemo(
+    () => gatewayLogsColumns(setSelectedLog),
+    [],
+  );
+  const { table: logsTable } = useDataTable({
+    data: logsQuery.data?.items ?? [],
+    columns: logColumns,
+    pageCount: 1,
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: logLimit },
+    },
+    getRowId: (row) => row.id,
   });
 
   const refreshSnapshot = (snapshot: GatewayLoggingSnapshot) => {
@@ -174,12 +224,12 @@ export function LoggingPage() {
 
   const snapshot = query.data;
   const unhealthy = snapshot.instances.filter(
-    (instance) => instance.state === "pending" || instance.state === "unreachable",
+    (instance) =>
+      instance.state === "pending" || instance.state === "unreachable",
   );
   const expiresAt = snapshot.control.expires_at
     ? new Date(snapshot.control.expires_at)
     : null;
-  const remainingMs = expiresAt ? Math.max(0, expiresAt.getTime() - now) : 0;
   const reasonInvalid = reasonTouched && reason.trim().length === 0;
 
   const submitDebug = () => {
@@ -188,20 +238,6 @@ export function LoggingPage() {
     if (!normalized) return;
     startMutation.mutate({ duration_minutes: duration, reason: normalized });
   };
-  const applyFilters = () => {
-    setFilters({
-      ...draftFilters,
-      type: draftFilters.type.trim(),
-      event: draftFilters.event.trim(),
-      related_id: draftFilters.related_id.trim(),
-      search: draftFilters.search.trim(),
-    });
-  };
-  const resetFilters = () => {
-    setDraftFilters(DEFAULT_LOG_FILTERS);
-    setFilters(DEFAULT_LOG_FILTERS);
-  };
-
   return (
     <div className="flex flex-col gap-4">
       {unhealthy.length > 0 ? (
@@ -225,7 +261,13 @@ export function LoggingPage() {
           <Fact label="当前模式" value={modeLabel(snapshot.mode)} />
           <Fact
             label="剩余时间"
-            value={snapshot.control.active ? formatRemaining(remainingMs) : "—"}
+            value={
+              snapshot.control.active && expiresAt ? (
+                <DebugRemaining expiresAt={expiresAt} />
+              ) : (
+                "—"
+              )
+            }
           />
           <Fact
             label="到期时间"
@@ -255,7 +297,9 @@ export function LoggingPage() {
               disabled={stopMutation.isPending}
               onClick={() => stopMutation.mutate()}
             >
-              {stopMutation.isPending ? <Spinner data-icon="inline-start" /> : null}
+              {stopMutation.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : null}
               关闭 DEBUG
             </Button>
           ) : (
@@ -282,181 +326,89 @@ export function LoggingPage() {
       <Card>
         <CardHeader>
           <CardTitle>最近日志</CardTitle>
-          <CardDescription>{logResultDescription(logsQuery.data?.items.length, filters)}</CardDescription>
-          <CardAction>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="刷新日志"
-              title="刷新日志"
-              disabled={logsQuery.isFetching}
-              onClick={() => void logsQuery.refetch()}
-            >
-              {logsQuery.isFetching ? <Spinner /> : <RefreshCwIcon />}
-            </Button>
-          </CardAction>
+          <CardDescription>
+            {logResultDescription(logsQuery.data?.items.length, filters)}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              applyFilters();
-            }}
-          >
-            <FieldGroup className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Field>
-                <FieldLabel htmlFor="gateway-log-range">时间范围</FieldLabel>
-                <Select
-                  value={draftFilters.range}
-                  onValueChange={(value) =>
-                    setDraftFilters((current) => ({
-                      ...current,
-                      range: value as GatewayLogFilters["range"],
-                    }))
-                  }
-                >
-                  <SelectTrigger id="gateway-log-range" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="15m">最近 15 分钟</SelectItem>
-                      <SelectItem value="1h">最近 1 小时</SelectItem>
-                      <SelectItem value="6h">最近 6 小时</SelectItem>
-                      <SelectItem value="24h">最近 24 小时</SelectItem>
-                      <SelectItem value="7d">最近 7 天</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="gateway-log-level">等级</FieldLabel>
-                <Select
-                  value={draftFilters.level || "all"}
-                  onValueChange={(value) =>
-                    setDraftFilters((current) => ({
-                      ...current,
-                      level: value === "all" ? "" : (value as GatewayLogLevel),
-                    }))
-                  }
-                >
-                  <SelectTrigger id="gateway-log-level" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="all">全部等级</SelectItem>
-                      <SelectItem value="debug">DEBUG</SelectItem>
-                      <SelectItem value="info">INFO</SelectItem>
-                      <SelectItem value="warning">WARNING</SelectItem>
-                      <SelectItem value="error">ERROR</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="gateway-log-type">Type</FieldLabel>
-                <Input
-                  id="gateway-log-type"
-                  maxLength={64}
-                  placeholder="http"
-                  value={draftFilters.type}
-                  onChange={(event) =>
-                    setDraftFilters((current) => ({ ...current, type: event.target.value }))
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="gateway-log-event">Event</FieldLabel>
-                <Input
-                  id="gateway-log-event"
-                  maxLength={64}
-                  placeholder="request"
-                  value={draftFilters.event}
-                  onChange={(event) =>
-                    setDraftFilters((current) => ({ ...current, event: event.target.value }))
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="gateway-log-related-id">关联 ID</FieldLabel>
-                <Input
-                  id="gateway-log-related-id"
-                  maxLength={128}
-                  placeholder="trace_id / request_id / attempt_id"
-                  value={draftFilters.related_id}
-                  onChange={(event) =>
-                    setDraftFilters((current) => ({
-                      ...current,
-                      related_id: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Field className="xl:col-span-2">
-                <FieldLabel htmlFor="gateway-log-search">内容</FieldLabel>
-                <Input
-                  id="gateway-log-search"
-                  maxLength={200}
-                  placeholder="message 或 data"
-                  value={draftFilters.search}
-                  onChange={(event) =>
-                    setDraftFilters((current) => ({ ...current, search: event.target.value }))
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="gateway-log-limit">条数</FieldLabel>
-                <Select
-                  value={String(draftFilters.limit)}
-                  onValueChange={(value) =>
-                    setDraftFilters((current) => ({
-                      ...current,
-                      limit: Number(value) as GatewayLogFilters["limit"],
-                    }))
-                  }
-                >
-                  <SelectTrigger id="gateway-log-limit" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="50">50 条</SelectItem>
-                      <SelectItem value="100">100 条</SelectItem>
-                      <SelectItem value="200">200 条</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <div className="flex items-end gap-2 md:col-span-2 xl:col-span-4">
-                <Button type="submit">
-                  <SearchIcon data-icon="inline-start" />
-                  查询
-                </Button>
-                <Button type="button" variant="outline" onClick={resetFilters}>
-                  <RotateCcwIcon data-icon="inline-start" />
-                  重置
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-
+        <CardContent>
           {logsQuery.isError ? (
             <Alert variant="destructive">
               <AlertTitle>日志查询失败</AlertTitle>
               <AlertDescription>{apiErrorMessage(logsQuery.error)}</AlertDescription>
             </Alert>
-          ) : logsQuery.isPending ? (
-            <LogTableSkeleton />
-          ) : logsQuery.data.items.length === 0 ? (
-            <Empty className="min-h-48 rounded-none border-0">
-              <EmptyHeader>
-                <EmptyTitle>没有匹配日志</EmptyTitle>
-                <EmptyDescription>当前筛选范围内没有记录。</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+          ) : logsQuery.isPending && !logsQuery.data ? (
+            <DataTableSkeleton columnCount={logColumns.length} rowCount={6} />
           ) : (
-            <LogTable items={logsQuery.data.items} onSelect={setSelectedLog} />
+            <DataTable
+              table={logsTable}
+              hidePagination
+              emptyMessage="当前筛选范围内没有日志。"
+              onRowClick={setSelectedLog}
+            >
+              <DataTableToolbar
+                table={logsTable}
+                leading={
+                  <>
+                    <Select
+                      value={logRange}
+                      onValueChange={(value) =>
+                        void setLogRange(value as GatewayLogFilters["range"])
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        aria-label="日志时间范围"
+                        className="w-36"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="15m">最近 15 分钟</SelectItem>
+                          <SelectItem value="1h">最近 1 小时</SelectItem>
+                          <SelectItem value="6h">最近 6 小时</SelectItem>
+                          <SelectItem value="24h">最近 24 小时</SelectItem>
+                          <SelectItem value="7d">最近 7 天</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={String(logLimit)}
+                      onValueChange={(value) =>
+                        void setLogLimit(
+                          Number(value) as GatewayLogFilters["limit"],
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        aria-label="日志结果上限"
+                        className="w-24"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="50">50 条</SelectItem>
+                          <SelectItem value="100">100 条</SelectItem>
+                          <SelectItem value="200">200 条</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </>
+                }
+              >
+                <RefreshControl
+                  autoRefresh={autoRefresh}
+                  intervalSec={intervalSec}
+                  onAutoRefreshChange={setAutoRefresh}
+                  onIntervalChange={setIntervalSec}
+                  onRefresh={() => void logsQuery.refetch()}
+                  spinning={autoRefresh || logsQuery.isFetching}
+                  refreshLabel="刷新日志"
+                />
+              </DataTableToolbar>
+            </DataTable>
           )}
         </CardContent>
         {logsQuery.data?.truncated ? (
@@ -558,86 +510,6 @@ export function LoggingPage() {
   );
 }
 
-function LogTable({
-  items,
-  onSelect,
-}: {
-  items: GatewayLogEntry[];
-  onSelect: (entry: GatewayLogEntry) => void;
-}) {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>时间</TableHead>
-          <TableHead>等级</TableHead>
-          <TableHead>分类</TableHead>
-          <TableHead>Message</TableHead>
-          <TableHead>关联 ID</TableHead>
-          <TableHead>实例</TableHead>
-          <TableHead className="w-10">
-            <span className="sr-only">操作</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.map((entry) => (
-          <TableRow key={entry.id}>
-            <TableCell className="font-mono text-xs tabular-nums">
-              {formatLogTime(entry.timestamp)}
-            </TableCell>
-            <TableCell>
-              <LogLevelBadge level={entry.level} />
-            </TableCell>
-            <TableCell>
-              <div className="flex min-w-28 flex-col gap-0.5 font-mono text-xs">
-                <span>{entry.type}</span>
-                <span className="text-muted-foreground">{entry.event}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="max-w-md truncate" title={entry.message}>
-                {entry.message}
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="max-w-52 truncate font-mono text-xs" title={relatedID(entry)}>
-                {relatedID(entry)}
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="max-w-40 truncate text-xs" title={entry.instance}>
-                {entry.instance || "—"}
-              </div>
-            </TableCell>
-            <TableCell>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`查看日志 ${entry.id}`}
-                title="查看详情"
-                onClick={() => onSelect(entry)}
-              >
-                <EyeIcon />
-              </Button>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-function LogTableSkeleton() {
-  return (
-    <div className="flex flex-col gap-2">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <Skeleton key={index} className="h-10 w-full" />
-      ))}
-    </div>
-  );
-}
-
 function LogDetailSheet({
   entry,
   onOpenChange,
@@ -729,21 +601,18 @@ function ModeBadge({ mode }: { mode: GatewayLoggingSnapshot["mode"] }) {
   return <Badge variant={mode === "info" ? "outline" : "secondary"}>{modeLabel(mode)}</Badge>;
 }
 
-function LogLevelBadge({ level }: { level: GatewayLogLevel }) {
-  return (
-    <Badge variant={level === "error" ? "destructive" : level === "info" ? "outline" : "secondary"}>
-      {level.toUpperCase()}
-    </Badge>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 break-words text-sm font-medium">{value}</div>
     </div>
   );
+}
+
+function DebugRemaining({ expiresAt }: { expiresAt: Date }) {
+  const now = useCurrentSecond();
+  return formatRemaining(expiresAt.getTime() - now);
 }
 
 function useCurrentSecond(): number {
@@ -786,34 +655,12 @@ function formatDateTime(value: Date): string {
   }).format(value);
 }
 
-function formatLogTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-    hour12: false,
-  }).format(date);
-}
-
 function formatOptionalDateTime(value?: string): string {
   return value ? formatDateTime(new Date(value)) : "—";
 }
 
 function operatorLabel(userID: number): string {
   return userID === 0 ? "管理员" : `管理员 #${userID}`;
-}
-
-function relatedID(entry: GatewayLogEntry): string {
-  for (const key of ["attempt_id", "request_id", "trace_id", "upstream_request_id"]) {
-    const value = entry.data[key];
-    if ((typeof value === "string" && value) || typeof value === "number") {
-      return String(value);
-    }
-  }
-  return "—";
 }
 
 function formatDataValue(value: unknown): string {

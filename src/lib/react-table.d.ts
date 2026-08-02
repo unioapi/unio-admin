@@ -27,6 +27,7 @@ declare module "@tanstack/react-table" {
     autoSizeValue?: (row: any) => unknown;
     /** tablecn Data Table 筛选 */
     placeholder?: string;
+    maxLength?: number;
     variant?:
       | "text"
       | "number"

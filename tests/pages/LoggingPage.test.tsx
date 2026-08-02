@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +26,13 @@ function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <NuqsAdapter>{children}</NuqsAdapter>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 const infoSnapshot = {
@@ -130,27 +138,60 @@ describe("LoggingPage", () => {
     render(<LoggingPage />, { wrapper });
 
     expect(await screen.findByText("request completed")).toBeInTheDocument();
-    await user.clear(screen.getByLabelText("Type"));
-    await user.type(screen.getByLabelText("Type"), "http");
-    await user.type(screen.getByLabelText("关联 ID"), " req_1 ");
-    await user.type(screen.getByLabelText("内容"), " timeout ");
-    await user.click(screen.getByRole("button", { name: "查询" }));
+    await user.type(screen.getByPlaceholderText("Type"), "http");
+    await user.type(
+      screen.getByPlaceholderText("请求 / Trace / Attempt ID"),
+      " req_1 ",
+    );
+    await user.type(
+      screen.getByPlaceholderText("搜索 message 或 data"),
+      " timeout ",
+    );
 
-    await waitFor(() => expect(mocks.getGatewayLogs).toHaveBeenCalledTimes(2));
-    expect(mocks.getGatewayLogs.mock.calls[1]?.[0]).toEqual({
-      range: "1h",
-      level: "",
-      type: "http",
-      event: "",
-      related_id: "req_1",
-      search: "timeout",
-      limit: 100,
-    });
+    await waitFor(() =>
+      expect(
+        mocks.getGatewayLogs.mock.calls.map((call) => call[0]),
+      ).toContainEqual({
+        range: "1h",
+        level: "",
+        type: "http",
+        event: "",
+        related_id: "req_1",
+        search: "timeout",
+        limit: 100,
+      }),
+    );
 
     await user.click(screen.getByRole("button", { name: "查看日志 log_1" }));
     expect(await screen.findByRole("heading", { name: "日志详情" })).toBeInTheDocument();
     expect(screen.getByText("status_code")).toBeInTheDocument();
     expect(screen.getByText("503")).toBeInTheDocument();
+  });
+
+  it("aborts in-flight polling requests when the page unmounts", async () => {
+    let loggingSignal: AbortSignal | undefined;
+    let logsSignal: AbortSignal | undefined;
+    mocks.getGatewayLogging.mockImplementation((signal: AbortSignal) => {
+      loggingSignal = signal;
+      return new Promise(() => undefined);
+    });
+    mocks.getGatewayLogs.mockImplementation(
+      (_filters: unknown, signal: AbortSignal) => {
+        logsSignal = signal;
+        return new Promise(() => undefined);
+      },
+    );
+
+    const view = render(<LoggingPage />, { wrapper });
+    await waitFor(() => {
+      expect(loggingSignal).toBeDefined();
+      expect(logsSignal).toBeDefined();
+    });
+
+    view.unmount();
+
+    expect(loggingSignal?.aborted).toBe(true);
+    expect(logsSignal?.aborted).toBe(true);
   });
 
   it("closes an active DEBUG session", async () => {

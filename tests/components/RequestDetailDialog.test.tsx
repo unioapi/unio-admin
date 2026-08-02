@@ -366,7 +366,10 @@ describe("RequestDetailDialog upstream timing", () => {
     expect(screen.getAllByText("续期").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("重扫取得容量")).toBeVisible();
     expect(screen.getByText("等待流式首个有效事件")).toBeVisible();
-    expect(mocks.getRequestRoutingDecision).toHaveBeenCalledWith("req_stream");
+    expect(mocks.getRequestRoutingDecision).toHaveBeenCalledWith(
+      "req_stream",
+      expect.any(AbortSignal),
+    );
   });
 
   it("distinguishes hard-filtered candidates from stale runtime state", async () => {

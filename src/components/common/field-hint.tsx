@@ -9,15 +9,20 @@ import {
 } from "@/components/ui/tooltip";
 
 // FieldHint 是字段标签旁的「圆圈问号」,悬浮显示该字段说明(把冗长 description 收进 tooltip,表单只留标签+输入)。
-function FieldHint({ text }: { text: ReactNode }) {
+export function FieldHint({
+  text,
+  label = "字段说明",
+}: {
+  text: ReactNode;
+  label?: string;
+}) {
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            tabIndex={-1}
-            aria-label="字段说明"
+            aria-label={label}
             onClick={(e) => e.preventDefault()}
             className="text-muted-foreground/60 hover:text-foreground inline-flex items-center"
           >

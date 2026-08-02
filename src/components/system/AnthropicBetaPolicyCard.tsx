@@ -68,7 +68,7 @@ export function AnthropicBetaPolicyCard() {
   // 生效值探针：/settings 返回的 value/source 就是 gateway 经 Redis 读到的当前值，用于验证配置已传播。
   const effective = useQuery({
     queryKey: ["settings-effective"],
-    queryFn: listSettings,
+    queryFn: ({ signal }) => listSettings(signal),
     refetchInterval: 5000,
   });
   const betaEffective = effective.data?.find((s) => s.key === "anthropic.beta_policy");

@@ -147,10 +147,14 @@ export interface ProviderRuntime {
   runtime_sync_state: string;
 }
 
-export async function getProviderRuntime(id: number): Promise<ProviderRuntime> {
-  const res = await api.get<{ data: ProviderRuntime }>(
-    `/admin/v1/providers/${id}/ops/runtime`,
-  );
+export async function getProviderRuntime(
+  id: number,
+  signal?: AbortSignal,
+): Promise<ProviderRuntime> {
+  const path = `/admin/v1/providers/${id}/ops/runtime`;
+  const res = signal
+    ? await api.get<{ data: ProviderRuntime }>(path, { signal })
+    : await api.get<{ data: ProviderRuntime }>(path);
   return res.data.data;
 }
 

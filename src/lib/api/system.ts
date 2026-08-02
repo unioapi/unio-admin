@@ -156,10 +156,13 @@ export interface RuntimeDiagnostics {
   };
 }
 
-export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
-  const res = await api.get<{ data: RuntimeDiagnostics }>(
-    "/admin/v1/system/runtime-diagnostics",
-  );
+export async function getRuntimeDiagnostics(
+  signal?: AbortSignal,
+): Promise<RuntimeDiagnostics> {
+  const path = "/admin/v1/system/runtime-diagnostics";
+  const res = signal
+    ? await api.get<{ data: RuntimeDiagnostics }>(path, { signal })
+    : await api.get<{ data: RuntimeDiagnostics }>(path);
   return res.data.data;
 }
 
@@ -225,19 +228,24 @@ export interface GatewayLogFilters {
   limit: 50 | 100 | 200;
 }
 
-export async function getGatewayLogging(): Promise<GatewayLoggingSnapshot> {
-  const res = await api.get<{ data: GatewayLoggingSnapshot }>(
-    "/admin/v1/system/gateway-logging",
-  );
+export async function getGatewayLogging(
+  signal?: AbortSignal,
+): Promise<GatewayLoggingSnapshot> {
+  const path = "/admin/v1/system/gateway-logging";
+  const res = signal
+    ? await api.get<{ data: GatewayLoggingSnapshot }>(path, { signal })
+    : await api.get<{ data: GatewayLoggingSnapshot }>(path);
   return res.data.data;
 }
 
 export async function getGatewayLogs(
   filters: GatewayLogFilters,
+  signal?: AbortSignal,
 ): Promise<GatewayLogList> {
   const res = await api.get<{ data: GatewayLogList }>(
     "/admin/v1/system/gateway-logs",
     {
+      ...(signal ? { signal } : {}),
       params: {
         range: filters.range,
         level: filters.level || undefined,
@@ -325,8 +333,11 @@ export interface SettingWriteResult {
   pending_revision: number;
 }
 
-export async function listSettings(): Promise<SettingItem[]> {
-  const res = await api.get<{ data: SettingItem[] }>("/admin/v1/settings");
+export async function listSettings(signal?: AbortSignal): Promise<SettingItem[]> {
+  const path = "/admin/v1/settings";
+  const res = signal
+    ? await api.get<{ data: SettingItem[] }>(path, { signal })
+    : await api.get<{ data: SettingItem[] }>(path);
   return res.data.data;
 }
 
