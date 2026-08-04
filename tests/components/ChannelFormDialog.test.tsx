@@ -62,7 +62,7 @@ const channel = {
   last_test_error: null,
 } satisfies Channel;
 
-describe("ChannelFormDialog P4 binding", () => {
+describe("ChannelFormDialog Provider binding", () => {
   beforeEach(() => {
     mocks.listAllProviders.mockResolvedValue([
       {

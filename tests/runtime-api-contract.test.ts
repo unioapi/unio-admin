@@ -24,7 +24,7 @@ import {
 } from "@/lib/api/providers";
 import { getRuntimeDiagnostics, listSettings, updateSetting } from "@/lib/api/system";
 
-describe("P4 admin API contracts", () => {
+describe("runtime admin API contracts", () => {
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
   });
