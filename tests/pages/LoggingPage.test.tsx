@@ -20,11 +20,15 @@ vi.mock("@/lib/api/system", async (importOriginal) => {
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-import { formatRemaining, LoggingPage } from "@/pages/LoggingPage";
+import {
+  formatRemaining,
+  LoggingPage,
+  snapshotPollIntervalMs,
+} from "@/pages/LoggingPage";
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
   });
   return (
     <QueryClientProvider client={client}>
@@ -87,6 +91,45 @@ describe("LoggingPage", () => {
     expect(formatRemaining(65_000)).toBe("1:05");
     expect(formatRemaining(1)).toBe("0:01");
     expect(formatRemaining(-1)).toBe("0:00");
+  });
+
+  it("only polls the snapshot fast while it can still change", () => {
+    expect(snapshotPollIntervalMs(infoSnapshot)).toBe(30_000);
+    expect(snapshotPollIntervalMs(undefined)).toBe(5_000);
+    expect(
+      snapshotPollIntervalMs({
+        ...infoSnapshot,
+        control: { ...infoSnapshot.control, active: true },
+      }),
+    ).toBe(5_000);
+    expect(
+      snapshotPollIntervalMs({
+        ...infoSnapshot,
+        instances: [{ ...infoSnapshot.instances[0], state: "pending" }],
+      }),
+    ).toBe(5_000);
+    expect(
+      snapshotPollIntervalMs({
+        ...infoSnapshot,
+        instances: [{ ...infoSnapshot.instances[0], state: "unreachable" }],
+      }),
+    ).toBe(5_000);
+  });
+
+  it("keeps the log table usable when the level snapshot fails", async () => {
+    mocks.getGatewayLogging.mockRejectedValue(new Error("gateway unreachable"));
+
+    render(<LoggingPage />, { wrapper });
+
+    expect(await screen.findByText("日志级别状态加载失败")).toBeInTheDocument();
+    expect(screen.getByText(/gateway unreachable/)).toBeInTheDocument();
+    expect(await screen.findByText("request completed")).toBeInTheDocument();
+    expect(screen.queryByText("Gateway 日志级别")).not.toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() =>
+      expect(mocks.getGatewayLogging.mock.calls.length).toBeGreaterThan(1),
+    );
   });
 
   it("starts a fixed-duration DEBUG session with a required reason", async () => {

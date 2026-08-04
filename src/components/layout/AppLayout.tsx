@@ -107,8 +107,8 @@ export function AppLayout() {
   const location = useLocation();
   const loc = { pathname: location.pathname, search: location.search };
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     navigate("/login", { replace: true });
   }
 

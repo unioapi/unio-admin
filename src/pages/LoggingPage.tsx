@@ -25,7 +25,12 @@ import {
   type GatewayLoggingSnapshot,
 } from "@/lib/api/system";
 import { apiErrorMessage } from "@/lib/api/client";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { RefreshControl } from "@/components/common/RefreshControl";
 import { useRefreshSettings } from "@/hooks/useRefreshSettings";
 import { gatewayLogsColumns } from "@/components/openstatus-table/gateway-logs-columns";
@@ -95,6 +100,8 @@ type DebugDuration = (typeof DEBUG_DURATIONS)[number];
 const LOG_RANGES = ["15m", "1h", "6h", "24h", "7d"] as const;
 const LOG_LEVELS = ["debug", "info", "warning", "error"] as const;
 const LOG_LIMITS = [50, 100, 200] as const;
+const SNAPSHOT_POLL_ACTIVE_MS = 5_000;
+const SNAPSHOT_POLL_IDLE_MS = 30_000;
 
 const INSTANCE_STATE: Record<
   GatewayLoggingInstance["state"],
@@ -157,8 +164,10 @@ export function LoggingPage() {
   const query = useQuery({
     queryKey: GATEWAY_LOGGING_QUERY_KEY,
     queryFn: ({ signal }) => getGatewayLogging(signal),
-    refetchInterval: 5_000,
+    refetchInterval: ({ state }) => snapshotPollIntervalMs(state.data),
     refetchIntervalInBackground: false,
+    // 轮询下一轮本身就是重试，不必再叠加默认的三次退避重试。
+    retry: 1,
   });
   const logsQuery = useQuery({
     queryKey: [...GATEWAY_LOGS_QUERY_KEY, filters],
@@ -205,29 +214,12 @@ export function LoggingPage() {
     onError: (error) => toast.error(apiErrorMessage(error)),
   });
 
-  if (query.isPending) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-56 w-full" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
-  }
-  if (query.isError) {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>日志状态加载失败</AlertTitle>
-        <AlertDescription>{apiErrorMessage(query.error)}</AlertDescription>
-      </Alert>
-    );
-  }
-
   const snapshot = query.data;
-  const unhealthy = snapshot.instances.filter(
+  const unhealthy = (snapshot?.instances ?? []).filter(
     (instance) =>
       instance.state === "pending" || instance.state === "unreachable",
   );
-  const expiresAt = snapshot.control.expires_at
+  const expiresAt = snapshot?.control.expires_at
     ? new Date(snapshot.control.expires_at)
     : null;
   const reasonInvalid = reasonTouched && reason.trim().length === 0;
@@ -249,6 +241,28 @@ export function LoggingPage() {
         </Alert>
       ) : null}
 
+      {query.isError ? (
+        <Alert variant="destructive">
+          <AlertTitle>日志级别状态加载失败</AlertTitle>
+          <AlertDescription>
+            {apiErrorMessage(query.error)}
+            {snapshot ? "（下方为最后一次成功获取的状态）" : null}
+          </AlertDescription>
+          <AlertAction>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={query.isFetching}
+              onClick={() => void query.refetch()}
+            >
+              重试
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : null}
+
+      {!snapshot && query.isPending ? <Skeleton className="h-56 w-full" /> : null}
+      {!snapshot ? null : (
       <Card>
         <CardHeader>
           <CardTitle>Gateway 日志级别</CardTitle>
@@ -322,6 +336,7 @@ export function LoggingPage() {
           </Button>
         </CardFooter>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -418,6 +433,7 @@ export function LoggingPage() {
         ) : null}
       </Card>
 
+      {!snapshot ? null : (
       <Card>
         <CardHeader>
           <CardTitle>Gateway 实例</CardTitle>
@@ -451,9 +467,11 @@ export function LoggingPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
       <LogDetailSheet entry={selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)} />
 
+      {!snapshot ? null : (
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -506,6 +524,7 @@ export function LoggingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
@@ -634,6 +653,19 @@ function modeDescription(snapshot: GatewayLoggingSnapshot): string {
   if (snapshot.mode === "debug") return `会话 ${snapshot.control.session_id ?? "—"}`;
   if (snapshot.mode === "environment_debug") return "开发环境启动基线";
   return "生产运行基线";
+}
+
+/** 只有会话进行中（要发现到期回落）或实例尚未全部完成下发时，快照才会变化；
+ * 其余时间放慢轮询，避免停在本页就持续空转请求。 */
+export function snapshotPollIntervalMs(
+  snapshot: GatewayLoggingSnapshot | undefined,
+): number {
+  if (!snapshot || snapshot.control.active) return SNAPSHOT_POLL_ACTIVE_MS;
+  const settled = snapshot.instances.every(
+    (instance) =>
+      instance.state === "applied" || instance.state === "environment_debug",
+  );
+  return settled ? SNAPSHOT_POLL_IDLE_MS : SNAPSHOT_POLL_ACTIVE_MS;
 }
 
 export function formatRemaining(milliseconds: number): string {

@@ -49,7 +49,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['vite.config.ts', 'vitest.config.ts', 'playwright.config.ts', 'e2e/**/*.{ts,tsx}'],
+    files: ['vite.config.ts', 'vitest.config.ts'],
     languageOptions: {
       globals: globals.node,
     },
