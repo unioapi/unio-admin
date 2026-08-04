@@ -21,7 +21,10 @@ import {
 } from "@/lib/capability/protocolScope";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useServerList } from "@/hooks/useServerList";
-import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
+import {
+  ServerDataTable,
+  FacetFilterButton,
+} from "@/components/openstatus-table";
 import {
   CAPABILITY_KEY_OS_COLUMN_LABELS,
   capabilityKeyOsColumns,
@@ -85,7 +88,9 @@ function compareCapabilityKeys(
       cmp =
         a.sort_order - b.sort_order ||
         PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(a.protocol_scope)) -
-          PROTOCOL_SCOPE_ORDER.indexOf(normalizeProtocolScope(b.protocol_scope)) ||
+          PROTOCOL_SCOPE_ORDER.indexOf(
+            normalizeProtocolScope(b.protocol_scope),
+          ) ||
         a.key.localeCompare(b.key);
   }
   return desc ? -cmp : cmp;
@@ -95,7 +100,9 @@ export function CapabilityDictionaryTab() {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CapabilityKeyDef | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<CapabilityKeyDef | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CapabilityKeyDef | null>(
+    null,
+  );
 
   const { page, setPage, sorting, setSorting, urlKeys } = useServerList({
     urlKey: "capability:dictionary",
@@ -106,11 +113,15 @@ export function CapabilityDictionaryTab() {
   const scopeKey = urlKeys.scope;
   const [protocolScope, setProtocolScope] = useQueryState(
     scopeKey,
-    parseAsString.withOptions({ history: "replace", shallow: true }).withDefault(""),
+    parseAsString
+      .withOptions({ history: "replace", shallow: true })
+      .withDefault(""),
   );
   const [searchFromUrl, setSearchUrl] = useQueryState(
     urlKeys.q,
-    parseAsString.withOptions({ history: "replace", shallow: true }).withDefault(""),
+    parseAsString
+      .withOptions({ history: "replace", shallow: true })
+      .withDefault(""),
   );
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const search = useDebouncedValue(searchInput.trim(), 300);
@@ -313,11 +324,11 @@ function CapabilityKeyFormDialog({
   const [displayName, setDisplayName] = useState(editing?.display_name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [sortOrder, setSortOrder] = useState(String(editing?.sort_order ?? 0));
-  const [deprecated, setDeprecated] = useState(editing?.deprecated ? "true" : "false");
+  const [deprecated, setDeprecated] = useState(
+    editing?.deprecated ? "true" : "false",
+  );
   const [protocolScope, setProtocolScope] = useState<ProtocolScope>(
-    editing?.protocol_scope === "both" || !editing
-      ? "shared"
-      : editing.protocol_scope,
+    editing?.protocol_scope ?? "shared",
   );
 
   const mutation = useMutation({
@@ -351,7 +362,9 @@ function CapabilityKeyFormDialog({
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-muted-foreground mb-1 block text-xs">key</label>
+            <label className="text-muted-foreground mb-1 block text-xs">
+              key
+            </label>
             <Input
               value={key}
               onChange={(e) => setKey(e.target.value)}
@@ -362,11 +375,18 @@ function CapabilityKeyFormDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-muted-foreground mb-1 block text-xs">domain</label>
-              <Input value={domain} onChange={(e) => setDomain(e.target.value)} />
+              <label className="text-muted-foreground mb-1 block text-xs">
+                domain
+              </label>
+              <Input
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+              />
             </div>
             <div>
-              <label className="text-muted-foreground mb-1 block text-xs">协议归属</label>
+              <label className="text-muted-foreground mb-1 block text-xs">
+                协议归属
+              </label>
               <Select
                 value={protocolScope}
                 onValueChange={(v) => setProtocolScope(v as ProtocolScope)}
@@ -385,16 +405,28 @@ function CapabilityKeyFormDialog({
             </div>
           </div>
           <div>
-            <label className="text-muted-foreground mb-1 block text-xs">展示名</label>
-            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <label className="text-muted-foreground mb-1 block text-xs">
+              展示名
+            </label>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
           </div>
           <div>
-            <label className="text-muted-foreground mb-1 block text-xs">中文描述</label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+            <label className="text-muted-foreground mb-1 block text-xs">
+              中文描述
+            </label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-muted-foreground mb-1 block text-xs">排序</label>
+              <label className="text-muted-foreground mb-1 block text-xs">
+                排序
+              </label>
               <Input
                 type="number"
                 value={sortOrder}
@@ -402,7 +434,9 @@ function CapabilityKeyFormDialog({
               />
             </div>
             <div>
-              <label className="text-muted-foreground mb-1 block text-xs">deprecated</label>
+              <label className="text-muted-foreground mb-1 block text-xs">
+                deprecated
+              </label>
               <Select value={deprecated} onValueChange={setDeprecated}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -419,7 +453,10 @@ function CapabilityKeyFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+          >
             {mutation.isPending && <Spinner data-icon="inline-start" />}
             保存
           </Button>

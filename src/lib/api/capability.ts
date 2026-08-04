@@ -29,7 +29,7 @@ export interface CapabilityKeyDef {
   description: string;
   sort_order: number;
   deprecated: boolean;
-  protocol_scope: ProtocolScope | "both";
+  protocol_scope: ProtocolScope;
 }
 
 export async function listCapabilityKeys(): Promise<CapabilityKeyDef[]> {
@@ -147,16 +147,16 @@ export async function listSyncJobs(params: SyncJobListParams): Promise<{
   items: SyncJob[];
   total: number;
 }> {
-  const res = await api.get<{ data: SyncJob[]; meta: { page: number; page_size: number; total: number } }>(
-    "/admin/v1/capability/sync-jobs",
-    {
-      params: buildListQuery({
-        page: params.page,
-        page_size: params.pageSize,
-        sort: params.sort,
-      }),
-    },
-  );
+  const res = await api.get<{
+    data: SyncJob[];
+    meta: { page: number; page_size: number; total: number };
+  }>("/admin/v1/capability/sync-jobs", {
+    params: buildListQuery({
+      page: params.page,
+      page_size: params.pageSize,
+      sort: params.sort,
+    }),
+  });
   return { items: res.data.data, total: res.data.meta.total };
 }
 
@@ -208,4 +208,3 @@ export async function materializeAdapterSeed(
   );
   return res.data.data;
 }
-

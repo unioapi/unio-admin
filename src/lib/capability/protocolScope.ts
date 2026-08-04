@@ -48,16 +48,14 @@ const PROTOCOL_SCOPE_STYLES: Record<
   },
 };
 
-export function protocolScopeStyles(scope: ProtocolScope | "both") {
+export function protocolScopeStyles(scope: ProtocolScope) {
   return PROTOCOL_SCOPE_STYLES[normalizeProtocolScope(scope)];
 }
 
-/** DB/API 取值 shared；兼容历史 both。 */
 export function normalizeProtocolScope(
-  scope: ProtocolScope | "both" | undefined | null,
+  scope: ProtocolScope | undefined | null,
 ): ProtocolScope {
   if (scope === "openai" || scope === "anthropic") return scope;
-  if (scope === "shared" || scope === "both") return "shared";
   return "shared";
 }
 
@@ -65,9 +63,9 @@ export function protocolScopeLabel(scope: ProtocolScope): string {
   return PROTOCOL_SCOPE_LABEL[scope];
 }
 
-export function groupKeysByProtocolScope<T extends { protocol_scope: ProtocolScope | "both" }>(
-  keys: T[],
-): Array<[ProtocolScope, T[]]> {
+export function groupKeysByProtocolScope<
+  T extends { protocol_scope: ProtocolScope },
+>(keys: T[]): Array<[ProtocolScope, T[]]> {
   const buckets = new Map<ProtocolScope, T[]>();
   for (const scope of PROTOCOL_SCOPE_ORDER) {
     buckets.set(scope, []);
@@ -86,12 +84,13 @@ export function groupKeysByProtocolScope<T extends { protocol_scope: ProtocolSco
   return out;
 }
 
-export function filterKeysByProtocolScope<T extends { protocol_scope: ProtocolScope | "both" }>(
-  keys: T[],
-  filter: ProtocolScopeFilter,
-): T[] {
+export function filterKeysByProtocolScope<
+  T extends { protocol_scope: ProtocolScope },
+>(keys: T[], filter: ProtocolScopeFilter): T[] {
   if (filter === "all") return keys;
-  return keys.filter((k) => normalizeProtocolScope(k.protocol_scope) === filter);
+  return keys.filter(
+    (k) => normalizeProtocolScope(k.protocol_scope) === filter,
+  );
 }
 
 export function groupKeysByDomain<T extends { domain: string }>(

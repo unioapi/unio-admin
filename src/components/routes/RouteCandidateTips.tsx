@@ -1,8 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  CheckCircle2Icon,
-  CircleXIcon,
-} from "lucide-react";
+import { CheckCircle2Icon, CircleXIcon } from "lucide-react";
 import type {
   RouteRuntimeChannel,
   RouteRuntimeEligibilityCheck,
@@ -54,7 +51,7 @@ const SCORE_WEIGHTS = [
   { key: "priority", label: "优先级", weight: 10, tone: "bg-emerald-500/80" },
 ] as const;
 
-export function TipSection({
+function TipSection({
   title,
   children,
 }: {
@@ -73,7 +70,7 @@ export function TipSection({
   );
 }
 
-export function TipSummaryRow({
+function TipSummaryRow({
   label,
   value,
   emphasis,
@@ -141,7 +138,10 @@ export function reasonLabel(reason: string): string {
 }
 
 export function formatScore(value: number): string {
-  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  return value
+    .toFixed(2)
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1");
 }
 
 export function formatPercentPoints(value: number | null | undefined): string {
@@ -173,7 +173,8 @@ export function ChannelColumnTip() {
       </TipSection>
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          配置优先级会进入五项评分中的「优先级」维度（权重 10%）。数值越小，该维得分越高。
+          配置优先级会进入五项评分中的「优先级」维度（权重
+          10%）。数值越小，该维得分越高。
         </p>
       </TipSection>
     </div>
@@ -184,14 +185,15 @@ export function ChannelColumnTip() {
 export function EligibilityColumnTip() {
   return (
     <div className="w-full space-y-3">
-      <TipHeader
-        title="候选资格"
-        subtitle="硬门槛：未通过则不会进入本次选路"
-      />
+      <TipHeader title="候选资格" subtitle="硬门槛：未通过则不会进入本次选路" />
       <TipSection title="状态含义">
         <div className="space-y-1.5">
           <TipSummaryRow label="有资格" value="可被选中与尝试" tone="ok" />
-          <TipSummaryRow label="仅探测" value="可探测，不承担主流量" tone="warn" />
+          <TipSummaryRow
+            label="仅探测"
+            value="可探测，不承担主流量"
+            tone="warn"
+          />
           <TipSummaryRow label="无资格" value="本轮排除出候选集" tone="bad" />
         </div>
       </TipSection>
@@ -204,7 +206,8 @@ export function EligibilityColumnTip() {
           ))}
         </div>
         <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
-          悬浮单元格可查看每项检查的通过/失败原因。毛利、熔断、429 冷却、模型权限与运行态同步任一项失败都会剥夺资格。
+          悬浮单元格可查看每项检查的通过/失败原因。毛利、熔断、429
+          冷却、模型权限与运行态同步任一项失败都会剥夺资格。
         </p>
       </TipSection>
     </div>
@@ -215,10 +218,7 @@ export function EligibilityColumnTip() {
 export function RuntimeColumnTip() {
   return (
     <div className="w-full space-y-3">
-      <TipHeader
-        title="运行态"
-        subtitle="数据库配置与共享运行态是否对齐"
-      />
+      <TipHeader title="运行态" subtitle="数据库配置与共享运行态是否对齐" />
       <TipSection title="为何重要">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
           选路读写的是共享运行态（熔断、并发、版本修订）。配置已改但运行态未同步时，系统会拒绝新准入，避免按过期事实分流。
@@ -227,8 +227,16 @@ export function RuntimeColumnTip() {
       <TipSection title="常见状态">
         <div className="space-y-1.5">
           <TipSummaryRow label="已同步" value="可正常准入" tone="ok" />
-          <TipSummaryRow label="同步中 / 待同步" value="暂缓新准入" tone="warn" />
-          <TipSummaryRow label="版本落后 / 不可用" value="不可作为实时事实" tone="bad" />
+          <TipSummaryRow
+            label="同步中 / 待同步"
+            value="暂缓新准入"
+            tone="warn"
+          />
+          <TipSummaryRow
+            label="版本落后 / 不可用"
+            value="不可作为实时事实"
+            tone="bad"
+          />
         </div>
       </TipSection>
     </div>
@@ -239,10 +247,7 @@ export function RuntimeColumnTip() {
 export function ConcurrencyColumnTip() {
   return (
     <div className="w-full space-y-3">
-      <TipHeader
-        title="并发占用"
-        subtitle="原子硬门槛；满载渠道退出本轮候选"
-      />
+      <TipHeader title="并发占用" subtitle="原子硬门槛；满载渠道退出本轮候选" />
       <TipSection title="读数">
         <FormulaBox>
           <p className="text-muted-foreground leading-relaxed">
@@ -254,7 +259,8 @@ export function ConcurrencyColumnTip() {
       </TipSection>
       <TipSection title="与评分的关系">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          剩余容量越高，并发维指标分越高（权重 20%）。满载是硬剔除，不会只靠低分被排到后面。
+          剩余容量越高，并发维指标分越高（权重
+          20%）。满载是硬剔除，不会只靠低分被排到后面。
         </p>
       </TipSection>
     </div>
@@ -265,10 +271,7 @@ export function ConcurrencyColumnTip() {
 export function TTFTColumnTip() {
   return (
     <div className="w-full space-y-3">
-      <TipHeader
-        title="TTFT"
-        subtitle="最近 30 分钟流式样本的平均首字时间"
-      />
+      <TipHeader title="TTFT" subtitle="最近 30 分钟流式样本的平均首字时间" />
       <TipSection title="无样本规则">
         <FormulaBox>
           <p className="text-muted-foreground leading-relaxed">
@@ -340,7 +343,8 @@ export function ScoreColumnTip() {
       <TipSection title="计算">
         <FormulaBox>
           <p className="text-muted-foreground leading-relaxed">
-            每维贡献 = 指标分 × 权重%；总分 = 五维贡献之和。悬浮单元格可看该渠道的逐项拆解。
+            每维贡献 = 指标分 × 权重%；总分 =
+            五维贡献之和。悬浮单元格可看该渠道的逐项拆解。
           </p>
         </FormulaBox>
       </TipSection>
@@ -415,13 +419,17 @@ export function EligibilityTip({ channel }: { channel: RouteRuntimeChannel }) {
             {passed > 0 ? (
               <div
                 className="h-full bg-emerald-500/85"
-                style={{ width: `${(passed / eligibility.checks.length) * 100}%` }}
+                style={{
+                  width: `${(passed / eligibility.checks.length) * 100}%`,
+                }}
               />
             ) : null}
             {failed > 0 ? (
               <div
                 className="h-full bg-destructive/75"
-                style={{ width: `${(failed / eligibility.checks.length) * 100}%` }}
+                style={{
+                  width: `${(failed / eligibility.checks.length) * 100}%`,
+                }}
               />
             ) : null}
           </div>
@@ -448,7 +456,12 @@ export function EligibilityTip({ channel }: { channel: RouteRuntimeChannel }) {
 
       {eligibility.primary_reason ? (
         <TipSection title="主因">
-          <p className={cn("text-[11px] leading-relaxed", tone === "bad" && "text-destructive")}>
+          <p
+            className={cn(
+              "text-[11px] leading-relaxed",
+              tone === "bad" && "text-destructive",
+            )}
+          >
             {reasonLabel(eligibility.primary_reason)}
           </p>
         </TipSection>
@@ -457,7 +470,11 @@ export function EligibilityTip({ channel }: { channel: RouteRuntimeChannel }) {
   );
 }
 
-function EligibilityCheckRow({ check }: { check: RouteRuntimeEligibilityCheck }) {
+function EligibilityCheckRow({
+  check,
+}: {
+  check: RouteRuntimeEligibilityCheck;
+}) {
   const passed = check.status === "passed";
   return (
     <div className="flex items-start gap-2 text-xs">
@@ -513,7 +530,11 @@ export function ConcurrencyTip({ channel }: { channel: RouteRuntimeChannel }) {
             <div
               className={cn(
                 "h-full",
-                full ? "bg-destructive/80" : usagePct >= 80 ? "bg-amber-500/80" : "bg-emerald-500/85",
+                full
+                  ? "bg-destructive/80"
+                  : usagePct >= 80
+                    ? "bg-amber-500/80"
+                    : "bg-emerald-500/85",
               )}
               style={{ width: `${usagePct}%` }}
             />
@@ -536,13 +557,20 @@ export function ConcurrencyTip({ channel }: { channel: RouteRuntimeChannel }) {
             value={value.unlimited ? "不限" : formatInt(value.remaining ?? 0)}
             emphasis
           />
-          <TipSummaryRow label="指标分" value={formatScore(value.metric_score)} />
-          <TipSummaryRow label="得分贡献" value={formatScore(value.contribution)} />
+          <TipSummaryRow
+            label="指标分"
+            value={formatScore(value.metric_score)}
+          />
+          <TipSummaryRow
+            label="得分贡献"
+            value={formatScore(value.contribution)}
+          />
         </div>
       </TipSection>
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          并发是原子硬门槛：满载即剔除。指标分反映剩余容量，按 20% 权重计入综合分。
+          并发是原子硬门槛：满载即剔除。指标分反映剩余容量，按 20%
+          权重计入综合分。
         </p>
       </TipSection>
     </div>
@@ -567,11 +595,21 @@ export function TTFTTip({ channel }: { channel: RouteRuntimeChannel }) {
         <div className="space-y-1.5">
           <TipSummaryRow
             label="样本"
-            value={metric.has_samples ? `${formatInt(metric.sample_count)} 个` : "无样本"}
+            value={
+              metric.has_samples
+                ? `${formatInt(metric.sample_count)} 个`
+                : "无样本"
+            }
             emphasis
           />
-          <TipSummaryRow label="指标分" value={formatScore(metric.metric_score)} />
-          <TipSummaryRow label="得分贡献" value={formatScore(metric.contribution)} />
+          <TipSummaryRow
+            label="指标分"
+            value={formatScore(metric.metric_score)}
+          />
+          <TipSummaryRow
+            label="得分贡献"
+            value={formatScore(metric.contribution)}
+          />
         </div>
       </TipSection>
       <TipSection title="口径">
@@ -598,7 +636,10 @@ export function TrafficTip({ channel }: { channel: RouteRuntimeChannel }) {
         badge={
           <span className="font-heading text-xl font-semibold tabular-nums">
             {formatInt(traffic.rpm)}
-            <span className="text-muted-foreground text-sm font-medium"> RPM</span>
+            <span className="text-muted-foreground text-sm font-medium">
+              {" "}
+              RPM
+            </span>
           </span>
         }
       />
@@ -615,7 +656,8 @@ export function TrafficTip({ channel }: { channel: RouteRuntimeChannel }) {
       </TipSection>
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          用于对照负载与排序是否匹配。真正的容量门禁看并发与熔断，不看这里的 RPM/TPM。
+          用于对照负载与排序是否匹配。真正的容量门禁看并发与熔断，不看这里的
+          RPM/TPM。
         </p>
       </TipSection>
     </div>
@@ -660,7 +702,9 @@ export function ScoreTip({
           <div
             key={label}
             className={cn("h-full", tone)}
-            style={{ width: `${Math.max(0, (part.contribution / total) * 100)}%` }}
+            style={{
+              width: `${Math.max(0, (part.contribution / total) * 100)}%`,
+            }}
             title={`${label} ${formatScore(part.contribution)}`}
           />
         ))}
@@ -668,14 +712,18 @@ export function ScoreTip({
 
       <div className="space-y-1.5">
         {parts.map(([label, part, tone]) => (
-		  <div key={label} className="grid grid-cols-[4.5rem_1fr] items-baseline gap-2 text-xs">
+          <div
+            key={label}
+            className="grid grid-cols-[4.5rem_1fr] items-baseline gap-2 text-xs"
+          >
             <span className="text-muted-foreground inline-flex items-center gap-1.5">
               <span className={cn("size-1.5 shrink-0 rounded-full", tone)} />
               {label}
             </span>
-			<span className="text-right font-medium tabular-nums">
-			  {formatScore(part.metric_score)} × {part.weight_pct}% = {formatScore(part.contribution)}
-			</span>
+            <span className="text-right font-medium tabular-nums">
+              {formatScore(part.metric_score)} × {part.weight_pct}% ={" "}
+              {formatScore(part.contribution)}
+            </span>
           </div>
         ))}
       </div>
@@ -684,14 +732,15 @@ export function ScoreTip({
       <div className="flex items-baseline justify-between gap-3 text-xs font-medium tabular-nums">
         <span>总分</span>
         <span>
-          {parts.map(([, part]) => formatScore(part.contribution)).join(" + ")} ={" "}
-          {formatScore(channel.score.total)}
+          {parts.map(([, part]) => formatScore(part.contribution)).join(" + ")}{" "}
+          = {formatScore(channel.score.total)}
         </span>
       </div>
 
       {!compact && channel.score.cost_ratio != null ? (
         <p className="text-muted-foreground text-[10px] leading-relaxed">
-          成本比 {formatScore(channel.score.cost_ratio)} · 配置优先级 P{channel.score.priority}
+          成本比 {formatScore(channel.score.cost_ratio)} · 配置优先级 P
+          {channel.score.priority}
         </p>
       ) : null}
     </div>
@@ -718,7 +767,10 @@ export function DistributionTip({ channel }: { channel: RouteRuntimeChannel }) {
       <div className="space-y-2">
         <div className="bg-muted/80 flex h-2 overflow-hidden rounded-full">
           {share > 0 ? (
-            <div className="h-full bg-primary/70" style={{ width: `${share * 100}%` }} />
+            <div
+              className="h-full bg-primary/70"
+              style={{ width: `${share * 100}%` }}
+            />
           ) : null}
         </div>
         <p className="text-muted-foreground text-[10px] leading-snug">

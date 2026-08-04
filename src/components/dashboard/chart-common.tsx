@@ -1,9 +1,8 @@
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { ReferenceLine } from "recharts";
 import { cn } from "@/lib/utils";
-import type { RangeQuery, TimeseriesInterval } from "@/lib/api/dashboard";
+import type { TimeseriesInterval } from "@/lib/api/dashboard";
 import type { CompareIntent } from "@/lib/compare";
-import { previousPeriodParams } from "@/lib/range";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -58,7 +57,10 @@ export function StatStrip({
   return (
     <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1.5">
       {items.map((it) => (
-        <div key={it.label} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs">
+        <div
+          key={it.label}
+          className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs"
+        >
           <span className="text-muted-foreground">{it.label}</span>
           <span
             className={cn(
@@ -82,16 +84,6 @@ export function StatStrip({
       ))}
     </div>
   );
-}
-
-/** 上一等长周期的 range（用于趋势环比）；无 from/to 时返回 null。 */
-export function usePreviousRange(range: RangeQuery): RangeQuery | null {
-  const { from, to, interval, range: rangePreset } = range;
-  return useMemo(() => {
-    const prev = previousPeriodParams({ from, to });
-    if (!prev) return null;
-    return { from: prev.from, to: prev.to, interval, range: rangePreset };
-  }, [from, to, interval, rangePreset]);
 }
 
 export function SloReferenceLine({

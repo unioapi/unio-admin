@@ -166,7 +166,7 @@ export async function getRuntimeDiagnostics(
   return res.data.data;
 }
 
-export interface GatewayLoggingControl {
+interface GatewayLoggingControl {
   active: boolean;
   session_id?: string;
   started_at?: string;
@@ -196,7 +196,7 @@ export interface GatewayLoggingSnapshot {
 }
 
 export type GatewayLogLevel = "debug" | "info" | "warning" | "error";
-export type GatewayLogRange = "15m" | "1h" | "6h" | "24h" | "7d";
+type GatewayLogRange = "15m" | "1h" | "6h" | "24h" | "7d";
 
 export interface GatewayLogEntry {
   id: string;
@@ -333,7 +333,9 @@ export interface SettingWriteResult {
   pending_revision: number;
 }
 
-export async function listSettings(signal?: AbortSignal): Promise<SettingItem[]> {
+export async function listSettings(
+  signal?: AbortSignal,
+): Promise<SettingItem[]> {
   const path = "/admin/v1/settings";
   const res = signal
     ? await api.get<{ data: SettingItem[] }>(path, { signal })
@@ -347,28 +349,10 @@ export async function updateSetting(
   key: string,
   value: unknown,
 ): Promise<SettingWriteResult> {
-  const res = await api.put<{
-    data:
-      | SettingWriteResult
-      | {
-          Key: string;
-          Revision: number;
-          State: SettingWriteResult["state"];
-          ActiveRevision: number;
-          PendingRevision: number;
-        };
-  }>(`/admin/v1/settings/${encodeURIComponent(key)}`, value, {
-    headers: { "Content-Type": "application/json" },
-  });
-  const result = res.data.data;
-  if ("Key" in result) {
-    return {
-      key: result.Key,
-      revision: result.Revision,
-      state: result.State,
-      active_revision: result.ActiveRevision,
-      pending_revision: result.PendingRevision,
-    };
-  }
-  return result;
+  const res = await api.put<{ data: SettingWriteResult }>(
+    `/admin/v1/settings/${encodeURIComponent(key)}`,
+    value,
+    { headers: { "Content-Type": "application/json" } },
+  );
+  return res.data.data;
 }

@@ -5,7 +5,7 @@ import { API_BASE } from "@/lib/config";
 // 与后端 adminapi login / logout handler 的 DTO 对齐。
 // 单管理员极简版：账号口令是唯一登录凭证，登录后由服务端签发随机会话 token 存于 Redis。
 
-export interface LoginResponse {
+interface LoginResponse {
   token: string;
   expires_in: number;
 }

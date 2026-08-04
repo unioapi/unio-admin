@@ -48,11 +48,11 @@ describe("P4 admin API contracts", () => {
     });
     mocks.put.mockResolvedValue({
       data: { data: {
-        Key: "gateway.routing_balance",
-        Revision: 4,
-        State: "runtime_sync_pending",
-        ActiveRevision: 3,
-        PendingRevision: 4,
+        key: "gateway.routing_balance",
+        revision: 4,
+        state: "runtime_sync_pending",
+        active_revision: 3,
+        pending_revision: 4,
       } },
     });
 
