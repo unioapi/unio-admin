@@ -117,8 +117,7 @@ export function routeOsColumns(): ColumnDef<RouteOpsRow, unknown>[] {
     {
       id: "models",
       accessorFn: (r) => r.models_count,
-      header: () => <span className="text-muted-foreground">模型</span>,
-      enableSorting: false,
+      header: ({ column }) => <ColumnHeader column={column} title="模型" />,
       cell: ({ row }) => (
         <RouteModelsCountCell routeId={row.original.id} count={row.original.models_count} />
       ),
