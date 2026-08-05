@@ -14,7 +14,13 @@ import {
   type RouteRuntime,
   type RouteRuntimeChannel,
 } from "@/lib/api/routesOps";
-import { formatDateTime, formatInt, formatLatencyMs, formatPercent } from "@/lib/format";
+import {
+  formatDateTime,
+  formatInt,
+  formatLatencyMs,
+  formatPercent,
+  trimDecimal,
+} from "@/lib/format";
 import { RequestsList } from "@/components/requests/RequestsList";
 import { RefreshControl } from "@/components/common/RefreshControl";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
@@ -39,7 +45,6 @@ import {
   TTFTColumnTip,
   TTFTTip,
 } from "@/components/routes/RouteCandidateTips";
-import { ChannelMultipliersCell } from "@/components/openstatus-table/channels-os-columns";
 import { useRefreshSettings } from "@/hooks/useRefreshSettings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -466,10 +471,7 @@ function CandidateTable({
                         {channel.provider.name} · {channel.protocol} · P{channel.priority}
                       </span>
                       <span className="shrink-0">·</span>
-                      <ChannelMultipliersCell
-                        channelId={channel.channel_id}
-                        className="text-muted-foreground shrink-0"
-                      />
+                      <RouteRuntimePricingCell channel={channel} />
                     </div>
                   </div>
                 </TableCell>
@@ -516,6 +518,59 @@ function ColumnLabel({ label, tip }: { label: string; tip: ReactNode }) {
         <TipHoverCardContent align="start">{tip}</TipHoverCardContent>
       </HoverCard>
     </span>
+  );
+}
+
+function RouteRuntimePricingCell({ channel }: { channel: RouteRuntimeChannel }) {
+  const pricing = channel.pricing;
+  const multiplier = pricing.cost_multiplier
+    ? trimDecimal(pricing.cost_multiplier)
+    : "—";
+  const rechargeFactor = pricing.recharge_factor
+    ? trimDecimal(pricing.recharge_factor)
+    : "1";
+  const summary =
+    pricing.source === "absolute"
+      ? "绝对成本"
+      : pricing.source === "multiplier"
+        ? `${multiplier} / ${rechargeFactor}`
+        : "未配置";
+
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground shrink-0 text-xs tabular-nums hover:underline"
+        >
+          {summary}
+        </button>
+      </HoverCardTrigger>
+      <TipHoverCardContent align="start" className="w-72">
+        <div className="space-y-2">
+          <div className="text-sm font-medium">当前模型成本</div>
+          {pricing.source === "absolute" ? (
+            <p className="text-muted-foreground text-xs">使用当前模型的渠道绝对成本。</p>
+          ) : pricing.source === "multiplier" ? (
+            <dl className="space-y-2 text-xs">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">价格倍率</dt>
+                <dd className="font-medium tabular-nums">{multiplier}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">充值倍率</dt>
+                <dd className="font-medium tabular-nums">
+                  {rechargeFactor}
+                  {pricing.recharge_factor == null ? "（默认）" : ""}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-muted-foreground text-xs">当前模型没有可用的渠道成本。</p>
+          )}
+        </div>
+      </TipHoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -612,11 +667,12 @@ function TrafficCell({ channel }: { channel: RouteRuntimeChannel }) {
 }
 
 function ScoreCell({ channel }: { channel: RouteRuntimeChannel }) {
+  const probeOnly = channel.eligibility.status === "probe_only";
   return (
     <HoverCard openDelay={120} closeDelay={120}>
       <HoverCardTrigger asChild>
         <button type="button" className="cursor-default font-medium tabular-nums underline decoration-dotted underline-offset-2">
-          {formatScore(channel.score.total)}
+          {probeOnly ? "仅探测" : formatScore(channel.score.total)}
         </button>
       </HoverCardTrigger>
       <TipHoverCardContent align="start">
@@ -651,6 +707,7 @@ function ChannelDetailSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const probeOnly = channel?.eligibility.status === "probe_only";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl">
@@ -666,14 +723,18 @@ function ChannelDetailSheet({
               <div className="flex flex-col gap-6 px-4 pb-6">
                 <DetailSection title="当前结论">
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant={channel.eligibility.status === "excluded" ? "destructive" : "outline"}>
-                      {channel.eligibility.status === "excluded" ? "无候选资格" : "有候选资格"}
+                    <Badge variant={channel.eligibility.status === "excluded" ? "destructive" : probeOnly ? "secondary" : "outline"}>
+                      {channel.eligibility.status === "excluded" ? "无候选资格" : probeOnly ? "仅探测" : "有候选资格"}
                     </Badge>
                     <Badge variant={channel.runtime.state === "active" ? "outline" : "destructive"}>
                       {RUNTIME_LABELS[channel.runtime.state] ?? channel.runtime.state}
                     </Badge>
                     <Badge variant="secondary">顺序 {channel.order}</Badge>
-                    <Badge variant="secondary">得分 {formatScore(channel.score.total)}</Badge>
+                    {probeOnly ? (
+                      <Badge variant="secondary">得分不参与普通排序</Badge>
+                    ) : (
+                      <Badge variant="secondary">得分 {formatScore(channel.score.total)}</Badge>
+                    )}
                   </div>
                 </DetailSection>
 
@@ -695,7 +756,7 @@ function ChannelDetailSheet({
                 </DetailSection>
 
                 <Separator />
-                <DetailSection title="五项评分">
+                <DetailSection title={probeOnly ? "探测状态" : "五项评分"}>
                   <ScoreTip channel={channel} />
                 </DetailSection>
 

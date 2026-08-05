@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/routes";
 import { listChannels } from "@/lib/api/channels";
 import { apiErrorMessage } from "@/lib/api/client";
+import { collectAllPages } from "@/lib/api/list-params";
 import { RoutePriceCalculator } from "@/components/routes/RoutePriceCalculator";
 import { RouteChannelMarginTable } from "@/components/routes/RouteChannelMarginTable";
 import { formatRouteRatioInput } from "@/components/routes/route-pricing";
@@ -128,11 +129,15 @@ function RouteForm({
     queryKey: ["channels", "all-for-route"],
     queryFn: async ({ signal }) => {
       const [enabled, disabled] = await Promise.all([
-        listChannels({ page: 1, pageSize: 100, status: "enabled" }, signal),
-        listChannels({ page: 1, pageSize: 100, status: "disabled" }, signal),
+        collectAllPages((page, pageSize) =>
+          listChannels({ page, pageSize, status: "enabled" }, signal),
+        ),
+        collectAllPages((page, pageSize) =>
+          listChannels({ page, pageSize, status: "disabled" }, signal),
+        ),
       ]);
       const channelsById = new Map(
-        [...enabled.items, ...disabled.items]
+        [...enabled, ...disabled]
           .filter((channel) => channel.status !== "archived")
           .map((channel) => [channel.id, channel]),
       );

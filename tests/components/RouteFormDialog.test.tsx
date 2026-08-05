@@ -134,6 +134,44 @@ describe("RouteFormDialog", () => {
     expect(mocks.createRoute.mock.calls[0][0]).toMatchObject({ channel_ids: [20] });
   });
 
+  it("loads channel options beyond the first 100 rows", async () => {
+    mocks.listChannels.mockImplementation(
+      ({ page, status }: { page: number; status?: string }) => {
+        if (status === "disabled") {
+          return Promise.resolve({ total: 0, items: [] });
+        }
+        if (page === 1) {
+          return Promise.resolve({
+            total: 101,
+            items: Array.from({ length: 100 }, (_, index) => ({
+              id: index + 1,
+              name: `channel-${index + 1}`,
+              status: "enabled",
+            })),
+          });
+        }
+        return Promise.resolve({
+          total: 101,
+          items: [{ id: 101, name: "channel-101", status: "enabled" }],
+        });
+      },
+    );
+
+    render(
+      <TestProviders>
+        <RouteFormDialog open onOpenChange={vi.fn()} route={null} onSaved={vi.fn()} />
+      </TestProviders>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "选择 channel-101" }),
+    ).toBeVisible();
+    expect(mocks.listChannels).toHaveBeenCalledWith(
+      { page: 2, pageSize: 100, status: "enabled" },
+      expect.any(AbortSignal),
+    );
+  });
+
   it("confirms a disabled channel already selected while editing", async () => {
     const user = userEvent.setup();
     mocks.updateRoute.mockResolvedValue({ id: 7 });

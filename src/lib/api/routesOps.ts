@@ -160,6 +160,12 @@ interface RouteRuntimeProvider {
   status: string;
 }
 
+interface RouteRuntimePricing {
+  source: "absolute" | "multiplier" | "unconfigured";
+  cost_multiplier: string | null;
+  recharge_factor: string | null;
+}
+
 export interface RouteRuntimeEligibilityCheck {
   key: string;
   status: "passed" | "failed";
@@ -262,6 +268,7 @@ export interface RouteRuntimeChannel {
   adapter_key: string;
   priority: number;
   order: number;
+  pricing: RouteRuntimePricing;
   eligibility: RouteRuntimeEligibility;
   runtime: RouteRuntimeState;
   concurrency: RouteRuntimeConcurrency;

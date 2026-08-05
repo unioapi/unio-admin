@@ -653,7 +653,7 @@ function ChannelForm({
               </Select>
               {stickyMode === "on" ? (
                 <div className="flex flex-col gap-1.5">
-                  <HintLabel htmlFor="sticky_ttl" hint="原绑定渠道完整成功时续期；临时绕行不改绑，永久失效才清除绑定。">
+          <HintLabel htmlFor="sticky_ttl" hint="读取命中本身不续期；只有原绑定渠道完整成功后把 TTL 重新延长。临时绕行不改绑，永久失效才清除绑定。">
                     渠道 Sticky TTL
                   </HintLabel>
                   <DurationInput

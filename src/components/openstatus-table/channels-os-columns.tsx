@@ -389,7 +389,7 @@ export function ChannelMultipliersCell({
     return isActiveMultiplierWindow(
       m.effective_from,
       m.effective_to,
-      Date.now(),
+      observedAt,
     );
   }).length;
   const resolvedRecharge = pickCurrentChannelRechargeFactor(

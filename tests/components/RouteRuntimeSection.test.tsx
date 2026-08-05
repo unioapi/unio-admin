@@ -68,6 +68,11 @@ function channelFixture(overrides: Partial<RouteRuntimeChannel> = {}): RouteRunt
     adapter_key: "openai",
     priority: 10,
     order: 1,
+    pricing: {
+      source: "multiplier",
+      cost_multiplier: "0.10",
+      recharge_factor: "1",
+    },
     eligibility: {
       status: "eligible",
       reasons: [],
@@ -308,6 +313,8 @@ describe("RouteRuntimeSection objective_v1", () => {
     expect(row).not.toBeNull();
     if (!row) return;
     expect(await within(row).findByText("0.1 / 1")).toBeVisible();
+    expect(mocks.listCostMultipliers).not.toHaveBeenCalled();
+    expect(mocks.listRechargeFactors).not.toHaveBeenCalled();
     expect(within(row).getByText(/provider-a · openai · P10/)).toBeVisible();
     expect(within(row).getByText("12 RPM")).toBeVisible();
     expect(within(row).getByText("1.25s")).toBeVisible();
@@ -324,6 +331,28 @@ describe("RouteRuntimeSection objective_v1", () => {
     );
   });
 
+  it("renders absolute and unconfigured pricing without per-channel requests", async () => {
+    const runtime = runtimeFixture();
+    runtime.channels[0].pricing = {
+      source: "absolute",
+      cost_multiplier: null,
+      recharge_factor: null,
+    };
+    runtime.channels[1].pricing = {
+      source: "unconfigured",
+      cost_multiplier: null,
+      recharge_factor: null,
+    };
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    renderSection();
+
+    expect(await screen.findByText("绝对成本")).toBeVisible();
+    expect(screen.getByText("未配置")).toBeVisible();
+    expect(mocks.listCostMultipliers).not.toHaveBeenCalled();
+    expect(mocks.listRechargeFactors).not.toHaveBeenCalled();
+  });
+
   it("shows exclusion reasons and treats no TTFT sample as full score", async () => {
     renderSection();
     const excluded = await screen.findByText("excluded", { exact: true });
@@ -331,8 +360,58 @@ describe("RouteRuntimeSection objective_v1", () => {
     expect(row).not.toBeNull();
     if (!row) return;
     expect(within(row).getByText("无资格")).toBeVisible();
-    expect(within(row).getByText("服务商disabled")).toBeVisible();
+		expect(within(row).getByText("服务商已停用")).toBeVisible();
     expect(within(row).getByText("无样本")).toBeVisible();
+  });
+
+  it("shows complete exclusion reason without an unevaluated margin failure", async () => {
+    const runtime = runtimeFixture();
+    runtime.channels[1].eligibility = {
+      status: "excluded",
+      primary_reason: "channel_cost_missing",
+      reasons: ["channel_cost_missing"],
+      checks: [
+        { key: "channel", status: "failed", reason: "channel_cost_missing" },
+      ],
+    };
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    renderSection();
+    const excluded = await screen.findByText("excluded", { exact: true });
+    const row = excluded.closest("tr");
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(within(row).getByText("渠道成本缺失")).toBeVisible();
+    expect(within(row).queryByText("未执行检查")).not.toBeInTheDocument();
+  });
+
+  it("renders half-open channels as probe only without a normal score equation", async () => {
+    const user = userEvent.setup();
+    const runtime = runtimeFixture();
+    runtime.channels[0].eligibility = {
+      ...runtime.channels[0].eligibility,
+      status: "probe_only",
+    };
+    mocks.getRuntime.mockResolvedValue(runtime);
+
+    renderSection();
+    const primary = await screen.findByText("primary", { exact: true });
+    const row = primary.closest("tr");
+    expect(row).not.toBeNull();
+    if (!row) return;
+		const scoreCell = within(row).getAllByRole("cell")[7];
+		const probe = within(scoreCell).getByText("仅探测", { exact: true });
+    expect(probe).toBeVisible();
+    await user.hover(probe);
+    expect(await screen.findByText(/五项得分不参与普通候选排序/)).toBeVisible();
+    expect(screen.queryByText(/15 \+ 16 \+/)).not.toBeInTheDocument();
+
+    await user.click(within(row).getByRole("button", { name: "查看" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByText("仅探测").length).toBeGreaterThanOrEqual(1);
+    expect(within(dialog).getByText("得分不参与普通排序")).toBeVisible();
+    expect(within(dialog).getByText("探测状态")).toBeVisible();
+    expect(within(dialog).queryByText("五项评分")).not.toBeInTheDocument();
   });
 
   it("surfaces route ingress observation and marks TPM as observation only", async () => {

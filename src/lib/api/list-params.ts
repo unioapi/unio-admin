@@ -1,5 +1,7 @@
 /** Admin 列表 REST 查询参数（与后端 snake_case wire 对齐）。 */
 
+import type { Page } from "@/lib/api/types";
+
 /** 服务端列表请求基类。sort 前缀 `-` 表示降序。 */
 export interface ServerListParams {
   page: number;
@@ -43,4 +45,21 @@ export function buildListQuery(
     }
   }
   return out;
+}
+
+const ALL_PAGE_SIZE = 100;
+
+/** 循环读取分页接口，直到收齐服务端报告的全部结果。 */
+export async function collectAllPages<T>(
+  loadPage: (page: number, pageSize: number) => Promise<Page<T>>,
+  pageSize = ALL_PAGE_SIZE,
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const result = await loadPage(page, pageSize);
+    items.push(...result.items);
+    if (items.length >= result.total || result.items.length === 0) {
+      return items;
+    }
+  }
 }

@@ -23,9 +23,32 @@ const ELIGIBILITY_LABELS: Record<string, string> = {
 };
 
 const REASON_LABELS: Record<string, string> = {
+  route_disabled: "线路已停用",
+  route_archived: "线路已归档",
+  provider_disabled: "服务商已停用",
+  provider_archived: "服务商已归档",
+  channel_disabled: "渠道已停用",
+  channel_archived: "渠道已归档",
+  credential_invalid: "渠道凭据无效",
+  credential_missing: "渠道凭据缺失",
+  base_url_missing: "上游地址缺失",
+  protocol_mismatch: "协议不匹配",
+  model_not_found: "模型不存在",
+  model_disabled: "模型已停用",
+  model_archived: "模型已归档",
+  model_not_bound: "渠道未绑定该模型",
+  binding_disabled: "模型绑定已停用",
+  binding_archived: "模型绑定已归档",
+  model_price_missing: "模型售价缺失",
+  channel_cost_missing: "渠道成本缺失",
+  pricing_invalid: "定价配置无效",
+  not_evaluated: "未执行检查",
   cooldown: "处于 429 冷却",
+  rate_limited: "处于限流冷却",
   model_permission_paused: "模型权限暂停",
   negative_margin: "毛利不满足要求",
+  breaker_open: "熔断已打开",
+  breaker_half_open_busy: "半开探测名额已占用",
   provider_breaker_open: "服务商熔断已打开",
   channel_breaker_open: "渠道熔断已打开",
   not_in_candidate_plan: "未进入本次候选计划",
@@ -680,6 +703,21 @@ export function ScoreTip({
   channel: RouteRuntimeChannel;
   compact?: boolean;
 }) {
+  if (channel.eligibility.status === "probe_only") {
+    return (
+      <div className={cn("w-full", compact ? "space-y-2.5" : "space-y-3")}>
+        <TipHeader
+          title="仅探测"
+          subtitle={channel.channel_name}
+          badge={<Badge variant="secondary">Half-open</Badge>}
+        />
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          当前渠道只允许受控探测，不承担普通流量；五项得分不参与普通候选排序。
+        </p>
+      </div>
+    );
+  }
+
   const parts: Array<[string, RouteRuntimeScoreComponent, string]> = [
     ["成本", channel.score.cost, "bg-sky-500/80"],
     ["并发", channel.score.concurrency, "bg-violet-500/80"],

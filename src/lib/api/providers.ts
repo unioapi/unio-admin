@@ -1,4 +1,5 @@
 import { api } from "@/lib/api/client";
+import { collectAllPages } from "@/lib/api/list-params";
 import type { ListMeta, ListParams, Page } from "@/lib/api/types";
 
 export interface Provider {
@@ -37,11 +38,9 @@ async function listProviders(params: ListParams): Promise<Page<Provider>> {
   return { items: res.data.data, total: res.data.meta.total };
 }
 
-// 给「创建渠道」的服务商下拉用：服务商数量天然很少，一次拉满（上限 100）即可，
-// 不需要在选择框里做分页。
+// 给「创建渠道」的服务商下拉用：循环读取全部服务端分页，避免超过 100 条时静默截断。
 export async function listAllProviders(): Promise<Provider[]> {
-  const { items } = await listProviders({ page: 1, pageSize: 100 });
-  return items;
+  return collectAllPages((page, pageSize) => listProviders({ page, pageSize }));
 }
 
 export interface CreateProviderInput {

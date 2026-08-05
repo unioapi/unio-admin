@@ -732,7 +732,7 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <HintLabel hint="仅原绑定渠道完整成功时滑动续期；临时绕行不会改绑或续期，到期后重新按线路策略选择。">
+    <HintLabel hint="读取命中本身不续期；只有原绑定渠道完整成功后把 TTL 重新延长。临时绕行不会改绑或续期，到期后重新按线路策略选择。">
           粘性 TTL
         </HintLabel>
         <DurationInput value={ttl} onChange={setTtl} />

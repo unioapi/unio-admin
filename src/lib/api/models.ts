@@ -1,4 +1,5 @@
 import { api } from "@/lib/api/client";
+import { collectAllPages } from "@/lib/api/list-params";
 import type { ListMeta, ListParams, Page } from "@/lib/api/types";
 
 // 采纳目录追更状态（阶段 14）：未采纳模型为 null。
@@ -58,12 +59,11 @@ async function listModels(
   return { items: res.data.data, total: res.data.meta.total };
 }
 
-// 给「渠道绑定模型」的下拉用：一次拉满（上限 100），默认只取启用中的模型。
+// 给「渠道绑定模型」的下拉用：循环读取全部服务端分页，默认只取启用中的模型。
 export async function listAllModels(
   status: "enabled" | "disabled" = "enabled",
 ): Promise<Model[]> {
-  const { items } = await listModels({ page: 1, pageSize: 100, status });
-  return items;
+  return collectAllPages((page, pageSize) => listModels({ page, pageSize, status }));
 }
 
 // 可选展示元数据（手建可填、采纳带入、刷新覆盖）；价格为十进制字符串，发布日期 YYYY-MM-DD。
