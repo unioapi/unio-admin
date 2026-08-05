@@ -3,7 +3,10 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
 import { listChannelModels } from "@/lib/api/channelModels";
-import { listChannelCostMultipliers } from "@/lib/api/channelCostMultipliers";
+import {
+  listChannelCostMultipliers,
+  pickCurrentChannelCostMultiplier,
+} from "@/lib/api/channelCostMultipliers";
 import {
   listChannelRechargeFactors,
   pickCurrentChannelRechargeFactor,
@@ -333,40 +336,95 @@ function formatMultiplier(value: string | null | undefined): string {
   return trimDecimal(value);
 }
 
-function ChannelMultipliersCell({
+function isActiveMultiplierWindow(
+  effectiveFrom: string,
+  effectiveTo: string | null,
+  atMs: number,
+): boolean {
+  if (new Date(effectiveFrom).getTime() > atMs) return false;
+  if (effectiveTo && new Date(effectiveTo).getTime() <= atMs) return false;
+  return true;
+}
+
+/** 渠道表 / 候选顺序表共用的倍率单元格：`价格倍率 / 充值倍率`，悬浮 tip 含覆盖明细。 */
+export function ChannelMultipliersCell({
   channelId,
-  costMultiplier,
-  costMultiplierOverrides,
-  rechargeFactor,
+  costMultiplier: costMultiplierProp,
+  costMultiplierOverrides: costMultiplierOverridesProp,
+  rechargeFactor: rechargeFactorProp,
+  className,
 }: {
   channelId: number;
-  costMultiplier: string | null;
-  costMultiplierOverrides: number;
-  rechargeFactor: string | null;
+  /** 省略时由 list cost-multipliers 解析当前渠道默认倍率。 */
+  costMultiplier?: string | null;
+  /** 省略时由 list cost-multipliers 统计当前生效的逐模型覆盖条数。 */
+  costMultiplierOverrides?: number;
+  /** 省略时由 list recharge-factors 解析当前充值倍率。 */
+  rechargeFactor?: string | null;
+  className?: string;
 }) {
+  const resolveLocally =
+    costMultiplierProp === undefined ||
+    costMultiplierOverridesProp === undefined ||
+    rechargeFactorProp === undefined;
   const [open, setOpen] = useState(false);
-  const [observedAt, setObservedAt] = useState(0);
+  const [observedAt, setObservedAt] = useState(() => Date.now());
   const multipliersQuery = useQuery({
     queryKey: ["channel-cost-multipliers", channelId],
     queryFn: () => listChannelCostMultipliers(channelId),
-    enabled: open,
+    enabled: open || resolveLocally,
   });
   const factorsQuery = useQuery({
     queryKey: ["channel-recharge-factors", channelId],
     queryFn: () => listChannelRechargeFactors(channelId),
-    enabled: open,
+    enabled: open || resolveLocally,
   });
 
+  const resolvedDefault = pickCurrentChannelCostMultiplier(
+    multipliersQuery.data ?? [],
+    null,
+  );
+  const resolvedOverrideCount = (multipliersQuery.data ?? []).filter((m) => {
+    if (m.model_id == null || m.status !== "enabled") return false;
+    return isActiveMultiplierWindow(
+      m.effective_from,
+      m.effective_to,
+      Date.now(),
+    );
+  }).length;
+  const resolvedRecharge = pickCurrentChannelRechargeFactor(
+    factorsQuery.data ?? [],
+  );
+
+  const costMultiplier =
+    costMultiplierProp !== undefined
+      ? costMultiplierProp
+      : (resolvedDefault?.multiplier ?? null);
+  const costMultiplierOverrides =
+    costMultiplierOverridesProp !== undefined
+      ? costMultiplierOverridesProp
+      : resolvedOverrideCount;
+  const rechargeFactor =
+    rechargeFactorProp !== undefined
+      ? rechargeFactorProp
+      : (resolvedRecharge?.factor ?? null);
+
+  const resolving =
+    resolveLocally &&
+    (multipliersQuery.isLoading || factorsQuery.isLoading) &&
+    !multipliersQuery.data &&
+    !factorsQuery.data;
   const costLabel = formatMultiplier(costMultiplier);
   const rechargeLabel = formatMultiplier(rechargeFactor);
-  const summary = `${costLabel} / ${rechargeLabel}`;
+  const summary = resolving ? "…" : `${costLabel} / ${rechargeLabel}`;
 
   const activeOverrides = (multipliersQuery.data ?? []).filter((m) => {
     if (m.model_id == null || m.status !== "enabled") return false;
-    if (new Date(m.effective_from).getTime() > observedAt) return false;
-    if (m.effective_to && new Date(m.effective_to).getTime() <= observedAt)
-      return false;
-    return true;
+    return isActiveMultiplierWindow(
+      m.effective_from,
+      m.effective_to,
+      observedAt,
+    );
   });
   const currentRecharge = pickCurrentChannelRechargeFactor(
     factorsQuery.data ?? [],
@@ -390,6 +448,7 @@ function ChannelMultipliersCell({
             costMultiplier == null && rechargeFactor == null
               ? "text-muted-foreground"
               : undefined,
+            className,
           )}
         >
           {summary}

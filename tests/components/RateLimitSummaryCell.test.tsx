@@ -9,13 +9,11 @@ describe("RateLimitSummaryCell", () => {
       <>
         <RateLimitSummaryCell
           rpm={null}
-          tpm={null}
           rpd={null}
           defaultScope="渠道"
         />
         <RateLimitSummaryCell
           rpm={null}
-          tpm={null}
           rpd={null}
           defaultScope="线路"
         />
@@ -31,8 +29,7 @@ describe("RateLimitSummaryCell", () => {
     render(
       <RateLimitSummaryCell
         rpm={null}
-        tpm={1_000}
-        rpd={null}
+        rpd={1_000}
         defaultScope="渠道"
       />,
     );
@@ -41,7 +38,7 @@ describe("RateLimitSummaryCell", () => {
     expect(summary).toBeVisible();
     await user.hover(summary);
 
-    expect(await screen.findAllByText("继承渠道默认限流")).toHaveLength(2);
+    expect(await screen.findAllByText("继承渠道默认限流")).toHaveLength(1);
     expect(
       screen.getByText("留空继承渠道默认限流，0 表示不限。"),
     ).toBeVisible();
@@ -52,7 +49,6 @@ describe("RateLimitSummaryCell", () => {
     render(
       <RateLimitSummaryCell
         rpm={60}
-        tpm={null}
         rpd={null}
         concurrency={8}
         scopeLabel="渠道级限流"

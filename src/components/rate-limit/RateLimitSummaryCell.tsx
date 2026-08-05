@@ -35,14 +35,12 @@ function concurrencyDetail(
 
 export function RateLimitSummaryCell({
   rpm,
-  tpm,
   rpd,
   concurrency,
   scopeLabel = "限流",
   defaultScope,
 }: {
   rpm: number | null | undefined;
-  tpm: number | null | undefined;
   rpd: number | null | undefined;
   /** 渠道在途并发；线路级限流无此维时可不传。 */
   concurrency?: number | null;
@@ -52,7 +50,6 @@ export function RateLimitSummaryCell({
   const showConcurrency = concurrency !== undefined;
   if (
     rpm == null &&
-    tpm == null &&
     rpd == null &&
     (!showConcurrency || concurrency == null)
   ) {
@@ -75,10 +72,6 @@ export function RateLimitSummaryCell({
           <li className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">每分钟请求 RPM</span>
             <span className="tabular-nums">{rateLimitDetail(rpm, defaultScope)}</span>
-          </li>
-          <li className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">每分钟 Token TPM</span>
-            <span className="tabular-nums">{rateLimitDetail(tpm, defaultScope)}</span>
           </li>
           <li className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">每日请求 RPD</span>

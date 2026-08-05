@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
-// 限流「数字 + 单位」输入：用于 TPM / RPD 这类量级较大的上限。
+// 限流「数字 + 单位」输入：用于 RPD 这类量级较大的上限。
 // 单位 K=千 / M=百万 / B=十亿，默认 K；入库存真实整数(数字 × 单位)。
 // 语义沿用限流覆盖约定：空=继承调用方对应的默认限流；0=不限(0 × 任意单位仍是 0)。
 

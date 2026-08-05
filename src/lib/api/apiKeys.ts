@@ -12,10 +12,7 @@ export interface ApiKey {
   spend_limit: string | null;
   spent_total: string;
   route_id: number;
-  // 已废弃（DEC-027 限流已归线路，改由所绑线路决定、按 (线路,用户) 计数）；恒为 null，仅兼容旧响应。
-  rpm_limit: number | null;
-  tpm_limit: number | null;
-  rpd_limit: number | null;
+  // 这里没有 Key 级限流：DEC-027 之后限流全部归线路，按 (线路, 用户) 计数。
   last_used_at: string | null;
   expires_at: string | null;
   disabled_at: string | null;

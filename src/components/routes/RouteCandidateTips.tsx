@@ -167,9 +167,15 @@ export function ChannelColumnTip() {
           </li>
           <li>
             <span className="text-foreground/90 font-medium">副行</span>
-            ：服务商 · 协议 · 配置优先级 P（0 最高，100 最低）
+            ：服务商 · 协议 · 配置优先级 P（0 最高，100 最低） · 价格倍率 / 充值倍率
           </li>
         </ul>
+      </TipSection>
+      <TipSection title="倍率">
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          上游名义成本 = 模型基准价 × 价格倍率；真实成本 = 名义成本 × 充值倍率。
+          悬浮倍率数字可看默认倍率、逐模型覆盖与充值明细。
+        </p>
       </TipSection>
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
@@ -301,13 +307,15 @@ export function TrafficColumnTip() {
         <div className="space-y-1.5">
           <TipSummaryRow label="RPM" value="近 1 分钟请求速率" emphasis />
           <TipSummaryRow label="RPD" value="当日累计请求" />
-          <TipSummaryRow label="TPM" value="近 1 分钟 token 速率" />
-          <TipSummaryRow label="Token 覆盖" value="带用量样本的占比" />
+          <TipSummaryRow label="TPM" value="当前分钟观测到的输入 + 输出 token" />
+          <TipSummaryRow label="Token 覆盖" value="拿到可靠 usage 的 attempt 占比" />
         </div>
       </TipSection>
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
           这些数字帮助对照「得分排序」与「实际负载」，本身不会因超限而剔除渠道。限流与满载由并发/熔断等硬门槛负责。
+          TPM 更是彻底没有上限：Unio 不主动限制 token 吞吐，上游容量不足只由真实 429 冷却表达。
+          Token 覆盖偏低说明这一分钟有 attempt 没拿到可靠 usage，对应的 TPM 里还含 Gateway 估算值。
         </p>
       </TipSection>
     </div>
@@ -656,8 +664,8 @@ export function TrafficTip({ channel }: { channel: RouteRuntimeChannel }) {
       </TipSection>
       <TipSection title="口径">
         <p className="text-muted-foreground text-[11px] leading-relaxed">
-          用于对照负载与排序是否匹配。真正的容量门禁看并发与熔断，不看这里的
-          RPM/TPM。
+          用于对照负载与排序是否匹配。真正的容量门禁看并发与熔断，不看这里的 RPM/TPM——
+          其中 TPM 连上限都不存在，只是当前分钟的观测值。
         </p>
       </TipSection>
     </div>

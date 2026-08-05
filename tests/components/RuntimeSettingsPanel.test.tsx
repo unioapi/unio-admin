@@ -38,8 +38,8 @@ function rateLimitSetting(key: string, label: string, revision: number) {
     label,
     description: `${label}说明`,
     hot_reload: true,
-    default: { rpm: 0, tpm: 0, rpd: 0 },
-    value: { rpm: 0, tpm: 0, rpd: 0 },
+    default: { rpm: 0, rpd: 0 },
+    value: { rpm: 0, rpd: 0 },
     source: "redis" as const,
     revision,
     runtime_active_revision: revision,
@@ -55,7 +55,7 @@ describe("RuntimeSettingsPanel", () => {
     mocks.listSettings.mockResolvedValue([
       rateLimitSetting(
         "gateway.route_rate_limit_defaults",
-        "线路默认限流(RPM/TPM/RPD)",
+        "线路默认限流(RPM/RPD)",
         5,
       ),
       {
@@ -132,33 +132,33 @@ describe("RuntimeSettingsPanel", () => {
       await screen.findByText("四个关键运行态控制以 Redis 激活版本为执行依据；其他网关设置由 applier 在约 5 秒内热更新"),
     ).toBeVisible();
 
-    const routeTitle = screen.getByText("线路默认限流(RPM/TPM/RPD)");
+    const routeTitle = screen.getByText("线路默认限流(RPM/RPD)");
     const routeCard = routeTitle.closest('[data-slot="card"]');
     expect(routeCard).not.toBeNull();
     if (!routeCard) return;
 
     expect(
       within(routeCard).getByRole("button", {
-        name: "线路默认限流(RPM/TPM/RPD)说明",
+        name: "线路默认限流(RPM/RPD)说明",
       }),
     ).toBeVisible();
     expect(
-      within(routeCard).queryByText('{"rpm":0,"tpm":0,"rpd":0}'),
+      within(routeCard).queryByText('{"rpm":0,"rpd":0}'),
     ).not.toBeInTheDocument();
     await user.click(
       within(routeCard).getByRole("button", { name: "配置详情" }),
     );
     expect(
-      within(routeCard).getAllByText('{"rpm":0,"tpm":0,"rpd":0}'),
+      within(routeCard).getAllByText('{"rpm":0,"rpd":0}'),
     ).toHaveLength(2);
     expect(within(routeCard).getByText("线路限流命中后直接返回 429")).toBeVisible();
     expect(
       within(routeCard).getByText(
-        /渠道级 RPM、RPD、TPM\s*只作观测，不参与拦截和评分。/,
+        /线路与渠道的 TPM 都只是观测值，不参与拦截和评分。/,
       ),
     ).toBeVisible();
     expect(within(routeCard).getByRole("textbox")).toHaveValue("0");
-    expect(within(routeCard).getAllByRole("spinbutton")).toHaveLength(2);
+    expect(within(routeCard).getAllByRole("spinbutton")).toHaveLength(1);
     for (const input of within(routeCard).getAllByRole("spinbutton")) {
       expect(input).toHaveValue(0);
     }
@@ -167,7 +167,7 @@ describe("RuntimeSettingsPanel", () => {
     await waitFor(() =>
       expect(mocks.updateSetting).toHaveBeenCalledWith(
         "gateway.route_rate_limit_defaults",
-        { rpm: 0, tpm: 0, rpd: 0 },
+        { rpm: 0, rpd: 0 },
       ),
     );
   });

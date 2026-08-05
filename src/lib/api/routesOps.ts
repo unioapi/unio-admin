@@ -19,7 +19,6 @@ export interface RouteOpsRow {
   description: string;
   price_ratio: string;
   rpm_limit: number | null;
-  tpm_limit: number | null;
   rpd_limit: number | null;
   concurrency_limit: number | null;
   created_at: string;
@@ -109,6 +108,7 @@ interface RouteRuntimeSourceStatus {
   sources: RouteRuntimeSource[];
 }
 
+/** 线路当前窗口的入口观测。tpm 是当前分钟观测到的输入+输出 token，没有上限也没有剩余量。 */
 interface RouteUsage {
   concurrency: number;
   rpm: number;
@@ -203,6 +203,7 @@ interface RouteRuntimeQuality {
   error_rate: RouteRuntimeQualityMetric;
 }
 
+/** 渠道当前分钟观测。tpm 只是观测值；token_coverage_pct 是拿到可靠 usage 的 attempt 占比。 */
 interface RouteRuntimeTraffic {
   rpm: number;
   rpd: number;

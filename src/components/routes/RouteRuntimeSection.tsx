@@ -39,6 +39,7 @@ import {
   TTFTColumnTip,
   TTFTTip,
 } from "@/components/routes/RouteCandidateTips";
+import { ChannelMultipliersCell } from "@/components/openstatus-table/channels-os-columns";
 import { useRefreshSettings } from "@/hooks/useRefreshSettings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -259,6 +260,7 @@ export function RouteRuntimeSection({ routeId }: { routeId: number }) {
           ) : (
             <>
               <RuntimeNotice runtime={runtime} />
+              <RouteUsageStrip runtime={runtime} />
               <CandidateTable
                 runtime={runtime}
                 onInspect={setSelectedChannel}
@@ -365,6 +367,46 @@ function RuntimeNotice({ runtime }: { runtime: RouteRuntime }) {
   );
 }
 
+/**
+ * 线路级入口观测（所有用户桶合计，只读）。
+ * 限流上限配在线路上，但准入按 (线路, 用户) 分桶——这里的合计不会直接 429。
+ * TPM 只有观测值：Unio 不限制 token 吞吐，不显示上限也没有剩余量可算。
+ */
+function RouteUsageStrip({ runtime }: { runtime: RouteRuntime }) {
+  const usage = runtime.route_summary.usage;
+  if (!usage) return null;
+  return (
+    <div className="rounded-lg border bg-muted/30 px-4 py-3">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="text-xs font-medium">线路入口观测</span>
+        <HoverCard openDelay={120} closeDelay={80}>
+          <HoverCardTrigger asChild>
+            <InfoIcon
+              aria-label="线路入口观测说明"
+              className="text-muted-foreground size-3.5 cursor-default"
+            />
+          </HoverCardTrigger>
+          <TipHoverCardContent align="start" className="w-72">
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              该线路上全部用户的合计用量，只做观测。限流上限配在线路上，但按
+              (线路, 用户) 分桶执行——每个用户各自撞到并发 / RPM / RPD 才
+              429；这里的合计本身不会触发拦截。TPM 是当前自然分钟观测到的输入 +
+              输出 token，没有上限也不参与拦截。
+            </p>
+          </TipHoverCardContent>
+        </HoverCard>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
+        <DetailValue label="在途并发">{formatInt(usage.concurrency)}</DetailValue>
+        <DetailValue label="RPM">{formatInt(usage.rpm)}</DetailValue>
+        <DetailValue label="RPD">{formatInt(usage.rpd)}</DetailValue>
+        <DetailValue label="TPM（观测）">{formatInt(usage.tpm)}</DetailValue>
+        <DetailValue label="活跃用户">{formatInt(usage.active_users)}</DetailValue>
+      </dl>
+    </div>
+  );
+}
+
 function CandidateTable({
   runtime,
   onInspect,
@@ -378,7 +420,7 @@ function CandidateTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-14">顺序</TableHead>
-            <TableHead className="w-48">
+            <TableHead className="w-56">
               <ColumnLabel label="渠道" tip={<ChannelColumnTip />} />
             </TableHead>
             <TableHead className="w-36">
@@ -419,8 +461,15 @@ function CandidateTable({
                 <TableCell>
                   <div className="min-w-0">
                     <div className="truncate font-medium">{channel.channel_name}</div>
-                    <div className="truncate text-muted-foreground text-xs">
-                      {channel.provider.name} · {channel.protocol} · P{channel.priority}
+                    <div className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
+                      <span className="truncate">
+                        {channel.provider.name} · {channel.protocol} · P{channel.priority}
+                      </span>
+                      <span className="shrink-0">·</span>
+                      <ChannelMultipliersCell
+                        channelId={channel.channel_id}
+                        className="text-muted-foreground shrink-0"
+                      />
                     </div>
                   </div>
                 </TableCell>
@@ -660,7 +709,7 @@ function ChannelDetailSheet({
                     <DetailValue label="错误率样本">{formatInt(channel.quality.error_rate.sample_count)}</DetailValue>
                     <DetailValue label="RPM">{formatInt(channel.traffic.rpm)}</DetailValue>
                     <DetailValue label="RPD">{formatInt(channel.traffic.rpd)}</DetailValue>
-                    <DetailValue label="TPM">{formatInt(channel.traffic.tpm)}</DetailValue>
+                    <DetailValue label="TPM（观测）">{formatInt(channel.traffic.tpm)}</DetailValue>
                     <DetailValue label="Token 覆盖">{formatPercentPoints(channel.traffic.token_coverage_pct)}</DetailValue>
                   </dl>
                 </DetailSection>

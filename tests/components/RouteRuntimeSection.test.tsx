@@ -11,12 +11,34 @@ const mocks = vi.hoisted(() => ({
   getModels: vi.fn(),
   getRuntime: vi.fn(),
   requestsList: vi.fn(),
+  listCostMultipliers: vi.fn(),
+  listRechargeFactors: vi.fn(),
 }));
 
 vi.mock("@/lib/api/routesOps", () => ({
   getRouteOpsReachableModels: mocks.getModels,
   getRouteRuntime: mocks.getRuntime,
 }));
+
+vi.mock("@/lib/api/channelCostMultipliers", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/api/channelCostMultipliers")
+  >("@/lib/api/channelCostMultipliers");
+  return {
+    ...actual,
+    listChannelCostMultipliers: mocks.listCostMultipliers,
+  };
+});
+
+vi.mock("@/lib/api/channelRechargeFactors", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/api/channelRechargeFactors")
+  >("@/lib/api/channelRechargeFactors");
+  return {
+    ...actual,
+    listChannelRechargeFactors: mocks.listRechargeFactors,
+  };
+});
 
 vi.mock("@/components/requests/RequestsList", () => ({
   RequestsList: (props: unknown) => {
@@ -227,13 +249,42 @@ describe("RouteRuntimeSection objective_v1", () => {
     mocks.getModels.mockReset();
     mocks.getRuntime.mockReset();
     mocks.requestsList.mockReset();
+    mocks.listCostMultipliers.mockReset();
+    mocks.listRechargeFactors.mockReset();
     mocks.getModels.mockResolvedValue([
       { model_id: "openai/gpt-test", display_name: "GPT Test" },
     ]);
     mocks.getRuntime.mockResolvedValue(runtimeFixture());
+    mocks.listCostMultipliers.mockImplementation(async (channelId: number) => [
+      {
+        id: channelId * 10,
+        channel_id: channelId,
+        model_id: null,
+        model_external_id: null,
+        model_display_name: null,
+        multiplier: channelId === 10 ? "0.10" : "0.20",
+        status: "enabled",
+        effective_from: "2026-01-01T00:00:00Z",
+        effective_to: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    mocks.listRechargeFactors.mockResolvedValue([
+      {
+        id: 1,
+        channel_id: 10,
+        factor: "1",
+        status: "enabled",
+        effective_from: "2026-01-01T00:00:00Z",
+        effective_to: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    ]);
   });
 
-  it("renders the fixed ten-column candidate table and removes recent decisions", async () => {
+  it("renders the fixed ten-column candidate table with multipliers in channel subtitle", async () => {
     renderSection();
 
     expect(await screen.findByText("primary", { exact: true })).toBeVisible();
@@ -256,6 +307,8 @@ describe("RouteRuntimeSection objective_v1", () => {
     const row = primary.closest("tr");
     expect(row).not.toBeNull();
     if (!row) return;
+    expect(await within(row).findByText("0.1 / 1")).toBeVisible();
+    expect(within(row).getByText(/provider-a · openai · P10/)).toBeVisible();
     expect(within(row).getByText("12 RPM")).toBeVisible();
     expect(within(row).getByText("1.25s")).toBeVisible();
     await waitFor(() =>
@@ -280,6 +333,28 @@ describe("RouteRuntimeSection objective_v1", () => {
     expect(within(row).getByText("无资格")).toBeVisible();
     expect(within(row).getByText("服务商disabled")).toBeVisible();
     expect(within(row).getByText("无样本")).toBeVisible();
+  });
+
+  it("surfaces route ingress observation and marks TPM as observation only", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    const label = await screen.findByText("线路入口观测");
+    const strip = label.closest("div")?.parentElement;
+    expect(strip).not.toBeNull();
+    if (!strip) return;
+    expect(within(strip).getByText("在途并发")).toBeVisible();
+    expect(within(strip).getByText("2")).toBeVisible();
+    expect(within(strip).getByText("活跃用户")).toBeVisible();
+    // TPM 必须明确标成观测：它没有上限，也不参与准入。
+    expect(within(strip).getByText("TPM（观测）")).toBeVisible();
+    expect(within(strip).getByText("8,000")).toBeVisible();
+    await user.hover(within(strip).getByLabelText("线路入口观测说明"));
+    expect(
+      await screen.findByText(/按 \(线路, 用户\) 分桶执行/),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/TPM 是当前自然分钟观测到的输入 \+ 输出 token，没有上限也不参与拦截。/),
+    ).toBeVisible();
   });
 
   it("explains the five-part score calculation", async () => {

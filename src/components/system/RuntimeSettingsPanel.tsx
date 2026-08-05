@@ -50,7 +50,7 @@ import {
 // 启动 seed 写入 DB 后行即固化，后续代码默认值升级不会自动跟进，靠此标记提示人工决策。
 //
 // 单位约定（与渠道配置对齐）：时长一律「数字 + 时间单位下拉」入库 int 毫秒；
-// 线路 TPM/RPD 用「数字 + K/M/B」（rate-limit-input）。
+// 线路 RPD 用「数字 + K/M/B」（rate-limit-input）。
 
 const SOURCE_LABEL: Record<string, string> = {
   redis: "Redis 实时源（消费方秒级读到）",
@@ -744,9 +744,9 @@ function RoutingStickyEditor({ item }: { item: SettingItem }) {
 
 // ---- gateway.route_rate_limit_defaults ----
 
+// 线路默认限流只有 RPM 与 RPD：Unio 不限制 TPM，token 吞吐只做观测。
 interface RateLimitValue {
   rpm: number;
-  tpm: number;
   rpd: number;
 }
 
@@ -754,9 +754,6 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
   const server = item.value as RateLimitValue;
   const defaults = item.default as RateLimitValue;
   const [rpm, setRpm] = useState(String(server.rpm));
-  const [tpm, setTpm] = useState<RateLimitFieldValue>(() =>
-    decomposeRateLimit(server.tpm),
-  );
   const [rpd, setRpd] = useState<RateLimitFieldValue>(() =>
     decomposeRateLimit(server.rpd),
   );
@@ -764,16 +761,12 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
 
   const reset = () => {
     setRpm(String(defaults.rpm));
-    setTpm(decomposeRateLimit(defaults.tpm));
     setRpd(decomposeRateLimit(defaults.rpd));
   };
 
   const save = () => {
     // 默认值没有「继承」语义（它就是兜底），故不允许留空；0=不限。
-    for (const [label, v] of [
-      ["TPM", tpm],
-      ["RPD", rpd],
-    ] as const) {
+    for (const [label, v] of [["RPD", rpd]] as const) {
       const err = rateLimitWithUnitError(v);
       if (err) {
         toast.error(`${label}：${err}`);
@@ -786,7 +779,6 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
     }
     mutation.mutate({
       rpm: Number(rpm),
-      tpm: composeRateLimit(tpm) as number,
       rpd: composeRateLimit(rpd) as number,
     } satisfies RateLimitValue);
   };
@@ -801,10 +793,6 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
           inputMode="numeric"
         />
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">TPM（token/分钟，0=不限）</Label>
-          <RateLimitInput value={tpm} onChange={setTpm} placeholder="0" />
-        </div>
-        <div className="flex flex-col gap-1.5">
           <Label className="text-xs">RPD（次/天，0=不限）</Label>
           <RateLimitInput value={rpd} onChange={setRpd} placeholder="0" />
         </div>
@@ -812,9 +800,9 @@ function RateLimitEditor({ item }: { item: SettingItem }) {
       <Alert>
         <AlertTitle>线路限流命中后直接返回 429</AlertTitle>
         <AlertDescription>
-          在线路未单独设置限额时使用；RPM/RPD 在请求入口执行，TPM
-          在候选估算后、上游调用前执行。命中均直接返回 429；渠道级 RPM、RPD、TPM
-          只作观测，不参与拦截和评分。
+          在线路未单独设置限额时使用；RPM 与 RPD 都在请求入口执行，命中直接返回 429。
+          这里没有 TPM：Unio 不主动限制 token 吞吐，上游容量不足只由真实 429、渠道冷却和熔断表达；
+          线路与渠道的 TPM 都只是观测值，不参与拦截和评分。
         </AlertDescription>
       </Alert>
       <SaveReset saving={mutation.isPending} onSave={save} onReset={reset} />

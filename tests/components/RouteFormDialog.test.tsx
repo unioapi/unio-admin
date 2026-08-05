@@ -68,7 +68,7 @@ describe("RouteFormDialog", () => {
         <RouteFormDialog open onOpenChange={vi.fn()} route={null} onSaved={vi.fn()} />
       </TestProviders>,
     );
-    expect(screen.getAllByPlaceholderText("继承线路默认限流")).toHaveLength(3);
+    expect(screen.getAllByPlaceholderText("继承线路默认限流")).toHaveLength(2);
     expect(screen.getByPlaceholderText("继承全局并发")).toBeVisible();
     expect(screen.queryByText("会话粘性")).not.toBeInTheDocument();
 
@@ -158,7 +158,6 @@ describe("RouteFormDialog", () => {
             status: "enabled",
             price_ratio: "1",
             rpm_limit: null,
-            tpm_limit: null,
             rpd_limit: null,
             concurrency_limit: null,
             description: null,

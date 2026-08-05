@@ -18,8 +18,8 @@ export interface Route {
   // price_ratio 客户售价倍率（DEC-026：客户售价 = 模型基准价 × 倍率），十进制字符串。
   price_ratio: string;
   // 线路级限流（按 (线路,用户) 计数）：null=继承默认，0=不限，>0=具体上限。
+  // 没有 TPM：Unio 不限制 token 吞吐，只在运行态里做观测。
   rpm_limit: number | null;
-  tpm_limit: number | null;
   rpd_limit: number | null;
   concurrency_limit: number | null;
   description: string | null;
@@ -46,7 +46,6 @@ export interface CreateRouteInput {
   price_ratio: string; // 客户售价倍率（十进制字符串，空=默认 1.0）
   // 线路级限流：null=继承默认，0=不限，>0=具体上限。
   rpm_limit: number | null;
-  tpm_limit: number | null;
   rpd_limit: number | null;
   concurrency_limit: number | null;
   description: string | null;

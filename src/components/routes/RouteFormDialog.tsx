@@ -107,11 +107,9 @@ function RouteForm({
   const [mode, setMode] = useState<RouteMode>(route?.mode ?? "balanced");
   const [status, setStatus] = useState(route?.status ?? "enabled");
   const [priceRatio, setPriceRatio] = useState(() => formatRouteRatioInput(route?.price_ratio));
-  // 线路级限流（DEC-027）：RPM 量级小用普通输入；TPM/RPD 量级大用「数字+单位 K/M/B」。
+  // 线路级限流（DEC-027）：RPM 量级小用普通输入；RPD 量级大用「数字+单位 K/M/B」。
+  // 没有 TPM：Unio 不限制 token 吞吐，运行态里只做观测。
   const [rpmLimit, setRpmLimit] = useState(rateLimitToInput(route?.rpm_limit));
-  const [tpmLimit, setTpmLimit] = useState<RateLimitFieldValue>(
-    decomposeRateLimit(route?.tpm_limit),
-  );
   const [rpdLimit, setRpdLimit] = useState<RateLimitFieldValue>(
     decomposeRateLimit(route?.rpd_limit),
   );
@@ -150,7 +148,6 @@ function RouteForm({
         status,
         price_ratio: formatRouteRatioInput(priceRatio),
         rpm_limit: parseIntegerLimit(rpmLimit),
-        tpm_limit: composeRateLimit(tpmLimit),
         rpd_limit: composeRateLimit(rpdLimit),
         concurrency_limit: parseIntegerLimit(concurrencyLimit),
         description: description.trim() || null,
@@ -174,8 +171,6 @@ function RouteForm({
     }
     const rpmErr = integerLimitError(rpmLimit, "继承线路默认限流");
     if (rpmErr) next.rpm_limit = rpmErr;
-    const tpmErr = rateLimitWithUnitError(tpmLimit, "继承线路默认限流");
-    if (tpmErr) next.tpm_limit = tpmErr;
     const rpdErr = rateLimitWithUnitError(rpdLimit, "继承线路默认限流");
     if (rpdErr) next.rpd_limit = rpdErr;
     const concurrencyErr = integerLimitError(concurrencyLimit, "继承全局线路用户并发");
@@ -359,7 +354,7 @@ function RouteForm({
             线路级限流
           </HintLabel>
           <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field data-invalid={!!errors.rpm_limit}>
                 <HintLabel htmlFor="rt_rpm" hint="每分钟请求数。">
                   RPM
@@ -374,19 +369,6 @@ function RouteForm({
                   aria-invalid={!!errors.rpm_limit}
                 />
                 <FieldError>{errors.rpm_limit}</FieldError>
-              </Field>
-              <Field data-invalid={!!errors.tpm_limit}>
-                <HintLabel htmlFor="rt_tpm" hint="每分钟 token 数。">
-                  TPM
-                </HintLabel>
-                <RateLimitInput
-                  id="rt_tpm"
-                  value={tpmLimit}
-                  onChange={setTpmLimit}
-                  ariaInvalid={!!errors.tpm_limit}
-                  placeholder="继承线路默认限流"
-                />
-                <FieldError>{errors.tpm_limit}</FieldError>
               </Field>
               <Field data-invalid={!!errors.rpd_limit}>
                 <HintLabel htmlFor="rt_rpd" hint="每日请求数。">

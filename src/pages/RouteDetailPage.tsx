@@ -155,7 +155,7 @@ function RouteContextCards({
             <ContextValue label="绑定渠道">{formatInt(route.channels.length)}</ContextValue>
             <ContextValue label="并发">{formatLimit(route.concurrency_limit)}</ContextValue>
             <ContextValue label="RPM">{formatLimit(route.rpm_limit)}</ContextValue>
-            <ContextValue label="RPD / TPM">{formatLimit(route.rpd_limit)} / {formatLimit(route.tpm_limit)}</ContextValue>
+            <ContextValue label="RPD">{formatLimit(route.rpd_limit)}</ContextValue>
           </dl>
         </CardContent>
       </Card>
