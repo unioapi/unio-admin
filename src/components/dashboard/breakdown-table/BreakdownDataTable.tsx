@@ -37,6 +37,8 @@ function autoSizeValue(row: BreakdownRow, columnId: string) {
       return row.label;
     case "status":
       return row.status === "enabled" ? "启用" : row.status === "disabled" ? "停用" : row.status;
+    case "balance":
+      return row.balance_usd == null ? "未设置" : formatUSD(row.balance_usd);
     case "requests":
       return formatCompact(row.terminal);
     case "succeeded":
@@ -155,8 +157,13 @@ export function BreakdownDataTable({
           按 API Key / 用户当前线路绑定归因，变更绑定后历史会重算。
         </p>
       ) : null}
+      {dimension === "provider" ? (
+        <p className="text-muted-foreground text-xs tabular-nums">
+          当前低余额服务商 {q.data?.low_balance_provider_count ?? 0} 个
+        </p>
+      ) : null}
       <ConfigurableDataTable
-        storageKey={`breakdown:${dimension}:content-v4`}
+        storageKey={`breakdown:${dimension}:content-v5`}
         data={q.data?.rows ?? []}
         columns={columns}
         columnLabels={columnLabels}

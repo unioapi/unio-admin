@@ -11,6 +11,7 @@ import { STATUS_LABEL } from "@/components/dashboard/breakdown-table/constants";
 import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/tablecn/data-table-column-header";
+import { ProviderBalanceDisplay } from "@/components/providers/ProviderBalanceDisplay";
 import { TruncateCell } from "./truncate-cell";
 import type { FacetOption } from "./types";
 
@@ -19,6 +20,10 @@ const PROVIDER_STATUS_OPTIONS: FacetOption[] = [
   { value: "enabled", label: "启用" },
   { value: "disabled", label: "停用" },
   { value: "archived", label: "已归档" },
+];
+
+const PROVIDER_BALANCE_OPTIONS: FacetOption[] = [
+  { value: "low", label: "低余额" },
 ];
 
 function toProvider(row: ProviderOpsRow): Provider {
@@ -82,6 +87,27 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
+    },
+    {
+      id: "balance",
+      accessorKey: "balance_usd",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="余额" />
+      ),
+      enableSorting: false,
+      enableColumnFilter: true,
+      meta: {
+        label: "余额",
+        variant: "select",
+        options: PROVIDER_BALANCE_OPTIONS,
+      },
+      cell: ({ row }) => (
+        <ProviderBalanceDisplay
+          balance={row.original.balance_usd}
+          status={row.original.balance_status}
+          compact
+        />
+      ),
     },
     {
       id: "origin",
@@ -155,7 +181,13 @@ export function providerOsColumns(): ColumnDef<ProviderOpsRow, unknown>[] {
       header: () => <span className="text-muted-foreground">操作</span>,
       enableHiding: false,
       enableSorting: false,
-      cell: ({ row }) => <ProviderRowActions provider={toProvider(row.original)} />,
+      cell: ({ row }) => (
+        <ProviderRowActions
+          provider={toProvider(row.original)}
+          balance={row.original.balance_usd}
+          balanceStatus={row.original.balance_status}
+        />
+      ),
     },
   ];
 }

@@ -30,6 +30,8 @@ import {
 import { PerformanceCharts, type PerfPoint } from "@/components/common/PerformanceCharts";
 import { ProviderRuntimeSection } from "@/components/providers/ProviderRuntimeSection";
 import type { Provider } from "@/lib/api/providers";
+import { ProviderLedgerSection } from "@/components/providers/ProviderLedgerSection";
+import { ProviderCostRiskSection } from "@/components/providers/ProviderCostRiskSection";
 
 const PAGE_SIZE = 10;
 
@@ -48,6 +50,16 @@ export function ProviderDetailContent({
         id: "configuration",
         label: "配置与运行态",
         content: <ProviderRuntimeSection provider={provider} />,
+      },
+      {
+        id: "cost-risks",
+        label: "待对账成本",
+        content: <ProviderCostRiskSection providerId={providerId} />,
+      },
+      {
+        id: "ledger",
+        label: "账本",
+        content: <ProviderLedgerSection providerId={providerId} range={range} />,
       },
       {
         id: "channels",

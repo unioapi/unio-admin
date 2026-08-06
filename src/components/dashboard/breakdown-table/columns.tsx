@@ -22,6 +22,7 @@ import { RevenueTip } from "@/components/dashboard/RevenueTip";
 import { TipHoverCardContent } from "@/components/dashboard/TipHoverCardContent";
 import { ChannelSuccessRateCell } from "@/components/common/ChannelSuccessRateCell";
 import { AttemptLatencyCell } from "@/components/table-cells/AttemptLatencyCell";
+import { ProviderBalanceDisplay } from "@/components/providers/ProviderBalanceDisplay";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
@@ -99,6 +100,18 @@ export function createBreakdownColumns(
       accessorKey: "status",
       header: "状态",
       cell: ({ row }) => breakdownStatusBadge(row.original.status),
+    },
+    balance: {
+      ...columnMeta("balance"),
+      accessorKey: "balance_usd",
+      header: "当前余额",
+      cell: ({ row }) => (
+        <ProviderBalanceDisplay
+          balance={row.original.balance_usd}
+          status={row.original.balance_status || "unconfigured"}
+          compact
+        />
+      ),
     },
     requests: {
       ...columnMeta("requests"),

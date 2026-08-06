@@ -162,6 +162,9 @@ export interface BreakdownRow {
   label: string;
   ref_id: number | null;
   status: string;
+  /** Provider 当前 USD 余额；与查询时间范围无关。 */
+  balance_usd: string | null;
+  balance_status: "unconfigured" | "normal" | "low" | "negative" | "";
   terminal: number;
   succeeded: number;
   failed: number;
@@ -196,6 +199,8 @@ export interface SuccessBucket {
 export interface BreakdownResult {
   dimension: BreakdownDimension;
   rows: BreakdownRow[];
+  /** 当前低余额及负余额 Provider 总数；仅 provider 维度返回。 */
+  low_balance_provider_count?: number;
 }
 
 export interface ErrorGroup {

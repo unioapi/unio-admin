@@ -14,12 +14,16 @@ export interface ProviderOpsRow {
   status: string;
   status_revision: number;
   created_at: string;
+  balance_usd: string | null;
+  balance_status: ProviderBalanceStatus;
   channel_total: number;
   models_count: number;
   routes_count: number;
 }
 
 export interface ProviderOpsDetail {
+  balance_usd: string | null;
+  balance_status: ProviderBalanceStatus;
   channel_total: number;
   channel_enabled: number;
   attempt_total: number;
@@ -33,6 +37,12 @@ export interface ProviderOpsDetail {
   margin_usd: string;
   avg_tps: number;
 }
+
+export type ProviderBalanceStatus =
+  | "unconfigured"
+  | "normal"
+  | "low"
+  | "negative";
 
 export interface ProviderOpsChannelCatalogItem {
   id: number;
@@ -85,6 +95,7 @@ export interface ProvidersOpsTableParams extends RangeQuery {
   sort?: string;
   status?: string;
   search?: string;
+  low_balance?: boolean;
 }
 
 export async function getProvidersOpsTable(

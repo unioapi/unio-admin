@@ -13,6 +13,8 @@ import { apiErrorMessage, apiErrorStatus } from "@/lib/api/client";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
 import { ProviderFormDialog } from "@/components/providers/ProviderFormDialog";
+import { ProviderBalanceDialog } from "@/components/providers/ProviderBalanceDialog";
+import type { ProviderBalanceStatus } from "@/lib/api/providersOps";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
@@ -21,12 +23,21 @@ import {
   HoverDropdownMenuTrigger,
 } from "@/components/ui/hover-dropdown-menu";
 
-export function ProviderRowActions({ provider }: { provider: Provider }) {
+export function ProviderRowActions({
+  provider,
+  balance,
+  balanceStatus,
+}: {
+  provider: Provider;
+  balance: string | null;
+  balanceStatus: ProviderBalanceStatus;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [balanceOpen, setBalanceOpen] = useState(false);
   const queryClient = useQueryClient();
   const archived = provider.status === "archived";
 
@@ -99,6 +110,7 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
             <Button variant="ghost" size="icon-sm" aria-label="更多"><EllipsisIcon /></Button>
           </HoverDropdownMenuTrigger>
           <HoverDropdownMenuContent align="end" className="min-w-36">
+            <DropdownMenuItem onClick={() => openDialog(setBalanceOpen)}>调整余额</DropdownMenuItem>
             {archived ? (
               <>
                 <DropdownMenuItem onClick={() => { setMenuOpen(false); restore.mutate(); }}>恢复</DropdownMenuItem>
@@ -120,6 +132,14 @@ export function ProviderRowActions({ provider }: { provider: Provider }) {
       </div>
 
       <ProviderFormDialog provider={provider} open={editOpen} onOpenChange={setEditOpen} />
+      <ProviderBalanceDialog
+        providerId={provider.id}
+        providerName={provider.name}
+        balance={balance}
+        balanceStatus={balanceStatus}
+        open={balanceOpen}
+        onOpenChange={setBalanceOpen}
+      />
       <DeleteProviderDialog provider={provider} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ConfirmActionDialog
         open={statusOpen}

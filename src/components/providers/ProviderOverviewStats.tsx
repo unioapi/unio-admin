@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatCompact, formatTPS, formatUSD } from "@/lib/format";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProviderBalanceDisplay } from "@/components/providers/ProviderBalanceDisplay";
 
 function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -37,7 +38,17 @@ function profitClass(marginUsd: string, th: MetricThresholds, revenueUsd?: strin
 export function ProviderOverviewStats({ detail }: { detail: ProviderOpsDetail }) {
   const th = useMetricThresholds();
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      <Stat
+        label="当前余额"
+        value={
+          <ProviderBalanceDisplay
+            balance={detail.balance_usd}
+            status={detail.balance_status}
+            compact
+          />
+        }
+      />
       <Stat label="渠道" value={`${detail.channel_enabled}/${detail.channel_total}`} />
       <Stat
         label="成功率"
@@ -98,8 +109,8 @@ export function ProviderOverviewStats({ detail }: { detail: ProviderOpsDetail })
 
 export function ProviderOverviewStatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      {Array.from({ length: 6 }).map((_, i) => (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      {Array.from({ length: 7 }).map((_, i) => (
         <Skeleton key={i} className="h-[62px] w-full rounded-md" />
       ))}
     </div>

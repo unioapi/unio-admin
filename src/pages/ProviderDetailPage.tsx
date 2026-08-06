@@ -12,6 +12,9 @@ import {
 } from "@/components/providers/ProviderOverviewStats";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { WalletCardsIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ProviderBalanceDialog } from "@/components/providers/ProviderBalanceDialog";
 
 export function ProviderDetailPage() {
   const { providerId: providerIdParam } = useParams();
@@ -63,12 +66,27 @@ export function ProviderDetailPage() {
         }
         subtitle={providerEntity ? providerEntity.slug : null}
         actions={
-          <RangeFilter
-            value={value}
-            onChange={setRange}
-            refreshedAt={refreshedAt}
-            onRefresh={refresh}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {providerEntity && opsDetail.data ? (
+              <ProviderBalanceDialog
+                providerId={providerEntity.id}
+                providerName={providerEntity.name}
+                balance={opsDetail.data.balance_usd}
+                balanceStatus={opsDetail.data.balance_status}
+              >
+                <Button variant="outline" size="sm">
+                  <WalletCardsIcon data-icon="inline-start" />
+                  调整余额
+                </Button>
+              </ProviderBalanceDialog>
+            ) : null}
+            <RangeFilter
+              value={value}
+              onChange={setRange}
+              refreshedAt={refreshedAt}
+              onRefresh={refresh}
+            />
+          </div>
         }
         summary={providerEntity ? overviewSummary : null}
       />

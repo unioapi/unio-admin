@@ -47,6 +47,10 @@ export function ProvidersPage() {
     parseAsArrayOf(parseAsString).withDefault([]),
   );
   const [nameFilter] = useQueryState("name", parseAsString.withDefault(""));
+  const [balanceFilter] = useQueryState(
+    "balance",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
 
   // 首屏 URL 无 status 时按「启用」查；用户清空筛选后保持空（看全部）。
   const status =
@@ -56,6 +60,7 @@ export function ProvidersPage() {
       : "");
   const search = nameFilter.trim();
   const sort = sortingToApiSort(sorting);
+  const lowBalance = balanceFilter.includes("low");
 
   const columns = useMemo(() => providerOsColumns(), []);
 
@@ -63,7 +68,7 @@ export function ProvidersPage() {
     queryKey: [
       "providers",
       "tablecn",
-      { status, search, page, perPage, sort },
+      { status, search, lowBalance, page, perPage, sort },
     ],
     queryFn: () =>
       getProvidersOpsTable({
@@ -73,6 +78,7 @@ export function ProvidersPage() {
         sort,
         status: status || undefined,
         search: search || undefined,
+        low_balance: lowBalance || undefined,
       }),
     placeholderData: keepPreviousData,
   });

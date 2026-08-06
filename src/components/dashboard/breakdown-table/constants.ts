@@ -3,6 +3,7 @@ import type { BreakdownDimension } from "@/lib/api/dashboard";
 export type BreakdownColumnId =
   | "name"
   | "status"
+  | "balance"
   | "requests"
   | "succeeded"
   | "failed"
@@ -28,6 +29,7 @@ export const BREAKDOWN_COLUMNS: Record<
   provider: [
     "name",
     "status",
+    "balance",
     "channels",
     "requests",
     "success_rate",
@@ -69,6 +71,7 @@ const BREAKDOWN_COLUMN_LABEL: Record<
   string
 > = {
   status: "状态",
+  balance: "当前余额",
   requests: "请求",
   succeeded: "成功",
   failed: "失败",
@@ -84,6 +87,7 @@ const BREAKDOWN_COLUMN_LABEL: Record<
 export const BREAKDOWN_COLUMN_SIZE: Record<BreakdownColumnId, number> = {
   name: 160,
   status: 72,
+  balance: 140,
   requests: 80,
   succeeded: 80,
   failed: 80,
@@ -100,6 +104,7 @@ export const BREAKDOWN_COLUMN_SIZE: Record<BreakdownColumnId, number> = {
 export const BREAKDOWN_COLUMN_MIN_SIZE: Record<BreakdownColumnId, number> = {
   name: 120,
   status: 64,
+  balance: 120,
   requests: 64,
   succeeded: 64,
   failed: 64,
