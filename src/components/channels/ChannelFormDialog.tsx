@@ -51,16 +51,24 @@ export function ChannelFormDialog({
   open,
   onOpenChange,
   channel,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   channel?: Channel;
+  onSaved?: (channel: Channel) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
         {open && (
-          <ChannelForm channel={channel} onDone={() => onOpenChange(false)} />
+          <ChannelForm
+            channel={channel}
+            onDone={(saved) => {
+              onOpenChange(false);
+              onSaved?.(saved);
+            }}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -112,7 +120,7 @@ function ChannelForm({
   onDone,
 }: {
   channel?: Channel;
-  onDone: () => void;
+  onDone: (saved: Channel) => void;
 }) {
   const isEdit = !!channel;
   const queryClient = useQueryClient();
@@ -128,7 +136,7 @@ function ChannelForm({
     channel?.adapter_key ?? initialProtocol,
   );
   const [credential, setCredential] = useState("");
-  const [status, setStatus] = useState(channel?.status ?? "enabled");
+  const [status, setStatus] = useState(channel?.status ?? "disabled");
   const [priority, setPriority] = useState(String(channel?.priority ?? 0));
   const [responseTimeoutMs, setResponseTimeoutMs] = useState(
     channel?.response_timeout_ms != null
@@ -252,7 +260,7 @@ function ChannelForm({
       toast.success(
         isEdit ? `已保存「${saved.name}」` : `已创建渠道「${saved.name}」`,
       );
-      onDone();
+      onDone(saved);
     },
     onError: (err) => {
       if (apiErrorStatus(err) === 409) {
@@ -527,12 +535,13 @@ function ChannelForm({
                 </HintLabel>
                 <Input
                   id="credential"
+                  name="upstream-credential"
                   type="password"
                   value={credential}
                   onChange={(e) => setCredential(e.target.value)}
                   placeholder="sk-..."
                   aria-invalid={!!errors.credential}
-                  autoComplete="off"
+                  autoComplete="new-password"
                 />
                 <FieldError>{errors.credential}</FieldError>
               </Field>

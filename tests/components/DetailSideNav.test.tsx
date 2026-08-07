@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DetailSideNav } from "@/components/common/DetailSideNav";
 
 const sections = [
@@ -34,5 +34,32 @@ describe("DetailSideNav", () => {
     );
     expect(screen.getByText("性能内容")).toBeVisible();
     expect(screen.queryByText("运行态内容")).not.toBeInTheDocument();
+  });
+
+  it("supports a controlled section for URL-backed navigation", async () => {
+    const onValueChange = vi.fn();
+    const { rerender } = render(
+      <DetailSideNav
+        sections={sections}
+        value="performance"
+        onValueChange={onValueChange}
+        orientation="horizontal"
+      />,
+    );
+
+    expect(screen.getByText("性能内容")).toBeVisible();
+    await userEvent.click(screen.getByRole("tab", { name: "渠道池" }));
+    expect(onValueChange).toHaveBeenCalledWith("pool");
+    expect(screen.getByText("性能内容")).toBeVisible();
+
+    rerender(
+      <DetailSideNav
+        sections={sections}
+        value="pool"
+        onValueChange={onValueChange}
+        orientation="horizontal"
+      />,
+    );
+    expect(screen.getByText("渠道池内容")).toBeVisible();
   });
 });

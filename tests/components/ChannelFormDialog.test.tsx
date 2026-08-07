@@ -78,6 +78,24 @@ describe("ChannelFormDialog Provider binding", () => {
     mocks.updateChannel.mockResolvedValue(channel);
   });
 
+  it("defaults a new channel to disabled", async () => {
+    mocks.listAdapterKeys.mockResolvedValue([
+      { protocol: "openai", adapter_key: "openai", is_default: true },
+    ]);
+
+    render(
+      <TestProviders>
+        <ChannelFormDialog open onOpenChange={vi.fn()} />
+      </TestProviders>,
+    );
+
+    expect(await screen.findByRole("combobox", { name: "状态" })).toHaveTextContent("停用");
+    expect(document.querySelector("#credential")).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+  });
+
   it("shows Provider origin as read-only and submits capacity and timeout settings", async () => {
     const user = userEvent.setup();
     render(

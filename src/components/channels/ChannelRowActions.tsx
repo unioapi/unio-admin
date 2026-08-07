@@ -14,7 +14,6 @@ import { apiErrorMessage, apiErrorStatus } from "@/lib/api/client";
 import { StatusChangeConfirmDialog } from "@/components/common/StatusChangeConfirmDialog";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { ChannelFormDialog } from "@/components/channels/ChannelFormDialog";
-import { ChannelModelsDialog } from "@/components/channels/ChannelModelsDialog";
 import { ChannelTestDialog } from "@/components/channels/ChannelTestDialog";
 import { ChannelPricesDialog } from "@/components/channels/ChannelPricesDialog";
 import { ChannelCostMultiplierDialog } from "@/components/channels/ChannelCostMultiplierDialog";
@@ -31,7 +30,6 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
   const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [modelsOpen, setModelsOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
   const [costMultOpen, setCostMultOpen] = useState(false);
   const [credOpen, setCredOpen] = useState(false);
@@ -41,7 +39,6 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
 
   const needChannel =
     editOpen ||
-    modelsOpen ||
     pricesOpen ||
     costMultOpen ||
     credOpen ||
@@ -169,7 +166,9 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
                 <DropdownMenuItem disabled={!channel} onClick={requestStatusChange}>
                   {channel?.status === "enabled" ? "停用" : "启用"}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openDialog(setModelsOpen)}>管理模型</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={`/channels/${channelId}?section=models`}>管理模型</Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(setCostMultOpen)}>成本倍率</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(setPricesOpen)}>成本覆盖</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(setCredOpen)}>修改APIKey</DropdownMenuItem>
@@ -186,7 +185,6 @@ export function ChannelRowActions({ channelId }: { channelId: number }) {
         <>
           <ChannelFormDialog open={editOpen} onOpenChange={setEditOpen} channel={channel} />
           <ChannelTestDialog open={testOpen} onOpenChange={setTestOpen} channel={channel} />
-          <ChannelModelsDialog open={modelsOpen} onOpenChange={setModelsOpen} channel={channel} />
           <ChannelPricesDialog open={pricesOpen} onOpenChange={setPricesOpen} channel={channel} />
           <ChannelCostMultiplierDialog open={costMultOpen} onOpenChange={setCostMultOpen} channel={channel} />
           <RotateCredentialDialog open={credOpen} onOpenChange={setCredOpen} channel={channel} />

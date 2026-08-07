@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { getChannel } from "@/lib/api/channels";
@@ -40,6 +40,19 @@ export function ChannelDetailPage() {
   const validId = Number.isFinite(channelId) && channelId > 0;
   const queryClient = useQueryClient();
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = searchParams.get("section") ?? "overview";
+  const setup = searchParams.get("setup") === "1";
+
+  function setSection(nextSection: string) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (nextSection === "overview") next.delete("section");
+      else next.set("section", nextSection);
+      if (nextSection !== "models") next.delete("setup");
+      return next;
+    }, { replace: true });
+  }
 
   const channelQ = useQuery({
     queryKey: ["channel", channelId],
@@ -209,6 +222,9 @@ export function ChannelDetailPage() {
             opsRow={opsRow.data}
             runtime={runtimeQ.data}
             runtimeSyncState={runtimeSyncState}
+            section={section}
+            onSectionChange={setSection}
+            setup={setup}
           />
         </>
       ) : null}

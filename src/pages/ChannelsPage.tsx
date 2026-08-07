@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CableIcon, PlusIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { getChannelsOpsTable } from "@/lib/api/channelsOps";
 import { ServerDataTable, FacetFilterButton } from "@/components/openstatus-table";
 import {
@@ -21,6 +22,7 @@ import { useServerTable } from "@/hooks/useServerTable";
 
 export function ChannelsPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const navigate = useNavigate();
   const columns = useMemo(() => channelOsColumns(), []);
   const table = useServerTable({
     queryKey: "channels",
@@ -75,7 +77,11 @@ export function ChannelsPage() {
         />
       )}
 
-      <ChannelFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ChannelFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSaved={(channel) => navigate(`/channels/${channel.id}?section=models&setup=1`)}
+      />
     </div>
   );
 }

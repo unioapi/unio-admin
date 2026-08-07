@@ -9,6 +9,7 @@ import {
   type CatalogEntry,
   type CatalogEntryDetail,
 } from "@/lib/api/modelCatalog";
+import { adoptAndBindChannelModel } from "@/lib/api/channelModelInventory";
 import { listCapabilityKeys, type SupportLevel } from "@/lib/api/capability";
 import { AddCapabilitiesDialog } from "@/components/capability/AddCapabilitiesDialog";
 import { apiErrorMessage } from "@/lib/api/client";
@@ -51,17 +52,26 @@ function strippedModelID(canonicalID: string): string {
 // 从目录采纳：预填 model_id（去前缀）/元数据/能力清单，全部可改后原子创建。
 export function AdoptFromCatalogDialog({
   entry,
+  canonicalId,
+  channelId,
+  upstreamModel,
+  onCompleted,
   children,
 }: {
-  entry: CatalogEntry;
+  entry?: CatalogEntry;
+  canonicalId?: string;
+  channelId?: number;
+  upstreamModel?: string;
+  onCompleted?: () => void;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const resolvedCanonicalId = entry?.canonical_id ?? canonicalId ?? "";
 
   const detailQuery = useQuery({
-    queryKey: ["model-catalog-entry", entry.canonical_id],
-    queryFn: () => getCatalogEntry(entry.canonical_id),
-    enabled: open,
+    queryKey: ["model-catalog-entry", resolvedCanonicalId],
+    queryFn: () => getCatalogEntry(resolvedCanonicalId),
+    enabled: open && resolvedCanonicalId !== "",
   });
 
   return (
@@ -69,10 +79,12 @@ export function AdoptFromCatalogDialog({
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>采纳为模型</DialogTitle>
+          <DialogTitle>{channelId ? "采纳并绑定" : "采纳为模型"}</DialogTitle>
           <DialogDescription>
-            来自目录 <span className="font-mono">{entry.canonical_id}</span>
-            ，预填值可改；提交后创建一个可独立编辑的运营模型并与目录关联（用于追更）。
+            来自目录 <span className="font-mono">{resolvedCanonicalId}</span>
+            ，预填值可改；{channelId
+              ? "提交后原子创建运营模型和停用绑定，验证成功后再人工启用。"
+              : "提交后创建一个可独立编辑的运营模型并与目录关联（用于追更）。"}
           </DialogDescription>
         </DialogHeader>
 
@@ -88,9 +100,14 @@ export function AdoptFromCatalogDialog({
         ) : (
           // 详情加载完才挂载表单：能力初值直接来自 props，无需 effect 同步。
           <AdoptForm
-            entry={entry}
+            entry={detailQuery.data}
             detail={detailQuery.data}
-            onDone={() => setOpen(false)}
+            channelId={channelId}
+            upstreamModel={upstreamModel}
+            onDone={() => {
+              setOpen(false);
+              onCompleted?.();
+            }}
           />
         )}
       </DialogContent>
@@ -101,10 +118,14 @@ export function AdoptFromCatalogDialog({
 function AdoptForm({
   entry,
   detail,
+  channelId,
+  upstreamModel,
   onDone,
 }: {
   entry: CatalogEntry;
   detail: CatalogEntryDetail;
+  channelId?: number;
+  upstreamModel?: string;
   onDone: () => void;
 }) {
   const [modelId, setModelId] = useState(strippedModelID(entry.canonical_id));
@@ -121,11 +142,11 @@ function AdoptForm({
   });
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       // 采纳价只保留三位小数后入库。
       const inputPrice = roundPrice3(entry.input_price_usd_per_million_tokens);
       const outputPrice = roundPrice3(entry.output_price_usd_per_million_tokens);
-      return createModelFromCatalog({
+      const input = {
         canonical_id: entry.canonical_id,
         model_id: modelId.trim(),
         display_name: displayName.trim(),
@@ -137,12 +158,26 @@ function AdoptForm({
         output_price_usd_per_million_tokens: outputPrice === "" ? null : outputPrice,
         release_date: entry.release_date,
         capabilities: caps,
-      });
+      };
+      if (channelId && upstreamModel) {
+        const saved = await adoptAndBindChannelModel(channelId, {
+          ...input,
+          upstream_model: upstreamModel,
+        });
+        return { modelId: saved.model_external_id };
+      }
+      const saved = await createModelFromCatalog(input);
+      return { modelId: saved.model_id };
     },
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["model-catalog"] });
-      toast.success(`已采纳为模型「${saved.model_id}」`);
+      if (channelId) {
+        queryClient.invalidateQueries({ queryKey: ["channel", channelId, "model-inventory"] });
+        toast.success(`已采纳并创建停用绑定「${saved.modelId}」`);
+      } else {
+        toast.success(`已采纳为模型「${saved.modelId}」`);
+      }
       onDone();
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
@@ -234,7 +269,7 @@ function AdoptForm({
             <HintLabel htmlFor="adopt_status" hint="采纳后模型的初始状态；停用则暂不对客户开放调用。">
               状态
             </HintLabel>
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={setStatus} disabled={!!channelId}>
               <SelectTrigger id="adopt_status" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -338,7 +373,7 @@ function AdoptForm({
         </DialogClose>
         <Button type="submit" disabled={mutation.isPending}>
           {mutation.isPending && <Spinner data-icon="inline-start" />}
-          {mutation.isPending ? "采纳中..." : "采纳"}
+          {mutation.isPending ? "提交中..." : channelId ? "采纳并绑定" : "采纳"}
         </Button>
       </DialogFooter>
     </form>

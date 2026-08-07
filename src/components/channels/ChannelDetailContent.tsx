@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
-  BoxIcon,
   CircleCheckIcon,
   CopyIcon,
   EyeIcon,
@@ -14,12 +13,10 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { getChannel, type Channel } from "@/lib/api/channels";
-import { apiErrorMessage } from "@/lib/api/client";
 import type { ChannelOpsRow, ChannelRuntime } from "@/lib/api/channelsOps";
 import type { RuntimeSyncState } from "@/lib/api/runtime";
 import {
   getChannelOpsErrors,
-  getChannelOpsModels,
   getChannelOpsPerformance,
   getChannelOpsRoutes,
 } from "@/lib/api/channelsOps";
@@ -30,14 +27,13 @@ import { ConfigurableDataTable } from "@/components/data-table";
 import { ServerDataTable } from "@/components/openstatus-table";
 import {
   CHANNEL_OPS_ERROR_COLUMN_LABELS,
-  CHANNEL_OPS_MODEL_COLUMN_LABELS,
   CHANNEL_OPS_ROUTE_COLUMN_LABELS,
   channelOpsErrorColumns,
-  channelOpsModelColumns,
   channelOpsRouteColumns,
 } from "@/components/detail-tables/channel-detail-columns";
 import { ChannelOverviewSection } from "@/components/channels/ChannelOverviewSection";
 import { ChannelTestSection } from "@/components/channels/ChannelTestSection";
+import { ChannelModelInventorySection } from "@/components/channels/ChannelModelInventorySection";
 import { DetailSideNav } from "@/components/common/DetailSideNav";
 import {
   ChartSkeleton,
@@ -59,6 +55,9 @@ export function ChannelDetailContent({
   opsRow,
   runtime,
   runtimeSyncState,
+  section,
+  onSectionChange,
+  setup = false,
 }: {
   channelId: number;
   channel: Channel;
@@ -66,6 +65,9 @@ export function ChannelDetailContent({
   opsRow?: ChannelOpsRow | null;
   runtime?: ChannelRuntime | null;
   runtimeSyncState?: RuntimeSyncState;
+  section?: string;
+  onSectionChange?: (section: string) => void;
+  setup?: boolean;
 }) {
   const sections = useMemo(
     () => [
@@ -99,7 +101,9 @@ export function ChannelDetailContent({
       {
         id: "models",
         label: "模型",
-        content: <ModelsSection channelId={channelId} range={range} />,
+        content: (
+          <ChannelModelInventorySection channelId={channelId} range={range} setup={setup} />
+        ),
       },
       {
         id: "routes",
@@ -117,13 +121,15 @@ export function ChannelDetailContent({
         content: <AuditSection />,
       },
     ],
-    [channelId, channel, range, opsRow, runtime, runtimeSyncState],
+    [channelId, channel, range, opsRow, runtime, runtimeSyncState, setup],
   );
 
   return (
     <DetailSideNav
       sections={sections}
       defaultSectionId="overview"
+      value={section}
+      onValueChange={onSectionChange}
       orientation="horizontal"
     />
   );
@@ -216,48 +222,6 @@ function ErrorsSection({ channelId, range }: { channelId: number; range: RangeQu
       showViewOptions={false}
       refetching={q.isFetching && !q.isPending}
       pinnedColumnId="at"
-    />
-  );
-}
-
-function ModelsSection({ channelId, range }: { channelId: number; range: RangeQuery }) {
-  const q = useQuery({
-    queryKey: ["channel", channelId, "ops-models", range],
-    queryFn: () => getChannelOpsModels(channelId, range),
-    placeholderData: keepPreviousData,
-    retry: false,
-  });
-
-  const models = useMemo(
-    () => [...(q.data ?? [])].sort((a, b) => b.attempt_total - a.attempt_total),
-    [q.data],
-  );
-
-  if (q.isPending && !q.data) return <TableSkeleton rows={5} cols={6} />;
-  if (q.isError) return <ErrorBox message={apiErrorMessage(q.error)} />;
-  if (models.length === 0) {
-    return (
-      <SectionEmpty
-        icon={BoxIcon}
-        title="暂无绑定模型"
-        description="为该渠道绑定模型后即可在此查看运行表现"
-      />
-    );
-  }
-
-  return (
-    <ConfigurableDataTable
-      storageKey={`channel:${channelId}:models`}
-      data={models}
-      columns={channelOpsModelColumns()}
-      columnLabels={CHANNEL_OPS_MODEL_COLUMN_LABELS}
-      layoutMode="content"
-      bordered={false}
-      toolbarStart={
-        <span className="text-muted-foreground text-sm tabular-nums">
-          共 {models.length} 个模型
-        </span>
-      }
     />
   );
 }

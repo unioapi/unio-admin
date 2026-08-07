@@ -11,19 +11,29 @@ export type DetailSideSection = {
 export function DetailSideNav({
   sections,
   defaultSectionId,
+  value,
+  onValueChange,
   orientation = "vertical",
   className,
 }: {
   sections: DetailSideSection[];
   defaultSectionId?: string;
+  value?: string;
+  onValueChange?: (sectionId: string) => void;
   orientation?: "vertical" | "horizontal";
   className?: string;
 }) {
-  const [activeId, setActiveId] = useState(
+  const [internalActiveId, setInternalActiveId] = useState(
     defaultSectionId ?? sections[0]?.id ?? "",
   );
+  const activeId = value ?? internalActiveId;
   const active =
     sections.find((section) => section.id === activeId) ?? sections[0];
+
+  function setActiveId(sectionId: string) {
+    if (value == null) setInternalActiveId(sectionId);
+    onValueChange?.(sectionId);
+  }
 
   if (!active) return null;
 

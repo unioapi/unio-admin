@@ -49,6 +49,7 @@ export interface UpdateChannelModelInput {
   modelId: number;
   upstream_model: string;
   status: string;
+  verification_item_id?: number;
 }
 
 export async function updateChannelModel({
